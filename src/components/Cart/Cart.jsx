@@ -323,7 +323,7 @@ import { useAuth } from "../../context/AuthContext";
 
 export default function Cart() {
   const navigate = useNavigate();
-  const { user } = useAuth(); // ✅ use global auth context
+  const { user } = useAuth();
   const [cartItems, setCartItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const [totalPrice, setTotalPrice] = useState(0);
@@ -335,41 +335,44 @@ export default function Cart() {
   const [userAddress, setUserAddress] = useState({});
   const [showEmptyAlert, setShowEmptyAlert] = useState(false);
 
+  const API_URL = process.env.REACT_APP_API_URL;
+
+  const fetchCart = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/cart/${user._id}`);
+      const items = Array.isArray(res.data?.cartItems) ? res.data.cartItems : [];
+
+      const itemDetails = await Promise.all(
+        items.map(async (item) => {
+          const itemId = item.itemId || item.id || item._id;
+          if (!itemId) return null;
+          try {
+            const res = await axios.get(`${API_URL}/api/items/${itemId}`);
+            return res.data ? { ...res.data, id: itemId, quantity: item.quantity } : null;
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      const validItems = itemDetails.filter(Boolean);
+      setCartItems(validItems);
+      setCartCount(validItems.reduce((sum, i) => sum + i.quantity, 0));
+      setShowEmptyAlert(validItems.length === 0);
+    } catch (err) {
+      console.error("Fetch cart error:", err);
+      setError("Failed to fetch cart.");
+    }
+  };
+
   useEffect(() => {
-    const fetchCart = async () => {
-      try {
-        const res = await axios.get(`/api/cart/${user._id}`);
-        const items = res.data.cartItems;
-        const itemDetails = await Promise.all(
-          items.map(async (item) => {
-            const itemId = item.itemId || item.id || item._id;
-            if (!itemId) return null;
-            try {
-              const res = await axios.get(`/api/items/${itemId}`);
-              return res.data ? { ...res.data, id: itemId, quantity: item.quantity } : null;
-            } catch {
-              return null;
-            }
-          })
-        );
-
-        const validItems = itemDetails.filter(Boolean);
-        setCartItems(validItems);
-        setCartCount(validItems.reduce((sum, i) => sum + i.quantity, 0));
-        setShowEmptyAlert(validItems.length === 0);
-      } catch (err) {
-        console.error("Fetch cart error:", err);
-        setError("Failed to fetch cart.");
-      }
-    };
-
     if (user) fetchCart();
   }, [user]);
 
   useEffect(() => {
     const fetchAddress = async () => {
       try {
-        const res = await axios.get(`/api/users/${user._id}/address`);
+        const res = await axios.get(`${API_URL}/api/users/${user._id}/address`);
         setUserAddress(res.data || {});
       } catch {
         console.error("Failed to load address.");
@@ -393,6 +396,7 @@ export default function Cart() {
 
   const handleDeleteSelected = async () => {
     if (!user || selectedItems.length === 0) return;
+
     const confirmed = await Swal.fire({
       title: "Are you sure?",
       text: "You won't be able to revert this!",
@@ -403,26 +407,13 @@ export default function Cart() {
 
     if (confirmed.isConfirmed) {
       try {
-        await axios.put(`/api/cart/${user._id}/remove`, {
+        await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
           removeItems: selectedItems.map((i) => i.id),
         });
         setSelectedItems([]);
         setSelectAll(false);
         toast.success("Selected items removed.");
-        // Refetch
-        const res = await axios.get(`/api/cart/${user._id}`);
-        const items = res.data.cartItems;
-        const validItems = await Promise.all(
-          items.map(async (item) => {
-            try {
-              const response = await axios.get(`/api/items/${item.itemId || item._id}`);
-              return { ...response.data, quantity: item.quantity, id: item.itemId || item._id };
-            } catch {
-              return null;
-            }
-          })
-        );
-        setCartItems(validItems.filter(Boolean));
+        fetchCart();
       } catch {
         toast.error("Failed to delete items.");
       }
@@ -432,7 +423,7 @@ export default function Cart() {
   const handleQuantityChange = async (item, newQty) => {
     if (!user || newQty < 1) return;
     try {
-      await axios.put(`/api/cart/${user._id}/update`, {
+      await axios.put(`${API_URL}/api/cart/${user._id}/update`, {
         id: item.id,
         quantity: newQty,
       });
@@ -457,7 +448,7 @@ export default function Cart() {
   }, [selectedItems, cartItems]);
 
   const filteredCartItems = cartItems.filter((item) =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    item.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (!user) return <p className="text-center mt-5">Please log in.</p>;

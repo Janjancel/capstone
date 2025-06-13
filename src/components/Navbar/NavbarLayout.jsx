@@ -92,30 +92,57 @@ export default function Navbar() {
     }
   };
 
-  const handleLogout = async () => {
-    Swal.fire({
-      title: "Are you sure?",
-      text: "You will be logged out!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Yes, logout!",
-      cancelButtonText: "Cancel",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          await axios.get(`${process.env.REACT_APP_API_URL}/api/auth/logout`, { userId: user._id });
-          localStorage.clear();
-          setUser(null);
-          setCartCount(0);
-          navigate('/');
-          toast.success("You have been successfully logged out.");
-        } catch (error) {
-          console.error("Logout error:", error);
-          toast.error("Failed to log out. Please try again.");
-        }
+  // const handleLogout = async () => {
+  //   Swal.fire({
+  //     title: "Are you sure?",
+  //     text: "You will be logged out!",
+  //     icon: "warning",
+  //     showCancelButton: true,
+  //     confirmButtonText: "Yes, logout!",
+  //     cancelButtonText: "Cancel",
+  //   }).then(async (result) => {
+  //     if (result.isConfirmed) {
+  //       try {
+  //         await axios.get(`${process.env.REACT_APP_API_URL}/api/auth/logout`, { userId: user._id });
+  //         localStorage.clear();
+  //         setUser(null);
+  //         setCartCount(0);
+  //         navigate('/');
+  //         toast.success("You have been successfully logged out.");
+  //       } catch (error) {
+  //         console.error("Logout error:", error);
+  //         toast.error("Failed to log out. Please try again.");
+  //       }
+  //     }
+  //   });
+  // };
+
+  const handleLogout = () => {
+  Swal.fire({
+    title: "Are you sure?",
+    text: "You will be logged out!",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Yes, logout!",
+    cancelButtonText: "Cancel",
+  }).then((result) => {
+    if (result.isConfirmed) {
+      try {
+        // ✅ Just clear local storage and update app state
+        localStorage.removeItem("token");
+        localStorage.removeItem("userId");
+        setUser(null);
+        setCartCount(0);
+        navigate('/');
+        toast.success("You have been successfully logged out.");
+      } catch (error) {
+        console.error("Logout error:", error);
+        toast.error("Failed to log out. Please try again.");
       }
-    });
-  };
+    }
+  });
+};
+
 
   if (location.pathname.startsWith("/admin")) return null;
 
