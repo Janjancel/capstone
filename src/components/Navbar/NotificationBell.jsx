@@ -238,15 +238,16 @@ export default function NotificationBell() {
   const [userId, setUserId] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [startPolling, setStartPolling] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderLoading, setOrderLoading] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
-  const API_BASE = "http://localhost:5000";
+  const API_URL = process.env.REACT_APP_API_URL;
 
-  // ✅ Load current userId
+  // Load current userId
   useEffect(() => {
     const loadUserId = async () => {
       const storedId = localStorage.getItem("userId");
@@ -259,7 +260,7 @@ export default function NotificationBell() {
 
       if (token) {
         try {
-          const res = await axios.get(`${API_BASE}/api/users/me`, {
+          const res = await axios.get(`${API_URL}/api/users/me`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (res.data?._id) {
@@ -277,33 +278,62 @@ export default function NotificationBell() {
     loadUserId();
   }, []);
 
-  // ✅ Poll notifications
+  // Initial notification check
   useEffect(() => {
     if (!userId) return;
 
-    const fetchNotifications = async () => {
+    const checkInitialNotifications = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/api/notifications/users/${userId}/notifications`);
+        const res = await axios.get(`${API_URL}/api/notifications/users/${userId}/notifications`);
         const notifList = Array.isArray(res.data) ? res.data : [];
         setNotifications(notifList);
-        setUnreadCount(notifList.filter(n => !n.read).length);
+        const unread = notifList.filter(n => !n.read).length;
+        setUnreadCount(unread);
+        if (unread > 0) setStartPolling(true);
+      } catch (err) {
+        console.error("Initial notification check failed:", err);
+      }
+    };
+
+    checkInitialNotifications();
+  }, [userId]);
+
+  // Start polling only if unread notifications exist
+  useEffect(() => {
+    if (!userId || !startPolling) return;
+
+    const fetchNotifications = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/notifications/users/${userId}/notifications`);
+        const notifList = Array.isArray(res.data) ? res.data : [];
+        setNotifications(notifList);
+        const unread = notifList.filter(n => !n.read).length;
+        setUnreadCount(unread);
+        if (unread === 0) setStartPolling(false);
       } catch (err) {
         console.error("Notification fetch failed:", err);
       }
     };
 
-    fetchNotifications();
     const intervalId = setInterval(fetchNotifications, 3000);
     return () => clearInterval(intervalId);
-  }, [userId]);
+  }, [userId, startPolling]);
 
   const handleMarkAsRead = async (notifId) => {
     try {
-      await axios.patch(`${API_BASE}/api/notifications/users/${userId}/notifications/${notifId}`, { read: true });
+      await axios.patch(`${API_URL}/api/notifications/users/${userId}/notifications/${notifId}`, {
+        read: true,
+      });
+
       setNotifications(prev =>
         prev.map(n => (n._id === notifId ? { ...n, read: true } : n))
       );
-      setUnreadCount(prev => Math.max(prev - 1, 0));
+
+      setUnreadCount(prev => {
+        const newCount = Math.max(prev - 1, 0);
+        if (newCount === 0) setStartPolling(false);
+        return newCount;
+      });
     } catch (err) {
       Swal.fire("Error", "Failed to mark as read", "error");
     }
@@ -311,9 +341,10 @@ export default function NotificationBell() {
 
   const handleClearNotifications = async () => {
     try {
-      await axios.delete(`${API_BASE}/api/notifications/users/${userId}/notifications`);
+      await axios.delete(`${API_URL}/api/notifications/users/${userId}/notifications`);
       setNotifications([]);
       setUnreadCount(0);
+      setStartPolling(false);
     } catch (err) {
       Swal.fire("Error", "Failed to clear notifications", "error");
     }
@@ -325,7 +356,7 @@ export default function NotificationBell() {
 
     try {
       if (notifId) await handleMarkAsRead(notifId);
-      const res = await axios.get(`${API_BASE}/api/orders/${orderId}`);
+      const res = await axios.get(`${API_URL}/api/orders/${orderId}`);
       setSelectedOrder(res.data);
       setUserEmail(res.data?.email || "");
       setShowOrderModal(true);

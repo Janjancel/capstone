@@ -103,7 +103,7 @@ export default function Navbar() {
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
-          await axios.post('/api/auth/logout', { userId: user._id });
+          await axios.get(`${process.env.REACT_APP_API_URL}/api/auth/logout`, { userId: user._id });
           localStorage.clear();
           setUser(null);
           setCartCount(0);
