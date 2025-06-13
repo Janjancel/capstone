@@ -1,0 +1,85 @@
+/* Container styling */
+.sell-dashboard {
+    width: 80vw;  /* Fit the content to 80% of the screen */
+    margin-left: 10vw;
+    padding: 20px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    overflow-x: auto; /* Enable scrolling for small screens */
+}
+
+/* Table Styling */
+.request-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Table Header */
+.request-table thead {
+    background-color: #007bff;
+    color: white;
+}
+
+.request-table th {
+    padding: 12px;
+    font-size: 16px;
+}
+
+/* Table Rows */
+.request-table tbody tr {
+    border-bottom: 1px solid #ddd;
+    transition: background 0.3s ease-in-out;
+}
+
+/* Hover effect */
+.request-table tbody tr:hover {
+    background-color: #f4f4f4;
+}
+
+/* Table Cells */
+.request-table td {
+    padding: 12px;
+    font-size: 14px;
+}
+
+/* Price Styling */
+.request-table td:nth-child(5) {
+    font-weight: bold;
+    color: #28a745;
+}
+
+/* Description Trimming */
+.request-table td:nth-child(6) {
+    max-width: 250px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Image Styling */
+.request-table td img {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .request-table th, 
+    .request-table td {
+        padding: 8px;
+        font-size: 12px;
+    }
+
+    .sell-dashboard {
+        width: 95vw;
+        padding: 10px;
+    }
+}

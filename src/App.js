@@ -1,24 +1,60 @@
-import logo from './logo.svg';
-import './App.css';
+import { useEffect } from "react";
+import { Route, Routes, useLocation, Navigate } from "react-router-dom";
+import "bootstrap/dist/css/bootstrap.min.css";
+import "animate.css";
+import "./App.css";
+
+import About from "./components/About/About";
+import Contact from "./components/Contact/Contact";
+import PrivateRoute from "./components/PrivateRoute";
+import Navbar from "./components/Navbar/Navbar";
+import Footer from "./components/Footer";
+import Home from "./components/Home/Home";
+import Admin from "./components/AdminDashboard/Admin/Admin";
+import Cart from "./components/Cart/Cart";
+import Buy from "./components/Buy";
+import Profile from "./components/Profile/Profile";
+
+import { Toaster } from "react-hot-toast";
+import { useAuth } from "./context/AuthContext";
+import ProtectedAdminRoute from "./ProtectedAdminRoute";
 
 function App() {
+  const location = useLocation();
+  const { user } = useAuth();
+
+  // Adjust padding for admin layout
+  useEffect(() => {
+    document.body.style.paddingTop = location.pathname.startsWith("/admin") ? "0" : "10vh";
+  }, [location.pathname]);
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <>
+      {!location.pathname.startsWith("/admin") && <Navbar />}
+
+      <div className="content-wrapper">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+
+          <Route element={<PrivateRoute />}>
+            <Route path="/buy" element={<Buy />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/profile" element={<Profile />} />
+          </Route>
+
+          <Route element={<ProtectedAdminRoute />}>
+            <Route path="/admin/*" element={<Admin />} />
+          </Route>
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+
+      <Toaster position="top-right" reverseOrder={false} />
+      {!location.pathname.startsWith("/admin") && <Footer />}
+    </>
   );
 }
 

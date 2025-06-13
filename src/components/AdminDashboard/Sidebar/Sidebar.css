@@ -1,0 +1,67 @@
+/* Sidebar Container */
+.sidebar {
+    width: 20vw;
+    background-color: #333;
+    color: white;
+    padding: 20px;
+    height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
+    overflow-y: auto;
+}
+
+/* Sidebar Links */
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+}
+
+.sidebar ul li {
+    padding: 10px;
+    margin: 5px 0;
+}
+
+/* Default Link Styles */
+.sidebar ul li a, .dropdown-toggle {
+    text-decoration: none;
+    color: white;
+    display: block;
+    padding: 10px;
+    border-radius: 5px;
+    transition: background 0.3s ease-in-out;
+    cursor: pointer;
+}
+
+/* Active Link Background */
+.sidebar ul li .active-link {
+    background-color: #007bff; /* Blue background for active links */
+    color: white;
+    font-weight: bold;
+}
+
+/* Dropdown Styling */
+.dropdown {
+    position: relative;
+}
+
+/* Show dropdown when open */
+.dashboard-dropdown-menu {
+    list-style: none;
+    padding-left: 20px;
+    display: none;
+}
+
+.dropdown.open .dashboard-dropdown-menu {
+    display: block;
+}
+
+/* Highlight active link inside dropdown */
+.dashboard-dropdown-menu .active-link {
+    background-color: #0056b3; /* Darker blue for dropdown active */
+}
+
+/* Show dropdown if a child is active */
+.dropdown .dashboard-dropdown-menu.show {
+    display: block;
+}

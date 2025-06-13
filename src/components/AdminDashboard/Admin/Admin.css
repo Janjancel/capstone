@@ -1,0 +1,49 @@
+/* .dashboard-container {
+    display: flex;
+    height: 100vh;
+    background-color: #f8f9fa;
+}
+
+.sidebar {
+    width: 20vw;
+}
+
+main {
+    width: 80vw;
+} */
+
+/* Admin Layout */
+
+* {
+    padding: 0;
+    margin: 0;
+}
+
+.dashboard-container {
+    display: flex;
+    height: 100vh;
+}
+
+/* Sidebar Styling */
+.sidebar {
+    width: 20vw; /* Sidebar takes 20% of the screen */
+    background-color: #333;
+    color: white;
+    padding: 20px;
+    height: 100vh;
+    position: fixed; /* Keep sidebar fixed */
+    left: 0;
+    top: 0;
+    overflow-y: auto;
+}
+
+/* Main Content */
+.dashboard-content {
+    flex-grow: 1;
+    min-width: 80vw; /* Remaining 80% of the screen */
+    margin-left: 10vw;
+    padding: 20px;
+    background-color: #f8f9fa;
+    /* overflow: hidden; */
+    width: auto;
+}
