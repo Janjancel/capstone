@@ -285,7 +285,7 @@ export default function Navbar() {
 
     const fetchStatus = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/users/status/${userId}`);
+        const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/users/status/${userId}`);
         setUserStatus(res.data.status || 'offline');
       } catch (err) {
         console.error('Failed to fetch user status:', err);
@@ -295,7 +295,7 @@ export default function Navbar() {
 
     const fetchCart = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/carts/${userId}`);
+        const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/carts/${userId}`);
         const cartItems = res.data.cartItems || [];
         const total = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
         setCartCount(total);

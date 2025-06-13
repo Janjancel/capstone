@@ -290,7 +290,7 @@ const Items = () => {
   const fetchItems = async () => {
     setFetching(true);
     try {
-      const response = await axios.get("http://localhost:5000/api/items");
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/items`);
       setItems(response.data);
       setAllItems(response.data);
     } catch (error) {
@@ -314,7 +314,7 @@ const Items = () => {
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
-          await axios.delete(`http://localhost:5000/api/items/${itemId}`);
+          await axios.delete(`${process.env.REACT_APP_API_URL}/api/items/${itemId}`);
           Swal.fire("Deleted!", "The item has been deleted.", "success");
           fetchItems();
         } catch (error) {
@@ -337,7 +337,7 @@ const Items = () => {
         imageBase64 = await convertImageToBase64(newItem.image);
       }
 
-      await axios.post("http://localhost:5000/api/items", {
+      await axios.post(`${process.env.REACT_APP_API_URL}/api/items`, {
         ...newItem,
         image: imageBase64,
       });

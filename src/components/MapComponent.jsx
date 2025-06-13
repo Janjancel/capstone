@@ -29,7 +29,7 @@ const MapComponent = () => {
   useEffect(() => {
     const fetchHeritageHouses = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/heritage");
+        const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/heritage`);
         setHeritageLocations(res.data);
       } catch (error) {
         console.error("Error fetching heritage houses:", error);

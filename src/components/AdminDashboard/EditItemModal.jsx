@@ -33,7 +33,7 @@ const EditItemModal = ({ show, onHide, item }) => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      const response = await axios.put(`http://localhost:5000/api/items/${item._id}`, updatedItem);
+      const response = await axios.put(`${process.env.REACT_APP_API_URL}/api/items/${item._id}`, updatedItem);
       Swal.fire("Updated!", "Item updated successfully.", "success");
       onHide();
     } catch (error) {

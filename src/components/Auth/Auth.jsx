@@ -18,7 +18,8 @@ export default function AuthModal({ show, onHide }) {
   useEffect(() => {
     const fetchUserStatuses = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/users/statuses");
+      const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/users/statuses`);
+
         setUserStatuses(res.data);
       } catch (err) {
         console.error("❌ Failed to fetch user statuses:", err);

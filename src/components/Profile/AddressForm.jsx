@@ -180,7 +180,7 @@ const AddressForm = () => {
       if (result.isConfirmed) {
         try {
           // Example of calling an API to save the address
-          await axios.post("http://localhost:5000/api/address/save", {
+          await axios.post(`${process.env.REACT_APP_API_URL}/api/address/save`, {
             userId: user._id, // Assuming user has _id in the context
             address: address,
           });

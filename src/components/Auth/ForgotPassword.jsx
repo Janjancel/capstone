@@ -25,7 +25,7 @@ export default function ForgotPassword({ show, onHide }) {
       const token = localStorage.getItem("token");
 
       const response = await axios.put(
-        "http://localhost:5000/api/users/update-password",
+        `${process.env.REACT_APP_API_URL}/api/users/update-password`,
         {
           currentPassword,
           newPassword,

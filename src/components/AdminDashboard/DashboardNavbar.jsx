@@ -247,7 +247,7 @@ const DashboardNavbar = ({ onLogout, onToggleSidebar }) => {
         try {
           const userId = localStorage.getItem("userId");
           if (userId) {
-            await axios.post("http://localhost:5000/api/auth/logout", { userId });
+            await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/logout`, { userId });
           }
 
           localStorage.clear();

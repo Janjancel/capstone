@@ -52,7 +52,7 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
     onSubmit: async (values, { setSubmitting, resetForm, setFieldError }) => {
   setLoading(true);
   try {
-    const res = await axios.post("http://localhost:5000/api/auth/register", values);
+    const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/register`, values);
     Swal.fire(
       "Registration Successful",
       "Check your email to verify your account before logging in.",

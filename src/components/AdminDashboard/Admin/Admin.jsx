@@ -32,7 +32,7 @@ const Admin = () => {
       }
 
       try {
-        const { data } = await axios.get(`http://localhost:5000/api/users/${userId}`, {
+        const { data } = await axios.get(`${process.env.REACT_APP_API_URL}/api/users/${userId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -60,7 +60,7 @@ const Admin = () => {
     try {
       const userId = user?._id;
       if (userId) {
-        await axios.post("http://localhost:5000/api/auth/logout", { userId });
+        await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/logout`, { userId });
       }
     } catch (err) {
       console.error("Logout Error:", err);

@@ -13,7 +13,7 @@ export default function VerifyEmailPage() {
 
     if (confirm === "yes") {
       axios
-        .get(`http://localhost:5000/api/auth/verify?email=${email}&token=${token}`)
+        .get(`${process.env.REACT_APP_API_URL}/api/auth/verify?email=${email}&token=${token}`)
         .then(() => setMessage("✅ Email verified! You can now log in."))
         .catch(() => setMessage("❌ Verification failed or token expired."));
     } else {
