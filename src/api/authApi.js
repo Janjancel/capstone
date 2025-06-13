@@ -13,7 +13,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: `${process.env.REACT_APP_API_URL}/api`,
+  baseURL: "https://capstone-backend-production-7ec4.up.railway.app/api",
   withCredentials: true, // keep if your backend sets cookies
 });
 
