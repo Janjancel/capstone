@@ -32,11 +32,17 @@ const OrderDashboard = () => {
       ]);
 
       const userMap = {};
-      usersRes.data.forEach((user) => {
-        userMap[user._id] = user;
-      });
+      if (Array.isArray(usersRes.data)) {
+        usersRes.data.forEach((user) => {
+          userMap[user._id] = user;
+        });
+      }
 
-      const sortedOrders = ordersRes.data.sort(
+      const rawOrders = Array.isArray(ordersRes.data)
+        ? ordersRes.data
+        : ordersRes.data.orders || [];
+
+      const sortedOrders = rawOrders.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
       );
 
@@ -52,7 +58,6 @@ const OrderDashboard = () => {
 
   useEffect(() => {
     fetchOrders();
-
     intervalRef.current = setInterval(() => {
       fetchOrders();
     }, 3000);
@@ -75,9 +80,7 @@ const OrderDashboard = () => {
 
   const handleStatusChange = async (order, newStatus) => {
     try {
-      await axios.put(`/api/orders/${order._id}/status`, {
-        status: newStatus,
-      });
+      await axios.put(`/api/orders/${order._id}/status`, { status: newStatus });
 
       await axios.post(`/api/notifications`, {
         orderId: order._id,
