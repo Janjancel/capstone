@@ -202,6 +202,38 @@ const CartModal = ({
     </div>
   );
 
+    const handleSaveAddress = async () => {
+      if (!user) return toast.error("User not found.");
+      if (!validateAddress()) {
+        return toast.error("Please fill in all the fields.");
+      }
+  
+      Swal.fire({
+        title: "Save Address?",
+        text: "Are you sure you want to save this address?",
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Yes, save it!",
+      }).then(async (result) => {
+        if (result.isConfirmed) {
+          try {
+            await axios.post(`${API_URL}/api/address/save`, {
+              userId: user._id,
+              address: address,
+            });
+  
+            toast.success("Address saved successfully!");
+            setIsAddressSaved(true);
+            setIsEditing(false);
+            setIsAdding(false);
+          } catch (err) {
+            console.error("Error saving address:", err);
+            toast.error("Failed to save address.");
+          }
+        }
+      });
+    };
+
   return (
     <>
       {!isEditing && (
@@ -311,7 +343,7 @@ const CartModal = ({
           setIsEditing={setIsEditing}
           address={address}
           setAddress={setAddress}
-          handleSaveAddress={() => {}}
+          handleSaveAddress={handleSaveAddress}
           options={options}
           renderDropdown={renderDropdown}
         />
