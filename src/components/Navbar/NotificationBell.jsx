@@ -319,9 +319,11 @@ export default function NotificationBell() {
   const handleMarkAsRead = async (notifId) => {
     try {
       const token = localStorage.getItem("token");
-      await axios.patch(`${API_URL}/api/notifications/${notifId}`, { read: true }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.patch(
+        `${API_URL}/api/notifications/users/${userId}/notifications/${notifId}`,
+        { read: true },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
       setNotifications((prev) =>
         prev.map((n) => (n._id === notifId ? { ...n, read: true } : n))
