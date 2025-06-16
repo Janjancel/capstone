@@ -333,6 +333,7 @@ export default function NotificationBell() {
         return next;
       });
     } catch (err) {
+      console.error("Failed to mark as read:", err);
       Swal.fire("Error", "Failed to mark as read", "error");
     }
   };
@@ -361,7 +362,7 @@ export default function NotificationBell() {
       setSelectedOrder(res.data);
       setUserEmail(res.data?.email || "");
       setShowOrderModal(true);
-    } catch {
+    } catch (err) {
       Swal.fire("Error", "Failed to fetch order", "error");
     } finally {
       setOrderLoading(false);
