@@ -16,6 +16,8 @@ const CartModal = ({
   setCartCount,
   setShowModal,
 }) => {
+  const API_URL = process.env.REACT_APP_API_URL;
+
   const [address, setAddress] = useState({
     region: "",
     province: "",
@@ -25,6 +27,7 @@ const CartModal = ({
     houseNo: "",
     zipCode: "",
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
@@ -34,6 +37,17 @@ const CartModal = ({
     cities: [],
     barangays: [],
   });
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setAddress((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "region" ? { province: "", city: "", barangay: "" } : {}),
+      ...(name === "province" ? { city: "", barangay: "" } : {}),
+      ...(name === "city" ? { barangay: "" } : {}),
+    }));
+  };
 
   const renderDropdown = (label, name, list) => (
     <Form.Group className="mb-3" controlId={`form-${name}`}>
@@ -58,59 +72,37 @@ const CartModal = ({
     </Form.Group>
   );
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setAddress((prev) => ({
-      ...prev,
-      [name]: value,
-      ...(name === "region" ? { province: "", city: "", barangay: "" } : {}),
-      ...(name === "province" ? { city: "", barangay: "" } : {}),
-      ...(name === "city" ? { barangay: "" } : {}),
-    }));
-  };
-
-  const handleSaveAddress = async () => {
-    if (!user) return toast.error("User not found.");
-    const isComplete = Object.values(address).every((field) => field !== "");
-    if (!isComplete) return toast.error("Please fill in all the fields.");
-
-    try {
-      await axios.post("/api/address/save", {
-        userId: user._id,
-        address: address,
-      });
-      toast.success("Address saved!");
-      setIsEditing(false);
-      setShowModal(true); // Show CartModal again
-    } catch (err) {
-      console.error("Save error:", err);
-      toast.error("Failed to save address.");
-    }
-  };
-
   useEffect(() => {
+    const loadRegions = () => {
+      const regionList = Object.keys(addressData).map((regionCode) => ({
+        code: regionCode,
+        name: addressData[regionCode].region_name,
+      }));
+      setOptions((prev) => ({ ...prev, regions: regionList }));
+    };
+
     if (show && user) {
+      loadRegions();
+
       const fetchAddress = async () => {
         try {
-          const res = await axios.get(`/api/address/${user._id}`);
+          const res = await axios.get(`${API_URL}/api/address/${user._id}`);
           const userAddress = res.data;
-          if (userAddress) setAddress(userAddress);
+          if (userAddress && Object.keys(userAddress).length > 0) {
+            setAddress(userAddress);
+          }
         } catch (err) {
           console.error("Error fetching user address:", err);
+          toast.error("Failed to load address.");
         }
       };
 
       fetchAddress();
-
-      const regionList = Object.keys(addressData).map((code) => ({
-        code,
-        name: addressData[code].region_name,
-      }));
-      setOptions((prev) => ({ ...prev, regions: regionList }));
     }
   }, [show, user]);
 
   useEffect(() => {
+    if (!address.region) return;
     const regionData = addressData[address.region];
     if (regionData?.province_list) {
       const provinces = Object.keys(regionData.province_list).map((name) => ({
@@ -127,8 +119,8 @@ const CartModal = ({
   }, [address.region]);
 
   useEffect(() => {
-    const regionData = addressData[address.region];
-    const provinceData = regionData?.province_list[address.province];
+    if (!address.province) return;
+    const provinceData = addressData[address.region]?.province_list[address.province];
     if (provinceData?.municipality_list) {
       const cities = Object.keys(provinceData.municipality_list).map((name) => ({
         name,
@@ -143,9 +135,8 @@ const CartModal = ({
   }, [address.province, address.region]);
 
   useEffect(() => {
-    const regionData = addressData[address.region];
-    const provinceData = regionData?.province_list[address.province];
-    const cityData = provinceData?.municipality_list[address.city];
+    if (!address.city) return;
+    const cityData = addressData[address.region]?.province_list[address.province]?.municipality_list[address.city];
     if (cityData?.barangay_list) {
       setOptions((prev) => ({
         ...prev,
@@ -162,12 +153,31 @@ const CartModal = ({
     address.street &&
     address.houseNo;
 
+  const handleSaveAddress = async () => {
+    if (!user) return toast.error("User not found.");
+    const isComplete = Object.values(address).every((field) => field !== "");
+    if (!isComplete) return toast.error("Please fill in all the fields.");
+
+    try {
+      await axios.post(`${API_URL}/api/address/save`, {
+        userId: user._id,
+        address,
+      });
+      toast.success("Address saved!");
+      setIsEditing(false);
+      setShowModal(true);
+    } catch (err) {
+      console.error("Save error:", err);
+      toast.error("Failed to save address.");
+    }
+  };
+
   const handleOrderConfirmation = async () => {
     if (!user || !isAddressComplete()) return;
 
     setLoading(true);
     try {
-      await axios.post(`/api/orders`, {
+      await axios.post(`${API_URL}/api/orders`, {
         userId: user._id,
         items: selectedItems,
         total: parseFloat(totalPrice),
@@ -175,7 +185,7 @@ const CartModal = ({
         notes: "",
       });
 
-      await axios.put(`/api/cart/${user._id}/remove`, {
+      await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
         removeItems: selectedItems.map((i) => i.id),
       });
 
