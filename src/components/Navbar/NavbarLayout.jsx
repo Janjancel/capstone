@@ -1,3 +1,28 @@
+  // const handleLogout = async () => {
+  //   Swal.fire({
+  //     title: "Are you sure?",
+  //     text: "You will be logged out!",
+  //     icon: "warning",
+  //     showCancelButton: true,
+  //     confirmButtonText: "Yes, logout!",
+  //     cancelButtonText: "Cancel",
+  //   }).then(async (result) => {
+  //     if (result.isConfirmed) {
+  //       try {
+  //         await axios.get(`${process.env.REACT_APP_API_URL}/api/auth/logout`, { userId: user._id });
+  //         localStorage.clear();
+  //         setUser(null);
+  //         setCartCount(0);
+  //         navigate('/');
+  //         toast.success("You have been successfully logged out.");
+  //       } catch (error) {
+  //         console.error("Logout error:", error);
+  //         toast.error("Failed to log out. Please try again.");
+  //       }
+  //     }
+  //   });
+  // };
+
 import './Navbar.css';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -33,26 +58,25 @@ export default function Navbar() {
 
   const hideAuthButtons = ["/auth", "/login", "/register"].includes(location.pathname);
 
-  // Client Polling for cart count
+  // ✅ Client Polling for cart count
   useEffect(() => {
     let pollingInterval = null;
 
-    const fetchCartCount = () => {
-      if (user?._id) {
-        axios.get(`/api/cart/${user._id}`)
-          .then((res) => {
-            const items = res.data.cartItems || [];
-            const total = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
-            setCartCount(total);
-          })
-          .catch(() => setCartCount(0));
+    const fetchCartCount = async () => {
+      try {
+        const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/cart/${user._id}`);
+        const items = res.data.cartItems || [];
+        const total = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+        setCartCount(total);
+      } catch (err) {
+        setCartCount(0);
       }
     };
 
     if (user) {
       setProfilePic(user.profilePic || "default-profile.png");
-      fetchCartCount(); // Initial fetch
-      pollingInterval = setInterval(fetchCartCount, 1000); // Poll every 10 seconds
+      fetchCartCount(); // initial fetch
+      pollingInterval = setInterval(fetchCartCount, 3000); // ⏱️ every 3 seconds
     }
 
     return () => {
@@ -61,14 +85,14 @@ export default function Navbar() {
   }, [user]);
 
   useEffect(() => {
-    function handleClickOutside(event) {
+    const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
       }
       if (servicesDropdownRef.current && !servicesDropdownRef.current.contains(event.target)) {
         setServicesDropdownOpen(false);
       }
-    }
+    };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
@@ -92,59 +116,28 @@ export default function Navbar() {
     }
   };
 
-  // const handleLogout = async () => {
-  //   Swal.fire({
-  //     title: "Are you sure?",
-  //     text: "You will be logged out!",
-  //     icon: "warning",
-  //     showCancelButton: true,
-  //     confirmButtonText: "Yes, logout!",
-  //     cancelButtonText: "Cancel",
-  //   }).then(async (result) => {
-  //     if (result.isConfirmed) {
-  //       try {
-  //         await axios.get(`${process.env.REACT_APP_API_URL}/api/auth/logout`, { userId: user._id });
-  //         localStorage.clear();
-  //         setUser(null);
-  //         setCartCount(0);
-  //         navigate('/');
-  //         toast.success("You have been successfully logged out.");
-  //       } catch (error) {
-  //         console.error("Logout error:", error);
-  //         toast.error("Failed to log out. Please try again.");
-  //       }
-  //     }
-  //   });
-  // };
-
   const handleLogout = () => {
-  Swal.fire({
-    title: "Are you sure?",
-    text: "You will be logged out!",
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonText: "Yes, logout!",
-    cancelButtonText: "Cancel",
-  }).then((result) => {
-    if (result.isConfirmed) {
-      try {
-        // ✅ Just clear local storage and update app state
+    Swal.fire({
+      title: "Are you sure?",
+      text: "You will be logged out!",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, logout!",
+      cancelButtonText: "Cancel",
+    }).then((result) => {
+      if (result.isConfirmed) {
         localStorage.removeItem("token");
         localStorage.removeItem("userId");
         setUser(null);
         setCartCount(0);
         navigate('/');
         toast.success("You have been successfully logged out.");
-      } catch (error) {
-        console.error("Logout error:", error);
-        toast.error("Failed to log out. Please try again.");
       }
-    }
-  });
-};
-
+    });
+  };
 
   if (location.pathname.startsWith("/admin")) return null;
+
   return (
     <nav className="navbar navbar-expand-lg fixed-top nav">
       <div className="container-fluid">
@@ -153,7 +146,13 @@ export default function Navbar() {
         </Link>
         <button className="navbar-toggler" type="button" onClick={handleMenuToggle}></button>
 
-        <div className={`navbar-collapse mobile-menu-bg animate__animated ${isMobileView ? isAnimatingOut ? "animate__bounceOutUp" : menuOpen ? "animate__zoomInDown" : "" : ""}`} style={{ display: isMobileView ? (menuOpen || isAnimatingOut ? "block" : "none") : "block" }} id="navbarNav">
+        <div
+          className={`navbar-collapse mobile-menu-bg animate__animated ${
+            isMobileView ? (isAnimatingOut ? "animate__bounceOutUp" : menuOpen ? "animate__zoomInDown" : "") : ""
+          }`}
+          style={{ display: isMobileView ? (menuOpen || isAnimatingOut ? "block" : "none") : "block" }}
+          id="navbarNav"
+        >
           <ul className="navbar-nav me-auto mb-2 mb-lg-0">
             <CustomLink to="/" onClick={() => setMenuOpen(false)}>Home</CustomLink>
             <li className="nav-item dropdown" ref={servicesDropdownRef}>
