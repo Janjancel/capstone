@@ -145,7 +145,6 @@ export default function Navbar() {
 
 
   if (location.pathname.startsWith("/admin")) return null;
-
   return (
     <nav className="navbar navbar-expand-lg fixed-top nav">
       <div className="container-fluid">

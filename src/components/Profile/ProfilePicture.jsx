@@ -107,24 +107,24 @@
 import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import toast from "react-hot-toast";
-import axios from "axios"; // Added for Express requests
-import { useAuth } from "../../context/AuthContext"; // Auth context
+import axios from "axios";
+import { useAuth } from "../../context/AuthContext";
 
 const ProfilePicture = ({ preview, setPreview, setImageBase64, userId }) => {
-  const { user } = useAuth(); // Use Auth context to pull user data
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Handle file selection
+  const API_URL = process.env.REACT_APP_API_URL;
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       const fileURL = URL.createObjectURL(file);
-      setPreview(fileURL); // Update preview with the selected file
+      setPreview(fileURL);
     }
   };
 
-  // Convert the image file to Base64
   const convertImageToBase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -134,7 +134,6 @@ const ProfilePicture = ({ preview, setPreview, setImageBase64, userId }) => {
     });
   };
 
-  // Handle the image upload logic
   const handleUpload = async () => {
     if (!preview || loading) return;
     setLoading(true);
@@ -148,23 +147,19 @@ const ProfilePicture = ({ preview, setPreview, setImageBase64, userId }) => {
         return;
       }
 
-      // Check if the user is authenticated (using the user context)
       if (!user) {
         Swal.fire("Authentication Error", "User not authenticated.", "error");
         setLoading(false);
         return;
       }
 
-      // If the user is authenticated, upload the image
       const imageBase64 = await convertImageToBase64(imageFile);
 
-      // Send the image to the server
-      await axios.post("/api/users/upload-profile-picture", {
-        userId: user._id, // Send the user ID from context
+      await axios.post(`${API_URL}/api/users/upload-profile-picture`, {
+        userId: user._id,
         imageBase64,
       });
 
-      // Update the preview and profile picture base64 state
       if (setImageBase64) {
         setImageBase64(imageBase64);
       }
@@ -180,7 +175,6 @@ const ProfilePicture = ({ preview, setPreview, setImageBase64, userId }) => {
 
   useEffect(() => {
     if (user) {
-      // If the user is logged in, set the profile picture preview from the context
       setPreview(user.profilePic || "default-image-url.png");
     }
   }, [user, setPreview]);
@@ -194,7 +188,7 @@ const ProfilePicture = ({ preview, setPreview, setImageBase64, userId }) => {
           style={{ width: "120px", height: "120px", backgroundColor: "#f0f0f0" }}
         >
           <img
-            src={preview || "default-image-url.png"} // Fallback to default image if not set
+            src={preview || "default-image-url.png"}
             alt="Profile"
             className="w-100 h-100"
             style={{ objectFit: "cover", borderRadius: "50%" }}

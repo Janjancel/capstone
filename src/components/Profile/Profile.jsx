@@ -88,11 +88,12 @@ import AddressForm from "./AddressForm";
 import ProfilePicture from "./ProfilePicture";
 
 export default function Profile() {
+  const API_URL = process.env.REACT_APP_API_URL;
+
   const [profilePic, setProfilePic] = useState(null);
   const [preview, setPreview] = useState("default-profile.png");
   const [userDetails, setUserDetails] = useState({ username: "", email: "" });
 
-  // Simulate getting current user ID (replace with useAuth or context)
   const userId = localStorage.getItem("userId");
 
   useEffect(() => {
@@ -100,7 +101,7 @@ export default function Profile() {
 
     const fetchUserData = async () => {
       try {
-        const res = await axios.get(`/api/users/${userId}`);
+        const res = await axios.get(`${API_URL}/api/users/${userId}`);
         const data = res.data;
 
         setUserDetails({
@@ -114,13 +115,13 @@ export default function Profile() {
     };
 
     fetchUserData();
-  }, [userId]);
+  }, [userId, API_URL]);
 
   const handleUpload = async (imageBase64) => {
     if (!userId || !imageBase64) return;
 
     try {
-      await axios.post("/api/users/upload-profile-picture", {
+      await axios.post(`${API_URL}/api/users/upload-profile-picture`, {
         userId,
         imageBase64,
       });

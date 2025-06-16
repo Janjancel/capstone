@@ -2,14 +2,14 @@ import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import toast from "react-hot-toast";
 import axios from "axios";
-import EditAddressModal from "./EditAddressModal"; // Import EditAddressModal
-
-// Importing the single JSON file
+import EditAddressModal from "./EditAddressModal";
 import addressData from "../../data/addressData.json";
-import { useAuth } from "../../context/AuthContext"; // Auth context
+import { useAuth } from "../../context/AuthContext";
 
 const AddressForm = () => {
-  const { user } = useAuth(); // ✅ pull user from context
+  const API_URL = process.env.REACT_APP_API_URL;
+  const { user } = useAuth();
+
   const [address, setAddress] = useState({
     region: "",
     province: "",
@@ -21,8 +21,8 @@ const AddressForm = () => {
   });
 
   const [isAddressSaved, setIsAddressSaved] = useState(false);
-  const [isAdding, setIsAdding] = useState(true); // State to check if user is adding an address
-  const [isEditing, setIsEditing] = useState(false); // State to check if user is editing an address
+  const [isAdding, setIsAdding] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
   const [options, setOptions] = useState({
     regions: [],
     provinces: [],
@@ -30,35 +30,33 @@ const AddressForm = () => {
     barangays: [],
   });
 
-  // Set regions from addressData.json
   useEffect(() => {
     setOptions({
       regions: Object.keys(addressData).map((regionCode) => ({
         code: regionCode,
         name: addressData[regionCode].region_name,
       })),
-      provinces: [], // Will be updated based on region
-      cities: [], // Will be updated based on province
-      barangays: [], // Will be updated based on city
+      provinces: [],
+      cities: [],
+      barangays: [],
     });
   }, []);
 
-  // Fetch user address from the backend if user is logged in
   useEffect(() => {
     const fetchUserAddress = async () => {
       if (!user || !user._id) return;
 
       try {
-        const res = await axios.get(`/api/address/${user._id}`);
+        const res = await axios.get(`${API_URL}/api/address/${user._id}`);
         const userAddress = res.data;
 
         if (userAddress && Object.keys(userAddress).length > 0) {
-          setAddress(userAddress);         // Set the fetched address
-          setIsAddressSaved(true);         // Mark as saved
-          setIsAdding(false);              // Switch to view mode
+          setAddress(userAddress);
+          setIsAddressSaved(true);
+          setIsAdding(false);
         } else {
-          setIsAddressSaved(false);        // No saved address
-          setIsAdding(true);               // Show add form
+          setIsAddressSaved(false);
+          setIsAdding(true);
         }
       } catch (err) {
         console.error("❌ Error fetching user address:", err);
@@ -67,9 +65,8 @@ const AddressForm = () => {
     };
 
     fetchUserAddress();
-  }, [user]);  // Only depend on 'user' because the address is fetched only once per user
+  }, [user]);
 
-  // Handle region change and filter provinces accordingly
   useEffect(() => {
     if (!address.region) return;
 
@@ -96,9 +93,8 @@ const AddressForm = () => {
         barangays: [],
       }));
     }
-  }, [address.region]);  // Add address.region to the dependency array
+  }, [address.region]);
 
-  // Handle province change and filter cities accordingly
   useEffect(() => {
     if (!address.province) return;
 
@@ -124,9 +120,8 @@ const AddressForm = () => {
         barangays: [],
       }));
     }
-  }, [address.province, address.region]);  // Add address.province and address.region to the dependency array
+  }, [address.province, address.region]);
 
-  // Handle city change and filter barangays accordingly
   useEffect(() => {
     if (!address.city) return;
 
@@ -145,7 +140,7 @@ const AddressForm = () => {
         barangays: [],
       }));
     }
-  }, [address.city, address.province, address.region]);  // Add address.city, address.province, and address.region to the dependency array
+  }, [address.city, address.province, address.region]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -159,7 +154,6 @@ const AddressForm = () => {
     }));
   };
 
-  // Validate if all fields are filled before saving the address
   const validateAddress = () => {
     return Object.values(address).every((field) => field !== "");
   };
@@ -179,16 +173,15 @@ const AddressForm = () => {
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
-          // Example of calling an API to save the address
-          await axios.post(`${process.env.REACT_APP_API_URL}/api/address/save`, {
-            userId: user._id, // Assuming user has _id in the context
+          await axios.post(`${API_URL}/api/address/save`, {
+            userId: user._id,
             address: address,
           });
 
           toast.success("Address saved successfully!");
-          setIsAddressSaved(true); // Mark address as saved
-          setIsEditing(false); // Close the modal after saving
-          setIsAdding(false); // Stop adding mode
+          setIsAddressSaved(true);
+          setIsEditing(false);
+          setIsAdding(false);
         } catch (err) {
           console.error("Error saving address:", err);
           toast.error("Failed to save address.");
@@ -227,7 +220,7 @@ const AddressForm = () => {
         <h4 className="mb-3">Address</h4>
         <button
           className="btn btn-sm btn-outline-primary"
-          onClick={() => setIsEditing(true)} // Open modal to edit address
+          onClick={() => setIsEditing(true)}
         >
           Edit Address
         </button>
@@ -236,8 +229,7 @@ const AddressForm = () => {
         {Object.entries(address).map(([key, value]) => (
           <p className="mb-1" key={key}>
             <strong>
-              {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, " $1")}
-              :
+              {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, " $1")}:
             </strong>{" "}
             {value || "Not Provided"}
           </p>
@@ -293,17 +285,21 @@ const AddressForm = () => {
     </div>
   );
 
-  return isAdding ? renderAddMode() : isAddressSaved && !isEditing ? renderViewMode() : (
-    <EditAddressModal 
-      isEditing={isEditing} 
-      setIsEditing={setIsEditing} 
-      address={address} 
-      setAddress={setAddress}
-      handleSaveAddress={handleSaveAddress} 
-      options={options} 
-      renderDropdown={renderDropdown}
-    />
-  );
+  return isAdding
+    ? renderAddMode()
+    : isAddressSaved && !isEditing
+    ? renderViewMode()
+    : (
+      <EditAddressModal
+        isEditing={isEditing}
+        setIsEditing={setIsEditing}
+        address={address}
+        setAddress={setAddress}
+        handleSaveAddress={handleSaveAddress}
+        options={options}
+        renderDropdown={renderDropdown}
+      />
+    );
 };
 
 export default AddressForm;

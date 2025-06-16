@@ -309,7 +309,6 @@
 //     </div>
 //   );
 // }
-
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -374,8 +373,12 @@ export default function Cart() {
       try {
         const res = await axios.get(`${API_URL}/api/users/${user._id}/address`);
         setUserAddress(res.data || {});
-      } catch {
-        console.error("Failed to load address.");
+      } catch (err) {
+        if (err.response?.status === 404) {
+          console.warn("User address not found. Skipping.");
+        } else {
+          console.error("Failed to load address.", err);
+        }
       }
     };
     if (user) fetchAddress();

@@ -247,7 +247,6 @@ export default function NotificationBell() {
 
   const API_URL = process.env.REACT_APP_API_URL;
 
-  // Load current userId
   useEffect(() => {
     const loadUserId = async () => {
       const storedId = localStorage.getItem("userId");
@@ -267,7 +266,7 @@ export default function NotificationBell() {
             localStorage.setItem("userId", res.data._id);
             setUserId(res.data._id);
           }
-        } catch (err) {
+        } catch {
           console.warn("Auth token invalid");
           localStorage.removeItem("token");
           localStorage.removeItem("userId");
@@ -278,61 +277,60 @@ export default function NotificationBell() {
     loadUserId();
   }, []);
 
-  // Initial notification check
   useEffect(() => {
     if (!userId) return;
 
-    const checkInitialNotifications = async () => {
+    const fetchInitial = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/notifications/users/${userId}/notifications`);
-        const notifList = Array.isArray(res.data) ? res.data : [];
-        setNotifications(notifList);
-        const unread = notifList.filter(n => !n.read).length;
+        const list = Array.isArray(res.data) ? res.data : [];
+        setNotifications(list);
+        const unread = list.filter((n) => !n.read).length;
         setUnreadCount(unread);
         if (unread > 0) setStartPolling(true);
       } catch (err) {
-        console.error("Initial notification check failed:", err);
+        console.error("Initial notification fetch failed:", err);
       }
     };
 
-    checkInitialNotifications();
+    fetchInitial();
   }, [userId]);
 
-  // Start polling only if unread notifications exist
   useEffect(() => {
     if (!userId || !startPolling) return;
 
-    const fetchNotifications = async () => {
+    const poll = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/notifications/users/${userId}/notifications`);
-        const notifList = Array.isArray(res.data) ? res.data : [];
-        setNotifications(notifList);
-        const unread = notifList.filter(n => !n.read).length;
+        const list = Array.isArray(res.data) ? res.data : [];
+        setNotifications(list);
+        const unread = list.filter((n) => !n.read).length;
         setUnreadCount(unread);
         if (unread === 0) setStartPolling(false);
       } catch (err) {
-        console.error("Notification fetch failed:", err);
+        console.error("Polling error:", err);
       }
     };
 
-    const intervalId = setInterval(fetchNotifications, 3000);
+    const intervalId = setInterval(poll, 3000);
     return () => clearInterval(intervalId);
   }, [userId, startPolling]);
 
   const handleMarkAsRead = async (notifId) => {
     try {
-      await axios.patch(`${API_URL}/api/notifications/users/${userId}/notifications/${notifId}`, {
-        read: true,
+      const token = localStorage.getItem("token");
+      await axios.patch(`${API_URL}/api/notifications/${notifId}`, { read: true }, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      setNotifications(prev =>
-        prev.map(n => (n._id === notifId ? { ...n, read: true } : n))
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === notifId ? { ...n, read: true } : n))
       );
 
-      setUnreadCount(prev => {
-        const newCount = Math.max(prev - 1, 0);
-        if (newCount === 0) setStartPolling(false);
-        return newCount;
+      setUnreadCount((prev) => {
+        const next = Math.max(prev - 1, 0);
+        if (next === 0) setStartPolling(false);
+        return next;
       });
     } catch (err) {
       Swal.fire("Error", "Failed to mark as read", "error");
@@ -341,7 +339,10 @@ export default function NotificationBell() {
 
   const handleClearNotifications = async () => {
     try {
-      await axios.delete(`${API_URL}/api/notifications/users/${userId}/notifications`);
+      const token = localStorage.getItem("token");
+      await axios.delete(`${API_URL}/api/notifications/users/${userId}/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setNotifications([]);
       setUnreadCount(0);
       setStartPolling(false);
@@ -360,7 +361,7 @@ export default function NotificationBell() {
       setSelectedOrder(res.data);
       setUserEmail(res.data?.email || "");
       setShowOrderModal(true);
-    } catch (err) {
+    } catch {
       Swal.fire("Error", "Failed to fetch order", "error");
     } finally {
       setOrderLoading(false);
@@ -400,7 +401,7 @@ export default function NotificationBell() {
           {notifications.length === 0 ? (
             <div className="text-muted text-center">No notifications</div>
           ) : (
-            notifications.map(n => (
+            notifications.map((n) => (
               <div
                 key={n._id}
                 className={`border rounded mb-2 p-2 small ${n.read ? "bg-light" : "bg-secondary text-white"}`}
@@ -454,7 +455,10 @@ export default function NotificationBell() {
       )}
 
       {orderLoading && (
-        <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex justify-content-center align-items-center" style={{ zIndex: 1050 }}>
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex justify-content-center align-items-center"
+          style={{ zIndex: 1050 }}
+        >
           <Spinner animation="border" variant="light" />
         </div>
       )}
