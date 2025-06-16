@@ -16,6 +16,7 @@ const CartModal = ({
   setCartCount,
   setShowModal,
 }) => {
+  const API_URL = process.env.REACT_APP_API_URL;
   const [address, setAddress] = useState({
     region: "",
     province: "",
@@ -35,68 +36,18 @@ const CartModal = ({
     barangays: [],
   });
 
-  const renderDropdown = (label, name, list) => (
-    <Form.Group className="mb-3" controlId={`form-${name}`}>
-      <Form.Label>{label}</Form.Label>
-      <Form.Select
-        name={name}
-        value={address[name]}
-        onChange={handleInputChange}
-        disabled={
-          (name === "province" && !address.region) ||
-          (name === "city" && !address.province) ||
-          (name === "barangay" && !address.city)
-        }
-      >
-        <option value="">Select {label}</option>
-        {list.map((item, idx) => (
-          <option key={idx} value={item.code || item.name}>
-            {item.name || item}
-          </option>
-        ))}
-      </Form.Select>
-    </Form.Group>
-  );
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setAddress((prev) => ({
-      ...prev,
-      [name]: value,
-      ...(name === "region" ? { province: "", city: "", barangay: "" } : {}),
-      ...(name === "province" ? { city: "", barangay: "" } : {}),
-      ...(name === "city" ? { barangay: "" } : {}),
-    }));
-  };
-
-  const handleSaveAddress = async () => {
-    if (!user) return toast.error("User not found.");
-    const isComplete = Object.values(address).every((field) => field !== "");
-    if (!isComplete) return toast.error("Please fill in all the fields.");
-
-    try {
-      await axios.post("/api/address/save", {
-        userId: user._id,
-        address: address,
-      });
-      toast.success("Address saved!");
-      setIsEditing(false);
-      setShowModal(true); // Show CartModal again
-    } catch (err) {
-      console.error("Save error:", err);
-      toast.error("Failed to save address.");
-    }
-  };
-
   useEffect(() => {
     if (show && user) {
       const fetchAddress = async () => {
         try {
-          const res = await axios.get(`/api/address/${user._id}`);
+          const res = await axios.get(`${API_URL}/api/address/${user._id}`);
           const userAddress = res.data;
-          if (userAddress) setAddress(userAddress);
+          if (userAddress && Object.keys(userAddress).length > 0) {
+            setAddress(userAddress);
+          }
         } catch (err) {
-          console.error("Error fetching user address:", err);
+          console.error("❌ Error fetching user address:", err);
+          toast.error("Unable to load your address.");
         }
       };
 
@@ -154,6 +105,40 @@ const CartModal = ({
     }
   }, [address.city, address.province, address.region]);
 
+  const renderDropdown = (label, name, list) => (
+    <Form.Group className="mb-3" controlId={`form-${name}`}>
+      <Form.Label>{label}</Form.Label>
+      <Form.Select
+        name={name}
+        value={address[name]}
+        onChange={handleInputChange}
+        disabled={
+          (name === "province" && !address.region) ||
+          (name === "city" && !address.province) ||
+          (name === "barangay" && !address.city)
+        }
+      >
+        <option value="">Select {label}</option>
+        {list.map((item, idx) => (
+          <option key={idx} value={item.code || item.name}>
+            {item.name || item}
+          </option>
+        ))}
+      </Form.Select>
+    </Form.Group>
+  );
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setAddress((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "region" ? { province: "", city: "", barangay: "" } : {}),
+      ...(name === "province" ? { city: "", barangay: "" } : {}),
+      ...(name === "city" ? { barangay: "" } : {}),
+    }));
+  };
+
   const isAddressComplete = () =>
     address.region &&
     address.province &&
@@ -167,7 +152,7 @@ const CartModal = ({
 
     setLoading(true);
     try {
-      await axios.post(`/api/orders`, {
+      await axios.post(`${API_URL}/api/orders`, {
         userId: user._id,
         items: selectedItems,
         total: parseFloat(totalPrice),
@@ -175,7 +160,7 @@ const CartModal = ({
         notes: "",
       });
 
-      await axios.put(`/api/cart/${user._id}/remove`, {
+      await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
         removeItems: selectedItems.map((i) => i.id),
       });
 
@@ -326,7 +311,7 @@ const CartModal = ({
           setIsEditing={setIsEditing}
           address={address}
           setAddress={setAddress}
-          handleSaveAddress={handleSaveAddress}
+          handleSaveAddress={() => {}}
           options={options}
           renderDropdown={renderDropdown}
         />
