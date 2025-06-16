@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
-import { collection, query, onSnapshot, doc, updateDoc } from "firebase/firestore";
-import { db, auth } from "../../firebase/firebase";
 import Swal from "sweetalert2";
-import { sendPasswordResetEmail } from "firebase/auth";
+import axios from "axios";
+import toast from "react-hot-toast";
 
 const AccountsDashboard = () => {
   const [accounts, setAccounts] = useState([]);
@@ -11,41 +10,40 @@ const AccountsDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState(null);
+  const API_URL = process.env.REACT_APP_API_URL;
 
-  useEffect(() => {
-    const q = query(collection(db, "users"));
-    const unsubscribe = onSnapshot(
-      q,
-      (querySnapshot) => {
-        const usersData = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setAccounts(usersData);
-        setFilteredAccounts(usersData);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error fetching users:", error);
-        setError("Failed to load account data.");
-        setLoading(false);
-      }
-    );
-    return () => unsubscribe();
-  }, []);
+  const pollingRef = useRef(null);
+
+  const fetchAccounts = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/users`);
+      setAccounts(res.data);
+      setFilteredAccounts(res.data);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+      setError("Failed to load account data.");
+      setLoading(false);
+    }
+  };
 
   const toggleStatus = async (account) => {
     const newStatus = account.status === "online" ? "offline" : "online";
     try {
-      await updateDoc(doc(db, "users", account.id), { status: newStatus });
+      await axios.put(`${API_URL}/api/users/status/${account._id}`, {
+        status: newStatus,
+      });
+      toast.success(`User marked as ${newStatus}`);
+      fetchAccounts(); // refresh after toggle
     } catch (err) {
       console.error("Failed to update status:", err);
+      toast.error("Failed to update user status.");
     }
   };
 
   const handleChangePassword = async (account) => {
     if (!account.email) {
-      Swal.fire("Error", "No email associated with this user.", "error");
+      toast.error("No email associated with this user.");
       return;
     }
 
@@ -57,15 +55,24 @@ const AccountsDashboard = () => {
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
-          await sendPasswordResetEmail(auth, account.email);
-          Swal.fire("Sent!", "Password reset email has been sent.", "success");
+          await axios.post(`${API_URL}/api/auth/reset-password`, {
+            email: account.email,
+          });
+          toast.success("Password reset email sent.");
         } catch (error) {
           console.error("Error sending reset email:", error);
-          Swal.fire("Error", error.message, "error");
+          toast.error(error.response?.data?.message || error.message);
         }
       }
     });
   };
+
+  useEffect(() => {
+    fetchAccounts();
+
+    pollingRef.current = setInterval(fetchAccounts, 3000); // poll every 3s
+    return () => clearInterval(pollingRef.current);
+  }, [API_URL]);
 
   useEffect(() => {
     const filtered = accounts.filter((account) =>
@@ -99,7 +106,7 @@ const AccountsDashboard = () => {
             <table className="table table-bordered text-center align-middle">
               <thead className="table-dark">
                 <tr>
-                  <th>Image</th>
+                  <th>Profile</th>
                   <th>Username</th>
                   <th>Email</th>
                   <th>Role</th>
@@ -111,9 +118,11 @@ const AccountsDashboard = () => {
                 {filteredAccounts.length > 0 ? (
                   filteredAccounts.map((account) => {
                     const isOnline = account.status === "online";
+                    const imageSrc = account.profilePic || "default-profile.png";
+
                     return (
                       <tr
-                        key={account.id}
+                        key={account._id}
                         style={{
                           border: `2px solid ${isOnline ? "#28a745" : "#ccc"}`,
                           color: isOnline ? "#28a745" : "#6c757d",
@@ -121,21 +130,23 @@ const AccountsDashboard = () => {
                         }}
                       >
                         <td>
-                          {account.profilePic ? (
+                          <div
+                            className="rounded-circle overflow-hidden mx-auto"
+                            style={{
+                              width: 45,
+                              height: 45,
+                              borderRadius: "50%",
+                              border: "1px solid #ccc",
+                              backgroundColor: "#f0f0f0",
+                            }}
+                          >
                             <img
-                              src={account.profilePic}
+                              src={imageSrc}
                               alt="profile"
-                              style={{
-                                width: 45,
-                                height: 45,
-                                borderRadius: "50%",
-                                objectFit: "cover",
-                                border: "1px solid #ccc",
-                              }}
+                              className="w-100 h-100"
+                              style={{ objectFit: "cover" }}
                             />
-                          ) : (
-                            <span className="text-muted">No Image</span>
-                          )}
+                          </div>
                         </td>
                         <td>{account.username || "N/A"}</td>
                         <td>{account.email || "N/A"}</td>

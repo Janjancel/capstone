@@ -8,12 +8,14 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const API_URL = process.env.REACT_APP_API_URL;
 
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get("/api/notifications");
-      setNotifications(res.data);
-      setUnreadCount(res.data.filter(n => !n.read).length);
+      const res = await axios.get(`${API_URL}/api/notifications`);
+      const adminNotifs = res.data.filter(n => n.role === "admin");
+      setNotifications(adminNotifs);
+      setUnreadCount(adminNotifs.filter(n => !n.read).length);
     } catch (err) {
       console.error("Error fetching notifications:", err);
     } finally {
@@ -27,7 +29,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
 
   const handleMarkAsRead = async (id) => {
     try {
-      await axios.patch(`/api/notifications/${id}/read`);
+      await axios.patch(`${API_URL}/api/notifications/${id}/read`);
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, read: true } : n))
       );
@@ -40,7 +42,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
 
   const handleClearNotifications = async () => {
     try {
-      await axios.delete("/api/notifications/clear");
+      await axios.delete(`${API_URL}/api/notifications/clear`);
       setNotifications([]);
       setUnreadCount(0);
     } catch (err) {

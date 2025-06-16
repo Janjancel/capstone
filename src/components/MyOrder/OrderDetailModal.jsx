@@ -1,19 +1,33 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Button, Badge, Spinner } from "react-bootstrap";
 import axios from "axios";
+import toast from "react-hot-toast";
 
 const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders }) => {
   const [realTimeOrder, setRealTimeOrder] = useState(order);
   const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState({});
+  const API_URL = process.env.REACT_APP_API_URL;
 
   useEffect(() => {
-    if (!order?.id) return;
+    if (!order?.id && !order?._id) return;
 
     const fetchOrder = async () => {
       try {
-        const response = await axios.get(`/api/orders/${order.id}`);
-        setRealTimeOrder(response.data);
-        updateParentOrders(response.data);
+        const orderId = order.id || order._id;
+        const [orderRes, usersRes] = await Promise.all([
+          axios.get(`${API_URL}/api/orders/${orderId}`),
+          axios.get(`${API_URL}/api/users`)
+        ]);
+
+        const userMap = {};
+        usersRes.data.forEach((user) => {
+          userMap[user._id] = user;
+        });
+
+        setRealTimeOrder({ ...orderRes.data, userEmail: userMap[orderRes.data.userId]?.email || "Unknown" });
+        setUserData(userMap);
+        updateParentOrders(orderRes.data);
       } catch (err) {
         console.error("Error fetching order:", err);
       } finally {
@@ -22,23 +36,34 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
     };
 
     fetchOrder();
-
-    const interval = setInterval(fetchOrder, 5000); // Simulate real-time polling
+    const interval = setInterval(fetchOrder, 5000);
     return () => clearInterval(interval);
-  }, [order?.id]);
+  }, [order?.id, order?._id, API_URL]);
 
   const handleCancelRequest = async () => {
     try {
-      await axios.patch(`/api/orders/${realTimeOrder.id}/cancel`, {
+      const orderId = realTimeOrder.id || realTimeOrder._id;
+      await axios.patch(`${API_URL}/api/orders/${orderId}/cancel`, {
         email: userEmail,
+      });
+
+      // Notify admin
+      await axios.post(`${API_URL}/api/notifications`, {
+        orderId: orderId,
+        userId: realTimeOrder.userId,
+        status: "Cancellation Requested",
+        role: "admin", // ✅ NEW: admin role
+        message: `User ${userEmail} requested cancellation for Order ID: ${orderId}`,
       });
 
       const updatedOrder = { ...realTimeOrder, status: "Cancellation Requested" };
       setRealTimeOrder(updatedOrder);
       updateParentOrders(updatedOrder);
+      toast.success("Cancellation request sent and admin notified.");
       onClose();
     } catch (err) {
       console.error("Error requesting cancellation:", err);
+      toast.error("Failed to request cancellation.");
     }
   };
 
@@ -57,7 +82,7 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
 
   if (!realTimeOrder) return null;
 
-  const { address = {}, items = [] } = realTimeOrder;
+  const { address = {}, items = [], userEmail: displayEmail } = realTimeOrder;
   const rawStatus = (realTimeOrder.status || "").toLowerCase().trim();
   const showCancelBtn = rawStatus === "pending";
 
@@ -73,20 +98,18 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
           </div>
         ) : (
           <>
-            <h5>Order ID: {realTimeOrder.id}</h5>
+            <h5>Order ID: {realTimeOrder.id || realTimeOrder._id}</h5>
             <p>
-              <strong>Date:</strong>{" "}
-              {new Date(realTimeOrder.createdAt).toLocaleString() || "N/A"}
+              <strong>Email:</strong> {displayEmail || userEmail || "Unknown"}
             </p>
             <p>
-              <strong>Status:</strong>{" "}
-              <Badge bg={getStatusVariant(rawStatus)}>
-                {realTimeOrder.status || "N/A"}
-              </Badge>
+              <strong>Date:</strong> {new Date(realTimeOrder.createdAt).toLocaleString() || "N/A"}
             </p>
             <p>
-              <strong>Total Price:</strong> ₱
-              {parseFloat(realTimeOrder.total || 0).toFixed(2)}
+              <strong>Status:</strong> <Badge bg={getStatusVariant(rawStatus)}>{realTimeOrder.status || "N/A"}</Badge>
+            </p>
+            <p>
+              <strong>Total Price:</strong> ₱{parseFloat(realTimeOrder.total || 0).toFixed(2)}
             </p>
 
             <h6>Shipping Address</h6>

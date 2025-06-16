@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import { Modal, Button, Spinner } from "react-bootstrap";
 import axios from "axios";
 import OrderDetailModal from "./OrderDetailModal";
+import { useAuth } from "../../context/AuthContext"; // ✅
 
 const MyOrders = ({ show, onClose }) => {
+  const { user } = useAuth(); // ✅ context-based user
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -11,39 +13,47 @@ const MyOrders = ({ show, onClose }) => {
   const [userEmail, setUserEmail] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const ORDERS_PER_PAGE = 3;
+  const API_URL = process.env.REACT_APP_API_URL;
 
-  useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user || !user._id) {
-      setError("You must be logged in to view your orders.");
+useEffect(() => {
+  if (!show) return;
+
+  // Only proceed once user is loaded
+  if (user === null) {
+    // still loading user
+    return;
+  }
+
+  if (!user._id) {
+    setError("You must be logged in to view your orders.");
+    setLoading(false);
+    return;
+  }
+
+  setUserEmail(user.email || "");
+
+  const fetchOrders = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/orders/user/${user._id}`);
+      const filtered = res.data.filter(
+        (order) =>
+          order.status.toLowerCase() !== "delivered" &&
+          order.status.toLowerCase() !== "cancelled"
+      );
+      filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setOrders(filtered);
+      setError(""); // clear any previous error
+    } catch (err) {
+      console.error("Error fetching orders:", err);
+      setError("Failed to fetch orders. Please try again.");
+    } finally {
       setLoading(false);
-      return;
     }
+  };
 
-    setUserEmail(user.email || "");
+  fetchOrders();
+}, [show, user, API_URL]);
 
-    const fetchOrders = async () => {
-      try {
-        const res = await axios.get(`/api/orders/user/${user._id}`);
-        const filtered = res.data.filter(
-          (order) =>
-            order.status.toLowerCase() !== "delivered" &&
-            order.status.toLowerCase() !== "cancelled"
-        );
-
-        filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-        setOrders(filtered);
-      } catch (err) {
-        console.error("Error fetching orders:", err);
-        setError("Failed to fetch orders. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrders();
-  }, []);
 
   const handleClose = () => {
     setSelectedOrder(null);

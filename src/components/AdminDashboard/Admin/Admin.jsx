@@ -5,7 +5,7 @@ import axios from "axios";
 import DashboardNavbar from "../DashboardNavbar";
 import Sidebar from "../Sidebar/Sidebar";
 import Items from "../Items";
-// import Accounts from "../Accounts";
+import Accounts from "../Accounts";
 // import Dashboard from "../Dashboard";
 // import SellRequests from "../Requests/SellDashboard/SellDashboard";
 // import DemolitionRequests from "../Requests/DemolishDashboard/DemolishDashboard";
@@ -100,9 +100,9 @@ const Admin = () => {
 
           <div>
             <Routes>
-              {/* <Route path="/" element={<Navigate to="dashboard" />} />
+              {/* <Route path="/" element={<Navigate to="dashboard" />} /> */}
               <Route path="accounts" element={<Accounts />} />
-              <Route path="dashboard" element={<Dashboard />} />
+              {/* <Route path="dashboard" element={<Dashboard />} />
               <Route path="sellDashboard" element={<SellRequests />} />
               <Route path="demolishDashboard" element={<DemolitionRequests />} /> */}
               <Route path="items" element={<Items />} />
