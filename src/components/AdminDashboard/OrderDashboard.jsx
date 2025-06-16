@@ -23,26 +23,21 @@ const OrderDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 5;
   const intervalRef = useRef(null);
+  const API_URL = process.env.REACT_APP_API_URL;
 
   const fetchOrders = async () => {
     try {
       const [ordersRes, usersRes] = await Promise.all([
-        axios.get("/api/orders"),
-        axios.get("/api/users"),
+        axios.get(`${API_URL}/api/orders`),
+        axios.get(`${API_URL}/api/users`),
       ]);
 
       const userMap = {};
-      if (Array.isArray(usersRes.data)) {
-        usersRes.data.forEach((user) => {
-          userMap[user._id] = user;
-        });
-      }
+      usersRes.data.forEach((user) => {
+        userMap[user._id] = user;
+      });
 
-      const rawOrders = Array.isArray(ordersRes.data)
-        ? ordersRes.data
-        : ordersRes.data.orders || [];
-
-      const sortedOrders = rawOrders.sort(
+      const sortedOrders = ordersRes.data.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
       );
 
@@ -61,7 +56,6 @@ const OrderDashboard = () => {
     intervalRef.current = setInterval(() => {
       fetchOrders();
     }, 3000);
-
     return () => clearInterval(intervalRef.current);
   }, []);
 
@@ -80,9 +74,11 @@ const OrderDashboard = () => {
 
   const handleStatusChange = async (order, newStatus) => {
     try {
-      await axios.put(`/api/orders/${order._id}/status`, { status: newStatus });
+      await axios.put(`${API_URL}/api/orders/${order._id}/status`, {
+        status: newStatus,
+      });
 
-      await axios.post(`/api/notifications`, {
+      await axios.post(`${API_URL}/api/notifications`, {
         orderId: order._id,
         userId: order.userId,
         status: newStatus,
@@ -96,9 +92,9 @@ const OrderDashboard = () => {
 
   const handleApproveCancellation = async (order) => {
     try {
-      await axios.put(`/api/orders/${order._id}/cancel`);
+      await axios.put(`${API_URL}/api/orders/${order._id}/cancel`);
 
-      await axios.post(`/api/notifications`, {
+      await axios.post(`${API_URL}/api/notifications`, {
         orderId: order._id,
         userId: order.userId,
         status: "Cancelled",
