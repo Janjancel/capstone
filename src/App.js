@@ -14,6 +14,8 @@ import Admin from "./components/AdminDashboard/Admin/Admin";
 import Cart from "./components/Cart/Cart";
 import Buy from "./components/Buy";
 import Profile from "./components/Profile/Profile";
+import Sell from "./components/Sell/Sell"
+import Demolish from "./components/Demolish/Demolish"
 
 import { Toaster } from "react-hot-toast";
 import { useAuth } from "./context/AuthContext";
@@ -42,6 +44,9 @@ function App() {
             <Route path="/buy" element={<Buy />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/sell" element={<Sell/>} />
+            <Route path="/demolish" element={<Demolish/>} />
+
           </Route>
 
           <Route element={<ProtectedAdminRoute />}>

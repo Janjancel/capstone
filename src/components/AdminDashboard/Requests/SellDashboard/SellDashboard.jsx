@@ -1,12 +1,38 @@
 import React, { useEffect, useState } from "react";
-import { collection, getDocs, deleteDoc, doc, updateDoc } from "firebase/firestore";
-import { db } from "../../../../firebase/firebase";
 import { Modal, Button, Image } from "react-bootstrap";
 import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 import { FaTrashAlt } from "react-icons/fa";
 import "bootstrap/dist/css/bootstrap.min.css";
-import { addNotification } from "../../../../functions/utils/notifications"; // ✅ IMPORT
+import axios from "axios";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup
+} from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
+import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
+import markerIcon from "leaflet/dist/images/marker-icon.png";
+import markerShadow from "leaflet/dist/images/marker-shadow.png";
+
+// Fix Leaflet marker icon URLs
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
+
+const customIcon = new L.Icon({
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+
+const API_URL = process.env.REACT_APP_API_URL;
 
 const SellDashboard = () => {
   const [requests, setRequests] = useState([]);
@@ -19,10 +45,9 @@ const SellDashboard = () => {
   useEffect(() => {
     const fetchRequests = async () => {
       try {
-        const snapshot = await getDocs(collection(db, "sellRequest"));
-        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setRequests(data);
-        setFilteredRequests(data);
+        const res = await axios.get(`${API_URL}/api/sell`);
+        setRequests(res.data);
+        setFilteredRequests(res.data);
       } catch (err) {
         console.error("Error fetching sell requests:", err);
         setError("Failed to fetch sell requests.");
@@ -30,14 +55,13 @@ const SellDashboard = () => {
         setLoading(false);
       }
     };
-
     fetchRequests();
   }, []);
 
   useEffect(() => {
     const filtered = requests.filter((request) =>
       request.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      request.where.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      request.contact.toLowerCase().includes(searchQuery.toLowerCase()) ||
       request.description.toLowerCase().includes(searchQuery.toLowerCase())
     );
     setFilteredRequests(filtered);
@@ -46,13 +70,8 @@ const SellDashboard = () => {
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this request?")) {
       try {
-        const deletedRequest = requests.find((r) => r.id === id);
-        await deleteDoc(doc(db, "sellRequest", id));
-        await addNotification(
-          `Sell request from ${deletedRequest.name} was deleted.`,
-          "sell"
-        );
-        setRequests((prev) => prev.filter((req) => req.id !== id));
+        await axios.delete(`${API_URL}/api/sell/${id}`);
+        setRequests((prev) => prev.filter((req) => req._id !== id));
       } catch (error) {
         console.error("Error deleting request:", error);
       }
@@ -61,17 +80,9 @@ const SellDashboard = () => {
 
   const handleStatusUpdate = async (id, newStatus) => {
     try {
-      const ref = doc(db, "sellRequest", id);
-      await updateDoc(ref, { status: newStatus });
-
-      const updatedRequest = requests.find((r) => r.id === id);
-      await addNotification(
-        `Sell request from ${updatedRequest.name} was ${newStatus}.`,
-        "sell"
-      );
-
+      await axios.patch(`${API_URL}/api/sell/${id}`, { status: newStatus });
       setRequests((prev) =>
-        prev.map((req) => (req.id === id ? { ...req, status: newStatus } : req))
+        prev.map((req) => (req._id === id ? { ...req, status: newStatus } : req))
       );
     } catch (error) {
       console.error(`Error updating status to ${newStatus}:`, error);
@@ -85,34 +96,80 @@ const SellDashboard = () => {
     docPDF.setFontSize(16);
     docPDF.text("Sell Request Details", 10, 20);
     docPDF.setFontSize(12);
-    docPDF.text(`ID: ${selectedRequest.id}`, 10, 40);
+    docPDF.text(`ID: ${selectedRequest._id}`, 10, 40);
     docPDF.text(`Name: ${selectedRequest.name}`, 10, 50);
     docPDF.text(`Contact: ${selectedRequest.contact}`, 10, 60);
-    docPDF.text(`Location: ${selectedRequest.where}`, 10, 70);
-    docPDF.text(`Price: $${selectedRequest.price}`, 10, 80);
+    docPDF.text(`Location: ${selectedRequest.location?.lat}, ${selectedRequest.location?.lng}`, 10, 70);
+    docPDF.text(`Price: ₱${selectedRequest.price}`, 10, 80);
     const description = docPDF.splitTextToSize(`Description: ${selectedRequest.description}`, 180);
     docPDF.text(description, 10, 90);
-
     if (selectedRequest.image) {
       docPDF.addImage(selectedRequest.image, "JPEG", 120, 40, 70, 70);
     }
-
-    docPDF.save(`Sell_Request_${selectedRequest.id}.pdf`);
+    docPDF.save(`Sell_Request_${selectedRequest._id}.pdf`);
   };
 
   const handleDownloadExcel = () => {
-    const exportData = filteredRequests.map((req) => {
-      const { image, ...rest } = req;
-      return rest;
-    });
+    const exportData = filteredRequests.map(({ image, ...rest }) => rest);
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sell Requests");
     XLSX.writeFile(wb, "Sell_Requests.xlsx");
   };
 
+  const validLocations = filteredRequests.filter(
+    (loc) =>
+      loc.location &&
+      typeof loc.location.lat === "number" &&
+      typeof loc.location.lng === "number"
+  );
+
+  const defaultPosition = [13.9311, 121.6176];
+  const mapCenter = validLocations.length
+    ? [validLocations[0].location.lat, validLocations[0].location.lng]
+    : defaultPosition;
+
   return (
     <div className="container mt-4">
+      <h2>Sell Request Map</h2>
+      <div className="mb-3">
+        <MapContainer
+          center={mapCenter}
+          zoom={6}
+          style={{ height: "400px", width: "100%" }}
+        >
+          <TileLayer
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+          />
+          {validLocations.map(({ _id, location, name, description, image }) => (
+            <Marker
+              key={_id}
+              position={[location.lat, location.lng]}
+              icon={customIcon}
+            >
+              <Popup>
+                <strong>📍 {name}</strong>
+                <br />
+                {description}
+                {image && (
+                  <img
+                    src={image}
+                    alt={name}
+                    style={{
+                      width: "100%",
+                      maxHeight: "200px",
+                      objectFit: "cover",
+                      marginTop: "10px",
+                    }}
+                  />
+                )}
+              </Popup>
+            </Marker>
+          ))}
+        </MapContainer>
+      </div>
+
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h2>Sell Requests</h2>
         <input
@@ -148,11 +205,15 @@ const SellDashboard = () => {
             <tbody>
               {filteredRequests.length > 0 ? (
                 filteredRequests.map((request) => (
-                  <tr key={request.id}> 
-                    <td>{request.id}</td>
+                  <tr key={request._id}>
+                    <td>{request._id}</td>
                     <td>{request.name}</td>
                     <td>{request.contact}</td>
-                    <td>{request.where}</td>
+                    <td>
+                      {request.location?.lat && request.location?.lng
+                        ? `${request.location.lat}, ${request.location.lng}`
+                        : "N/A"}
+                    </td>
                     <td>₱{request.price}</td>
                     <td>{request.description}</td>
                     <td>
@@ -185,7 +246,7 @@ const SellDashboard = () => {
                       <Button
                         size="sm"
                         variant="outline-success"
-                        onClick={() => handleStatusUpdate(request.id, "accepted")}
+                        onClick={() => handleStatusUpdate(request._id, "accepted")}
                         disabled={request.status === "accepted"}
                       >
                         Accept
@@ -193,7 +254,7 @@ const SellDashboard = () => {
                       <Button
                         size="sm"
                         variant="outline-warning"
-                        onClick={() => handleStatusUpdate(request.id, "declined")}
+                        onClick={() => handleStatusUpdate(request._id, "declined")}
                         disabled={request.status === "declined"}
                       >
                         Decline
@@ -201,7 +262,7 @@ const SellDashboard = () => {
                       <Button
                         size="sm"
                         variant="outline-danger"
-                        onClick={() => handleDelete(request.id)}
+                        onClick={() => handleDelete(request._id)}
                       >
                         <FaTrashAlt />
                       </Button>
@@ -237,11 +298,11 @@ const SellDashboard = () => {
           <Modal.Body>
             <div className="row">
               <div className="col-md-6">
-                <p><strong>ID:</strong> {selectedRequest.id}</p>
+                <p><strong>ID:</strong> {selectedRequest._id}</p>
                 <p><strong>Name:</strong> {selectedRequest.name}</p>
                 <p><strong>Contact:</strong> {selectedRequest.contact}</p>
-                <p><strong>Location:</strong> {selectedRequest.where}</p>
-                <p><strong>Price:</strong> ${selectedRequest.price}</p>
+                <p><strong>Location:</strong> {selectedRequest.location?.lat}, {selectedRequest.location?.lng}</p>
+                <p><strong>Price:</strong> ₱{selectedRequest.price}</p>
                 <p><strong>Description:</strong> {selectedRequest.description}</p>
               </div>
               <div className="col-md-6 text-center">
