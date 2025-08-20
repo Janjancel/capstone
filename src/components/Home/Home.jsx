@@ -13,21 +13,13 @@ export default function Home() {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem("token");
-      if (!token) {
-        console.log("No user logged in");
-        return;
-      }
+      if (!token) return;
 
       try {
-        const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/users/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+        await axios.get(`${process.env.REACT_APP_API_URL}/api/users/me`, {
+          headers: { Authorization: `Bearer ${token}` }
         });
-
-        console.log("User logged in:", res.data.email);
       } catch (err) {
-        console.error("Invalid or expired token");
         localStorage.removeItem("token");
         localStorage.removeItem("userId");
       }
@@ -39,31 +31,22 @@ export default function Home() {
   return (
     <div id="homepage">
       <Section1
-        title="Welcome to Unika Antika"
-        subtitle="Explore our unique collection of antique items."
+        title="Unika Antika"
+        subtitle="Timeless antiques for collectors and dreamers."
         onRegisterClick={() => navigate('/register')}
         onLoginClick={() => navigate('/login')}
       />
 
-      <Section2
-        title="Discover the Unique"
-        subtitle="Explore our collection of exquisite antiques"
-        onSearchSubmit={(e) => {
-          e.preventDefault();
-          console.log('Searching...');
-        }}
-        onViewAllClick={() => console.log('View All clicked')}
-      />
+      <Section2 />
 
       <Section3
-        title="Featured Products"
-        description="Discover our handpicked collection"
-        onShopNowClick={() => console.log('Shop Now clicked')}
+        title="Featured Antiques"
+        description="Discover our handpicked treasures"
       />
 
       <Section4
         title="Educational Facts"
-        description="Read about the history of antique treasures"
+        description="Uncover the history behind antique masterpieces"
       />
     </div>
   );

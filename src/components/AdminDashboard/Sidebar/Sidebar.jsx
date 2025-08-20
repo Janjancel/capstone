@@ -1,12 +1,27 @@
 import React, { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  List, Person, Box, Cart, ChevronDown, ChevronUp, Justify, ClipboardData
-} from "react-bootstrap-icons";
-import "bootstrap/dist/css/bootstrap.min.css";
+  List as ListIcon,
+  Person as PersonIcon,
+  Inventory2 as InventoryIcon,
+  ShoppingCart as CartIcon,
+  ExpandLess,
+  ExpandMore,
+  Assessment as ReportIcon,
+} from "@mui/icons-material";
+import {
+  Box,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Collapse,
+  Typography,
+  Divider,
+} from "@mui/material";
 import logo from "../../images/logo.png";
 
-const Sidebar = ({ toggleSidebar }) => {
+const Sidebar = () => {
   const location = useLocation();
 
   const isRequestsActive =
@@ -28,76 +43,136 @@ const Sidebar = ({ toggleSidebar }) => {
 
   const toggleDropdown = () => setIsOpen(!isOpen);
 
+  // Active NavLink style
   const activeStyle = {
-    backgroundColor: "#f8f9fa",
-    fontWeight: "bold",
-    borderRadius: "5px",
+    "&.active": {
+      backgroundColor: "#e6e6e6", // highlighted background
+      fontWeight: "bold",
+      borderRadius: "8px",
+      color: "black",
+    },
+    color: "black",
   };
 
   return (
-    <aside className="h-100 position-relative p-3">
-      <div className="text-center mb-4 mt-4 pt-2">
+    <Box
+      sx={{
+        height: "100%",
+        p: 2,
+        bgcolor: "#f8f9fa", // Sidebar background stays off-white
+      }}
+    >
+      {/* Logo + Title */}
+      <Box textAlign="center" mb={4} mt={2}>
         <img
           src={logo}
           alt="Unika Antika Logo"
           style={{ width: "50px", height: "50px", objectFit: "contain" }}
-          className="mb-2"
         />
-        <h5 className="fw-bold m-0">UNIKA ANTIKA</h5>
-      </div>
+        <Typography variant="h6" fontWeight="bold" mt={1}>
+          UNIKA ANTIKA
+        </Typography>
+      </Box>
 
-      <ul className="nav flex-column">
-        <li className="nav-item">
-          <NavLink to="/admin/dashboard" className="nav-link d-flex align-items-center" style={({ isActive }) => (isActive ? activeStyle : { color: "black" })}>
-            <List className="me-2" /> Dashboard
-          </NavLink>
-        </li>
+      {/* Navigation */}
+      <List component="navigation">
+        {/* Dashboard */}
+        <ListItem
+          button
+          component={NavLink}
+          to="/admin/dashboard"
+          sx={activeStyle}
+        >
+          <ListItemIcon>
+            <ListIcon />
+          </ListItemIcon>
+          <ListItemText primary="Dashboard" />
+        </ListItem>
 
-        <li className="nav-item">
-          <NavLink to="/admin/accounts" className="nav-link d-flex align-items-center" style={({ isActive }) => (isActive ? activeStyle : { color: "black" })}>
-            <Person className="me-2" /> Accounts
-          </NavLink>
-        </li>
+        {/* Accounts */}
+        <ListItem
+          button
+          component={NavLink}
+          to="/admin/accounts"
+          sx={activeStyle}
+        >
+          <ListItemIcon>
+            <PersonIcon />
+          </ListItemIcon>
+          <ListItemText primary="Accounts" />
+        </ListItem>
 
-        <li className="nav-item">
-          <NavLink to="/admin/items" className="nav-link d-flex align-items-center" style={({ isActive }) => (isActive ? activeStyle : { color: "black" })}>
-            <Box className="me-2" /> Items
-          </NavLink>
-        </li>
+        {/* Items */}
+        <ListItem
+          button
+          component={NavLink}
+          to="/admin/items"
+          sx={activeStyle}
+        >
+          <ListItemIcon>
+            <InventoryIcon />
+          </ListItemIcon>
+          <ListItemText primary="Items" />
+        </ListItem>
 
-        <li className="nav-item">
-          <NavLink to="/admin/orders" className="nav-link d-flex align-items-center" style={({ isActive }) => (isActive ? activeStyle : { color: "black" })}>
-            <Cart className="me-2" /> Orders
-          </NavLink>
-        </li>
+        {/* Orders */}
+        <ListItem
+          button
+          component={NavLink}
+          to="/admin/orders"
+          sx={activeStyle}
+        >
+          <ListItemIcon>
+            <CartIcon />
+          </ListItemIcon>
+          <ListItemText primary="Orders" />
+        </ListItem>
 
-        <li className="nav-item" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-          <span className="nav-link d-flex align-items-center" onClick={toggleDropdown} style={{ cursor: "pointer", color: "black" }}>
-            Requests {isOpen ? <ChevronUp className="ms-2" /> : <ChevronDown className="ms-2" />}
-          </span>
-          {(isOpen || isHovering) && (
-            <ul className="list-unstyled ps-3">
-              <li>
-                <NavLink to="/admin/sellDashboard" className="nav-link" style={({ isActive }) => (isActive ? activeStyle : { color: "black" })}>
-                  Sell
-                </NavLink>
-              </li>
-              <li>
-                <NavLink to="/admin/demolishDashboard" className="nav-link" style={({ isActive }) => (isActive ? activeStyle : { color: "black" })}>
-                  Demolish
-                </NavLink>
-              </li>
-            </ul>
-          )}
-        </li>
+        {/* Requests Dropdown */}
+        <Box onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+          <ListItem button onClick={toggleDropdown} sx={{ color: "black" }}>
+            <ListItemText primary="Requests" />
+            {isOpen ? <ExpandLess /> : <ExpandMore />}
+          </ListItem>
 
-        <li className="nav-item">
-          <NavLink to="/admin/report" className="nav-link d-flex align-items-center" style={({ isActive }) => (isActive ? activeStyle : { color: "black" })}>
-            <ClipboardData className="me-2" /> Reports
-          </NavLink>
-        </li>
-      </ul>
-    </aside>
+          <Collapse in={isOpen || isHovering} timeout="auto" unmountOnExit>
+            <List component="div" disablePadding sx={{ pl: 4 }}>
+              <ListItem
+                button
+                component={NavLink}
+                to="/admin/sellDashboard"
+                sx={activeStyle}
+              >
+                <ListItemText primary="Sell" />
+              </ListItem>
+              <ListItem
+                button
+                component={NavLink}
+                to="/admin/demolishDashboard"
+                sx={activeStyle}
+              >
+                <ListItemText primary="Demolish" />
+              </ListItem>
+            </List>
+          </Collapse>
+        </Box>
+
+        {/* Reports */}
+        <ListItem
+          button
+          component={NavLink}
+          to="/admin/report"
+          sx={activeStyle}
+        >
+          <ListItemIcon>
+            <ReportIcon />
+          </ListItemIcon>
+          <ListItemText primary="Reports" />
+        </ListItem>
+      </List>
+
+      {/* <Divider sx={{ mt: 2 }} /> */}
+    </Box>
   );
 };
 
