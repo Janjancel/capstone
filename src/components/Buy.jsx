@@ -1,5 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { OverlayTrigger, Popover, Spinner } from "react-bootstrap";
+import {
+  Box,
+  Typography,
+  TextField,
+  Grid,
+  Card,
+  CardMedia,
+  CardContent,
+  CardActions,
+  Button,
+  CircularProgress,
+  Popover,
+} from "@mui/material";
 import toast from "react-hot-toast";
 import axios from "axios";
 import CartModal from "./Cart/CartModal";
@@ -15,6 +27,8 @@ const Buy = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [userAddress, setUserAddress] = useState({});
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [popoverItem, setPopoverItem] = useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL;
 
@@ -51,9 +65,10 @@ const Buy = () => {
   }, []);
 
   useEffect(() => {
-    const filtered = items.filter((item) =>
-      item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    const filtered = items.filter(
+      (item) =>
+        item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.description?.toLowerCase().includes(searchQuery.toLowerCase())
     );
     setFilteredItems(filtered);
   }, [searchQuery, items]);
@@ -107,127 +122,182 @@ const Buy = () => {
     }
   };
 
+  const handlePopoverOpen = (event, item) => {
+    setAnchorEl(event.currentTarget);
+    setPopoverItem(item);
+  };
+
+  const handlePopoverClose = () => {
+    setAnchorEl(null);
+    setPopoverItem(null);
+  };
+
+  const open = Boolean(anchorEl);
+
   return (
-    <div style={{ minHeight: "100vh", padding: "20px" }}>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h2>Antique Shop</h2>
-        <input
-          type="text"
-          className="form-control w-25"
-          placeholder="Search items..."
+    <Box sx={{ minHeight: "100vh", p: 3 }}>
+      {/* Header */}
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
+      >
+        <Typography variant="h4" fontWeight="bold">
+          Antique Shop
+        </Typography>
+        <TextField
+          size="small"
+          variant="outlined"
+          label="Search items..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ width: "250px" }}
         />
-      </div>
+      </Box>
 
-      {error && <p className="text-danger">{error}</p>}
-      {loading && <Spinner animation="border" variant="secondary" className="mb-3" />}
+      {/* Error */}
+      {error && (
+        <Typography color="error" sx={{ mb: 2 }}>
+          {error}
+        </Typography>
+      )}
 
-      <div className="row">
+      {/* Loading */}
+      {loading && <CircularProgress sx={{ mb: 2 }} />}
+
+      {/* Items Grid */}
+      <Grid container spacing={2}>
         {!loading && filteredItems.length > 0 ? (
           filteredItems.map((item) => (
-            <div className="col-md-2 mb-4" key={item._id}>
-              <div
-                className="card"
-                style={{
-                  border: "none",
-                  boxShadow: "0 4px 10px rgba(0,0,0,0.1)",
-                  borderRadius: "12px",
-                  padding: "10px",
-                  textAlign: "left",
+            <Grid item xs={12} sm={6} md={3} lg={2} key={item._id}>
+              <Card
+                sx={{
+                  borderRadius: 2,
+                  boxShadow: 3,
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
                 }}
               >
-                <img
-                  src={item.image || "placeholder.jpg"}
+                <CardMedia
+                  component="img"
+                  height="150"
+                  image={item.image || "placeholder.jpg"}
                   alt={item.name}
-                  className="card-img-top"
-                  style={{
-                    width: "100%",
-                    height: "150px",
-                    objectFit: "cover",
-                    borderRadius: "8px",
-                  }}
                   onError={(e) => (e.target.src = "placeholder.jpg")}
+                  sx={{ borderRadius: "8px 8px 0 0" }}
                 />
-
-                <div className="card-body">
-                  <OverlayTrigger
-                    trigger="click"
-                    placement="auto"
-                    overlay={
-                      <Popover>
-                        <Popover.Header as="h3">{item.name}</Popover.Header>
-                        <Popover.Body>
-                          <img
-                            src={item.image || "placeholder.jpg"}
-                            alt={item.name}
-                            className="img-fluid mb-2"
-                            onError={(e) => (e.target.src = "placeholder.jpg")}
-                          />
-                          <p>{item.description}</p>
-                          <p className="fw-bold">₱{item.price}</p>
-                          {item.origin && <p>Origin: {item.origin}</p>}
-                          {item.age && <p>Age: {item.age}</p>}
-                          {item.createdAt && (
-                            <p>Created At: {new Date(item.createdAt).toLocaleString()}</p>
-                          )}
-                        </Popover.Body>
-                      </Popover>
-                    }
+                <CardContent sx={{ flexGrow: 1 }}>
+                  <Typography
+                    variant="h6"
+                    fontSize="1rem"
+                    fontWeight="bold"
+                    sx={{ cursor: "pointer" }}
+                    onClick={(e) => handlePopoverOpen(e, item)}
                   >
-                    <h5
-                      style={{
-                        fontSize: "1rem",
-                        fontWeight: "bold",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {item.name}
-                    </h5>
-                  </OverlayTrigger>
-
-                  <p
-                    style={{
-                      fontSize: "0.9rem",
-                      color: "#555",
+                    {item.name}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                     }}
                   >
                     {truncateText(item.description, 50)}
-                  </p>
-
-                  <p
-                    style={{
-                      fontSize: "1rem",
-                      fontWeight: "bold",
-                      color: "#333",
-                    }}
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    fontWeight="bold"
+                    color="text.primary"
+                    sx={{ mt: 1 }}
                   >
                     ₱{item.price}
-                  </p>
-
-                  <div className="d-flex gap-2">
-                    <button className="btn btn-dark btn-sm" onClick={() => handleBuyNow(item)}>
-                      Buy Now
-                    </button>
-                    <button
-                      className="btn btn-outline-dark btn-sm"
-                      onClick={() => handleAddToCart(item._id)}
-                    >
-                      Add to Cart
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+                  </Typography>
+                </CardContent>
+                <CardActions>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="dark"
+                    onClick={() => handleBuyNow(item)}
+                  >
+                    Buy Now
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="dark"
+                    onClick={() => handleAddToCart(item._id)}
+                  >
+                    Add to Cart
+                  </Button>
+                </CardActions>
+              </Card>
+            </Grid>
           ))
         ) : !loading ? (
-          <p className="text-danger">⚠️ No items available.</p>
+          <Typography color="error">⚠️ No items available.</Typography>
         ) : null}
-      </div>
+      </Grid>
 
+      {/* Popover for item details */}
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handlePopoverClose}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "left",
+        }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: "left",
+        }}
+      >
+        {popoverItem && (
+          <Box sx={{ p: 2, maxWidth: 300 }}>
+            <Typography variant="h6" gutterBottom>
+              {popoverItem.name}
+            </Typography>
+            <img
+              src={popoverItem.image || "placeholder.jpg"}
+              alt={popoverItem.name}
+              style={{
+                width: "100%",
+                height: "auto",
+                borderRadius: "8px",
+                marginBottom: "8px",
+              }}
+              onError={(e) => (e.target.src = "placeholder.jpg")}
+            />
+            <Typography variant="body2" gutterBottom>
+              {popoverItem.description}
+            </Typography>
+            <Typography variant="subtitle1" fontWeight="bold">
+              ₱{popoverItem.price}
+            </Typography>
+            {popoverItem.origin && (
+              <Typography variant="body2">Origin: {popoverItem.origin}</Typography>
+            )}
+            {popoverItem.age && (
+              <Typography variant="body2">Age: {popoverItem.age}</Typography>
+            )}
+            {popoverItem.createdAt && (
+              <Typography variant="body2">
+                Created At: {new Date(popoverItem.createdAt).toLocaleString()}
+              </Typography>
+            )}
+          </Box>
+        )}
+      </Popover>
+
+      {/* Cart Modal */}
       {selectedItem && (
         <CartModal
           show={showModal}
@@ -243,11 +313,12 @@ const Buy = () => {
           setCartCount={() => {}}
         />
       )}
-    </div>
+    </Box>
   );
 };
 
 export default Buy;
+
 
 
 // import React, { useEffect, useState } from "react";
