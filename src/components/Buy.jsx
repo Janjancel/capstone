@@ -11,17 +11,23 @@ import {
   Button,
   CircularProgress,
   Popover,
+  IconButton,
+  Menu,
+  MenuItem,
+  Tooltip,
 } from "@mui/material";
 import toast from "react-hot-toast";
 import axios from "axios";
 import CartModal from "./Cart/CartModal";
 import { useAuth } from "../context/AuthContext";
+import FilterListIcon from "@mui/icons-material/FilterList";
 
 const Buy = () => {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [priceFilter, setPriceFilter] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -29,9 +35,11 @@ const Buy = () => {
   const [userAddress, setUserAddress] = useState({});
   const [anchorEl, setAnchorEl] = useState(null);
   const [popoverItem, setPopoverItem] = useState(null);
+  const [filterAnchor, setFilterAnchor] = useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL;
 
+  // Fetch user address
   useEffect(() => {
     const fetchUserAddress = async () => {
       if (!user?._id) return;
@@ -45,6 +53,7 @@ const Buy = () => {
     fetchUserAddress();
   }, [user]);
 
+  // Fetch items
   useEffect(() => {
     const fetchItems = async () => {
       setLoading(true);
@@ -64,14 +73,24 @@ const Buy = () => {
     fetchItems();
   }, []);
 
+  // Filter items based on search query and price
   useEffect(() => {
-    const filtered = items.filter(
+    let filtered = items.filter(
       (item) =>
         item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.description?.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    if (priceFilter === "low") {
+      filtered = filtered.filter((item) => item.price < 5000);
+    } else if (priceFilter === "mid") {
+      filtered = filtered.filter((item) => item.price >= 5000 && item.price <= 20000);
+    } else if (priceFilter === "high") {
+      filtered = filtered.filter((item) => item.price > 20000);
+    }
+
     setFilteredItems(filtered);
-  }, [searchQuery, items]);
+  }, [searchQuery, priceFilter, items]);
 
   const truncateText = (text, length) =>
     text?.length > length ? text.substring(0, length) + "..." : text;
@@ -81,7 +100,6 @@ const Buy = () => {
       toast.error("Please log in to add items to cart.");
       return;
     }
-
     try {
       await axios.post(`${API_URL}/api/cart/${user._id}/add`, { itemId });
       toast.success("Item added to cart!");
@@ -103,7 +121,6 @@ const Buy = () => {
 
   const handleOrderConfirm = async (address, notes) => {
     if (!user?._id || !selectedItem) return;
-
     try {
       await axios.post(`${API_URL}/api/orders`, {
         userId: user._id,
@@ -112,7 +129,6 @@ const Buy = () => {
         address,
         notes,
       });
-
       toast.success("Order placed successfully!");
       setSelectedItem(null);
       setShowModal(false);
@@ -132,6 +148,14 @@ const Buy = () => {
     setPopoverItem(null);
   };
 
+  const handleFilterOpen = (event) => {
+    setFilterAnchor(event.currentTarget);
+  };
+
+  const handleFilterClose = () => {
+    setFilterAnchor(null);
+  };
+
   const open = Boolean(anchorEl);
 
   return (
@@ -143,19 +167,75 @@ const Buy = () => {
           justifyContent: "space-between",
           alignItems: "center",
           mb: 3,
+          gap: 1,
         }}
       >
         <Typography variant="h4" fontWeight="bold">
           Antique Shop
         </Typography>
-        <TextField
-          size="small"
-          variant="outlined"
-          label="Search items..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          sx={{ width: "250px" }}
-        />
+
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <TextField
+            size="small"
+            variant="outlined"
+            label="Search items..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            sx={{ width: 250 }}
+          />
+          <Tooltip title="Filter by Price">
+            <IconButton onClick={handleFilterOpen}>
+              <FilterListIcon />
+            </IconButton>
+          </Tooltip>
+          <Menu
+            anchorEl={filterAnchor}
+            open={Boolean(filterAnchor)}
+            onClose={handleFilterClose}
+          >
+            <MenuItem disabled>Filter by Price</MenuItem>
+            <MenuItem
+              onClick={() => setPriceFilter("")}
+              sx={{
+                fontWeight: priceFilter === "" ? "bold" : "normal",
+                bgcolor: priceFilter === "" ? "grey.700" : "inherit",
+                color: priceFilter === "" ? "primary.contrastText" : "inherit",
+              }}
+            >
+              All
+            </MenuItem>
+            <MenuItem
+              onClick={() => setPriceFilter("low")}
+              sx={{
+                fontWeight: priceFilter === "low" ? "bold" : "normal",
+                bgcolor: priceFilter === "low" ? "grey.700" : "inherit",
+                color: priceFilter === "low" ? "primary.contrastText" : "inherit",
+              }}
+            >
+              Below ₱5,000
+            </MenuItem>
+            <MenuItem
+              onClick={() => setPriceFilter("mid")}
+              sx={{
+                fontWeight: priceFilter === "mid" ? "bold" : "normal",
+                bgcolor: priceFilter === "mid" ? "grey.700" : "inherit",
+                color: priceFilter === "mid" ? "primary.contrastText" : "inherit",
+              }}
+            >
+              ₱5,000 – ₱20,000
+            </MenuItem>
+            <MenuItem
+              onClick={() => setPriceFilter("high")}
+              sx={{
+                fontWeight: priceFilter === "high" ? "bold" : "normal",
+                bgcolor: priceFilter === "high" ? "grey.700" : "inherit",
+                color: priceFilter === "high" ? "primary.contrastText" : "inherit",
+              }}
+            >
+              Above ₱20,000
+            </MenuItem>
+          </Menu>
+        </Box>
       </Box>
 
       {/* Error */}
@@ -318,6 +398,7 @@ const Buy = () => {
 };
 
 export default Buy;
+
 
 
 
