@@ -337,12 +337,15 @@ import {
   TableCell,
   Paper,
   Button,
-  CircularProgress,
+  // CircularProgress,
   Menu,
   MenuItem,
   IconButton,
+  Tooltip,
 } from "@mui/material";
+import Loader from "./Loader";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import MapIcon from "@mui/icons-material/Map";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
@@ -380,6 +383,7 @@ const SellDashboard = () => {
 
   const [anchorEl, setAnchorEl] = useState(null);
   const [activeRowId, setActiveRowId] = useState(null);
+  const [showMap, setShowMap] = useState(false);
 
   useEffect(() => {
     const fetchRequests = async () => {
@@ -419,12 +423,18 @@ const SellDashboard = () => {
     if (!confirm.isConfirmed) return;
 
     try {
-      const res = await axios.patch(`${API_URL}/api/sell/${id}`, { status: newStatus });
+      const res = await axios.patch(`${API_URL}/api/sell/${id}`, {
+        status: newStatus,
+      });
       setRequests((prev) =>
-        prev.map((req) => (req._id === id ? { ...req, status: res.data.status } : req))
+        prev.map((req) =>
+          req._id === id ? { ...req, status: res.data.status } : req
+        )
       );
       setFilteredRequests((prev) =>
-        prev.map((req) => (req._id === id ? { ...req, status: res.data.status } : req))
+        prev.map((req) =>
+          req._id === id ? { ...req, status: res.data.status } : req
+        )
       );
       toast.success(`Request ${newStatus}`);
     } catch (error) {
@@ -450,9 +460,7 @@ const SellDashboard = () => {
     if (!confirm.isConfirmed) return;
 
     try {
-      console.log("Deleting request id:", id);
       await axios.delete(`${API_URL}/api/sell/${id}`);
-      
       setRequests((prev) => prev.filter((req) => req._id !== id));
       setFilteredRequests((prev) => prev.filter((req) => req._id !== id));
       toast.success("Request deleted");
@@ -460,7 +468,7 @@ const SellDashboard = () => {
       console.error("Error deleting request:", error);
       toast.error("Failed to delete request");
     }
-  };  
+  };
 
   const handleDownloadPDF = (request) => {
     const docPDF = new jsPDF();
@@ -470,11 +478,19 @@ const SellDashboard = () => {
     docPDF.text(`ID: ${request._id}`, 10, 40);
     docPDF.text(`Name: ${request.name}`, 10, 50);
     docPDF.text(`Contact: ${request.contact}`, 10, 60);
-    docPDF.text(`Location: ${request.location?.lat}, ${request.location?.lng}`, 10, 70);
+    docPDF.text(
+      `Location: ${request.location?.lat}, ${request.location?.lng}`,
+      10,
+      70
+    );
     docPDF.text(`Price: ₱${request.price}`, 10, 80);
-    const description = docPDF.splitTextToSize(`Description: ${request.description}`, 180);
+    const description = docPDF.splitTextToSize(
+      `Description: ${request.description}`,
+      180
+    );
     docPDF.text(description, 10, 90);
-    if (request.image) docPDF.addImage(request.image, "JPEG", 120, 40, 70, 70);
+    if (request.image)
+      docPDF.addImage(request.image, "JPEG", 120, 40, 70, 70);
     docPDF.save(`Sell_Request_${request._id}.pdf`);
   };
 
@@ -507,39 +523,272 @@ const SellDashboard = () => {
     : defaultPosition;
 
   return (
+    // <Box sx={{ p: 3 }}>
+    //   <Toaster position="top-right" />
+
+    //   {/* Title + Map Toggle + Search */}
+    //   <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+    //     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+    //       <Typography variant="h5">Sell Requests</Typography>
+    //       <Tooltip title={showMap ? "Hide Map" : "Show Map"}>
+    //         <IconButton onClick={() => setShowMap((prev) => !prev)}>
+    //           <MapIcon color={showMap ? "primary" : "action"} />
+    //         </IconButton>
+    //       </Tooltip>
+    //     </Box>
+
+    //     <TextField
+    //       size="small"
+    //       placeholder="Search..."
+    //       value={searchQuery}
+    //       onChange={(e) => setSearchQuery(e.target.value)}
+    //     />
+    //   </Box>
+
+    //   {/* Map Section */}
+    //   {showMap && (
+    //     <Box sx={{ height: 400, mb: 4 }}>
+    //       <MapContainer
+    //         center={mapCenter}
+    //         zoom={6}
+    //         style={{ height: "100%", width: "100%" }}
+    //       >
+    //         <TileLayer
+    //           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    //           attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+    //         />
+    //         {validLocations.map(({ _id, location, name, description, image }) => (
+    //           <Marker
+    //             key={_id}
+    //             position={[location.lat, location.lng]}
+    //             icon={customIcon}
+    //           >
+    //             <Popup>
+    //               <strong>📍 {name}</strong>
+    //               <br />
+    //               {description}
+    //               {image && (
+    //                 <img
+    //                   src={image}
+    //                   alt={name}
+    //                   style={{ width: "100%", maxHeight: 200, marginTop: 10 }}
+    //                 />
+    //               )}
+    //             </Popup>
+    //           </Marker>
+    //         ))}
+    //       </MapContainer>
+    //     </Box>
+    //   )}
+
+    //   {/* Table */}
+    //   {loading ? (
+    //     <Loader />
+    //   ) : error ? (
+    //     <Typography color="error">{error}</Typography>
+    //   ) : (
+    //     <TableContainer component={Paper} sx={{ maxHeight: "60vh" }}>
+    //       <Table stickyHeader>
+    //         <TableHead>
+    //           <TableRow>
+    //             {[
+    //               "ID",
+    //               "Name",
+    //               "Contact",
+    //               "Location",
+    //               "Price",
+    //               "Description",
+    //               "Status",
+    //               "Actions",
+    //             ].map((head) => (
+    //               <TableCell
+    //                 key={head}
+    //                 sx={{
+    //                   bgcolor: "grey.700",
+    //                   color: "white",
+    //                   fontWeight: "bold",
+    //                 }}
+    //               >
+    //                 {head}
+    //               </TableCell>
+    //             ))}
+    //           </TableRow>
+    //         </TableHead>
+
+    //         <TableBody>
+    //           {filteredRequests.length > 0 ? (
+    //             filteredRequests.map((request) => (
+    //               <TableRow
+    //                 key={request._id}
+    //                 hover
+    //                 sx={{ cursor: "pointer" }}
+    //                 onClick={() => setSelectedRequest(request)}
+    //               >
+    //                 <TableCell>{request._id}</TableCell>
+    //                 <TableCell>{request.name}</TableCell>
+    //                 <TableCell>{request.contact}</TableCell>
+    //                 <TableCell>
+    //                   {request.location?.lat && request.location?.lng
+    //                     ? `${request.location.lat}, ${request.location.lng}`
+    //                     : "N/A"}
+    //                 </TableCell>
+    //                 <TableCell>₱{request.price}</TableCell>
+    //                 <TableCell>{request.description}</TableCell>
+    //                 <TableCell>
+    //                   <Typography
+    //                     sx={{
+    //                       borderColor:
+    //                         request.status === "accepted"
+    //                           ? "success.main"
+    //                           : request.status === "declined"
+    //                           ? "error.main"
+    //                           : "warning.main",
+    //                       color:
+    //                         request.status === "accepted"
+    //                           ? "success.main"
+    //                           : request.status === "declined"
+    //                           ? "error.main"
+    //                           : "warning.main",
+    //                       px: 1.5,
+    //                       py: 0.25,
+    //                       borderRadius: 1,
+    //                       display: "inline-block",
+    //                       fontWeight: 500,
+    //                       textTransform: "capitalize",
+    //                     }}
+    //                   >
+    //                     {request.status || "pending"}
+    //                   </Typography>
+    //                 </TableCell>
+    //                 <TableCell onClick={(e) => e.stopPropagation()}>
+    //                   <IconButton onClick={(e) => handleMenuOpen(e, request._id)}>
+    //                     <MoreVertIcon />
+    //                   </IconButton>
+    //                   <Menu
+    //                     anchorEl={anchorEl}
+    //                     open={activeRowId === request._id}
+    //                     onClose={handleMenuClose}
+    //                     onClick={(e) => e.stopPropagation()}
+    //                   >
+    //                     <MenuItem
+    //                       onClick={() => {
+    //                         handleStatusUpdate(request._id, "accepted");
+    //                         handleMenuClose();
+    //                       }}
+    //                       disabled={request.status === "accepted"}
+    //                       sx={{
+    //                         color: "success.main",
+    //                         fontWeight: 500,
+    //                         "&.Mui-disabled": { color: "success.light" },
+    //                         "&:hover": {
+    //                           bgcolor: "success.light",
+    //                           color: "white",
+    //                         },
+    //                       }}
+    //                     >
+    //                       Accept
+    //                     </MenuItem>
+    //                     <MenuItem
+    //                       onClick={() => {
+    //                         handleStatusUpdate(request._id, "declined");
+    //                         handleMenuClose();
+    //                       }}
+    //                       disabled={request.status === "declined"}
+    //                       sx={{
+    //                         color: "warning.main",
+    //                         fontWeight: 500,
+    //                         "&.Mui-disabled": { color: "warning.light" },
+    //                         "&:hover": {
+    //                           bgcolor: "warning.light",
+    //                           color: "white",
+    //                         },
+    //                       }}
+    //                     >
+    //                       Decline
+    //                     </MenuItem>
+    //                     <MenuItem
+    //                       onClick={() => {
+    //                         handleDelete(request._id);
+    //                         handleMenuClose();
+    //                       }}
+    //                       sx={{
+    //                         color: "error.main",
+    //                         fontWeight: 500,
+    //                         "&:hover": {
+    //                           bgcolor: "error.light",
+    //                           color: "white",
+    //                         },
+    //                       }}
+    //                     >
+    //                       Delete
+    //                     </MenuItem>
+    //                     <MenuItem
+    //                       onClick={() => {
+    //                         handleDownloadPDF(request);
+    //                         handleMenuClose();
+    //                       }}
+    //                       sx={{
+    //                         color: "primary.main",
+    //                         fontWeight: 500,
+    //                         "&:hover": {
+    //                           bgcolor: "primary.light",
+    //                           color: "white",
+    //                         },
+    //                       }}
+    //                     >
+    //                       Download PDF
+    //                     </MenuItem>
+    //                   </Menu>
+    //                 </TableCell>
+    //               </TableRow>
+    //             ))
+    //           ) : (
+    //             <TableRow>
+    //               <TableCell colSpan={8} align="center">
+    //                 No results found.
+    //               </TableCell>
+    //             </TableRow>
+    //           )}
+    //         </TableBody>
+    //       </Table>
+    //     </TableContainer>
+    //   )}
+
+    //   {/* Download Excel */}
+    //   <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
+    //     <Button variant="contained" color="success" onClick={handleDownloadExcel}>
+    //       Download Excel
+    //     </Button>
+    //   </Box>
+
+    //   {/* Modal */}
+    //   {selectedRequest && (
+    //     <ReqDetailModal
+    //       request={selectedRequest}
+    //       onClose={() => setSelectedRequest(null)}
+    //     />
+    //   )}
+    // </Box>
+
     <Box sx={{ p: 3 }}>
-      <Toaster position="top-right" />
-      <Typography variant="h4" mb={2}>
-        Sell Request Map
-      </Typography>
+  <Toaster position="top-right" />
 
-      <Box sx={{ height: 400, mb: 4 }}>
-        <MapContainer center={mapCenter} zoom={6} style={{ height: "100%", width: "100%" }}>
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
-          />
-          {validLocations.map(({ _id, location, name, description, image }) => (
-            <Marker key={_id} position={[location.lat, location.lng]} icon={customIcon}>
-              <Popup>
-                <strong>📍 {name}</strong>
-                <br />
-                {description}
-                {image && (
-                  <img
-                    src={image}
-                    alt={name}
-                    style={{ width: "100%", maxHeight: 200, marginTop: 10 }}
-                  />
-                )}
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
-      </Box>
-
+  {loading ? (
+    // Show only loader while loading
+    <Loader />
+  ) : (
+    <>
+      {/* Title + Map Toggle + Search */}
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
-        <Typography variant="h4">Sell Requests</Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Typography variant="h5">Sell Requests</Typography>
+          <Tooltip title={showMap ? "Hide Map" : "Show Map"}>
+            <IconButton onClick={() => setShowMap((prev) => !prev)}>
+              <MapIcon color={showMap ? "primary" : "action"} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
         <TextField
           size="small"
           placeholder="Search..."
@@ -548,103 +797,201 @@ const SellDashboard = () => {
         />
       </Box>
 
-      {loading ? (
-        <CircularProgress />
-      ) : error ? (
+      {/* Map Section */}
+      {showMap && (
+        <Box sx={{ height: 400, mb: 4 }}>
+          <MapContainer
+            center={mapCenter}
+            zoom={6}
+            style={{ height: "100%", width: "100%" }}
+          >
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+            />
+            {validLocations.map(({ _id, location, name, description, image }) => (
+              <Marker
+                key={_id}
+                position={[location.lat, location.lng]}
+                icon={customIcon}
+              >
+                <Popup>
+                  <strong>📍 {name}</strong>
+                  <br />
+                  {description}
+                  {image && (
+                    <img
+                      src={image}
+                      alt={name}
+                      style={{ width: "100%", maxHeight: 200, marginTop: 10 }}
+                    />
+                  )}
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
+        </Box>
+      )}
+
+      {/* Table */}
+      {error ? (
         <Typography color="error">{error}</Typography>
       ) : (
         <TableContainer component={Paper} sx={{ maxHeight: "60vh" }}>
           <Table stickyHeader>
             <TableHead>
               <TableRow>
-                {["ID", "Name", "Contact", "Location", "Price", "Description", "Status", "Actions"].map(
-                  (head) => (
-                    <TableCell key={head} sx={{ bgcolor: "grey.700", color: "white", fontWeight: "bold" }}>
-                      {head}
-                    </TableCell>
-                  )
-                )}
+                {[
+                  "ID",
+                  "Name",
+                  "Contact",
+                  "Location",
+                  "Price",
+                  "Description",
+                  "Status",
+                  "Actions",
+                ].map((head) => (
+                  <TableCell
+                    key={head}
+                    sx={{
+                      bgcolor: "grey.700",
+                      color: "white",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {head}
+                  </TableCell>
+                ))}
               </TableRow>
             </TableHead>
 
             <TableBody>
               {filteredRequests.length > 0 ? (
-                filteredRequests.map((request) => {
-                  const isFinal = ["accepted", "declined"].includes(request.status);
-                  return (
-                    <TableRow key={request._id} hover sx={{ cursor: "pointer" }} onClick={() => setSelectedRequest(request)}>
-                      <TableCell>{request._id}</TableCell>
-                      <TableCell>{request.name}</TableCell>
-                      <TableCell>{request.contact}</TableCell>
-                      <TableCell>
-                        {request.location?.lat && request.location?.lng
-                          ? `${request.location.lat}, ${request.location.lng}`
-                          : "N/A"}
-                      </TableCell>
-                      <TableCell>₱{request.price}</TableCell>
-                      <TableCell>{request.description}</TableCell>
-                      <TableCell>
-                        <Typography
+                filteredRequests.map((request) => (
+                  <TableRow
+                    key={request._id}
+                    hover
+                    sx={{ cursor: "pointer" }}
+                    onClick={() => setSelectedRequest(request)}
+                  >
+                    <TableCell>{request._id}</TableCell>
+                    <TableCell>{request.name}</TableCell>
+                    <TableCell>{request.contact}</TableCell>
+                    <TableCell>
+                      {request.location?.lat && request.location?.lng
+                        ? `${request.location.lat}, ${request.location.lng}`
+                        : "N/A"}
+                    </TableCell>
+                    <TableCell>₱{request.price}</TableCell>
+                    <TableCell>{request.description}</TableCell>
+                    <TableCell>
+                      <Typography
+                        sx={{
+                          borderColor:
+                            request.status === "accepted"
+                              ? "success.main"
+                              : request.status === "declined"
+                              ? "error.main"
+                              : "warning.main",
+                          color:
+                            request.status === "accepted"
+                              ? "success.main"
+                              : request.status === "declined"
+                              ? "error.main"
+                              : "warning.main",
+                          px: 1.5,
+                          py: 0.25,
+                          borderRadius: 1,
+                          display: "inline-block",
+                          fontWeight: 500,
+                          textTransform: "capitalize",
+                        }}
+                      >
+                        {request.status || "pending"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <IconButton onClick={(e) => handleMenuOpen(e, request._id)}>
+                        <MoreVertIcon />
+                      </IconButton>
+                      <Menu
+                        anchorEl={anchorEl}
+                        open={activeRowId === request._id}
+                        onClose={handleMenuClose}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MenuItem
+                          onClick={() => {
+                            handleStatusUpdate(request._id, "accepted");
+                            handleMenuClose();
+                          }}
+                          disabled={request.status === "accepted"}
                           sx={{
-                            // border: "1px solid",
-                            borderColor:
-                              request.status === "accepted"
-                                ? "success.main"
-                                : request.status === "declined"
-                                ? "error.main"
-                                : "warning.main",
-                            color:
-                              request.status === "accepted"
-                                ? "success.main"
-                                : request.status === "declined"
-                                ? "error.main"
-                                : "warning.main",
-                            px: 1.5,
-                            py: 0.25,
-                            borderRadius: 1,
-                            display: "inline-block",
+                            color: "success.main",
                             fontWeight: 500,
-                            textTransform: "capitalize",
+                            "&.Mui-disabled": { color: "success.light" },
+                            "&:hover": {
+                              bgcolor: "success.light",
+                              color: "white",
+                            },
                           }}
                         >
-                          {request.status || "pending"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <IconButton onClick={(e) => handleMenuOpen(e, request._id)}>
-                          <MoreVertIcon />
-                        </IconButton>
-                        <Menu
-                          anchorEl={anchorEl}
-                          open={activeRowId === request._id}
-                          onClose={handleMenuClose}
-                          onClick={(e) => e.stopPropagation()}
+                          Accept
+                        </MenuItem>
+                        <MenuItem
+                          onClick={() => {
+                            handleStatusUpdate(request._id, "declined");
+                            handleMenuClose();
+                          }}
+                          disabled={request.status === "declined"}
+                          sx={{
+                            color: "warning.main",
+                            fontWeight: 500,
+                            "&.Mui-disabled": { color: "warning.light" },
+                            "&:hover": {
+                              bgcolor: "warning.light",
+                              color: "white",
+                            },
+                          }}
                         >
-                          <MenuItem
-                            onClick={() => { handleStatusUpdate(request._id, "accepted"); handleMenuClose(); }}
-                            disabled={request.status === "accepted"}
-                            sx={{ color: "success.main", fontWeight: 500, "&.Mui-disabled": { color: "success.light" }, "&:hover": { bgcolor: "success.light", color: "white" } }}
-                          >
-                            Accept
-                          </MenuItem>
-                          <MenuItem
-                            onClick={() => { handleStatusUpdate(request._id, "declined"); handleMenuClose(); }}
-                            disabled={request.status === "declined"}
-                            sx={{ color: "warning.main", fontWeight: 500, "&.Mui-disabled": { color: "warning.light" }, "&:hover": { bgcolor: "warning.light", color: "white" } }}
-                          >
-                            Decline
-                          </MenuItem>
-                          <MenuItem
-                            onClick={() => { handleDelete(request._id); handleMenuClose(); }}
-                            sx={{ color: "error.main", fontWeight: 500, "&:hover": { bgcolor: "error.light", color: "white" } }}
-                          >
-                            Delete
-                          </MenuItem>
-                        </Menu>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
+                          Decline
+                        </MenuItem>
+                        <MenuItem
+                          onClick={() => {
+                            handleDelete(request._id);
+                            handleMenuClose();
+                          }}
+                          sx={{
+                            color: "error.main",
+                            fontWeight: 500,
+                            "&:hover": {
+                              bgcolor: "error.light",
+                              color: "white",
+                            },
+                          }}
+                        >
+                          Delete
+                        </MenuItem>
+                        <MenuItem
+                          onClick={() => {
+                            handleDownloadPDF(request);
+                            handleMenuClose();
+                          }}
+                          sx={{
+                            color: "primary.main",
+                            fontWeight: 500,
+                            "&:hover": {
+                              bgcolor: "primary.light",
+                              color: "white",
+                            },
+                          }}
+                        >
+                          Download PDF
+                        </MenuItem>
+                      </Menu>
+                    </TableCell>
+                  </TableRow>
+                ))
               ) : (
                 <TableRow>
                   <TableCell colSpan={8} align="center">
@@ -657,16 +1004,24 @@ const SellDashboard = () => {
         </TableContainer>
       )}
 
+      {/* Download Excel */}
       <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
         <Button variant="contained" color="success" onClick={handleDownloadExcel}>
           Download Excel
         </Button>
       </Box>
 
+      {/* Modal */}
       {selectedRequest && (
-        <ReqDetailModal request={selectedRequest} onClose={() => setSelectedRequest(null)} />
+        <ReqDetailModal
+          request={selectedRequest}
+          onClose={() => setSelectedRequest(null)}
+        />
       )}
-    </Box>
+    </>
+  )}
+</Box>
+
   );
 };
 
