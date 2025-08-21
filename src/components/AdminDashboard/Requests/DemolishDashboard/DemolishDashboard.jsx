@@ -644,357 +644,6 @@
 // };
 
 // export default DemolishDashboard;
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import Swal from "sweetalert2";
-import toast, { Toaster } from "react-hot-toast";
-import {
-  Box,
-  Typography,
-  TextField,
-  TableContainer,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  Paper,
-  Button,
-  // CircularProgress,
-  Menu,
-  MenuItem,
-  IconButton,
-  Tooltip,
-} from "@mui/material";
-import Loader from "./Loader";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
-import MapIcon from "@mui/icons-material/Map";
-import * as XLSX from "xlsx";
-import ReqDetailModal from "./ReqDetailModal";
-import DemolishDashboardMap from "./DemolishDashboardMap";
-
-const API_URL = process.env.REACT_APP_API_URL;
-
-const DemolishDashboard = () => {
-  const [requests, setRequests] = useState([]);
-  const [filteredRequests, setFilteredRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedRequest, setSelectedRequest] = useState(null);
-
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [activeRowId, setActiveRowId] = useState(null);
-  const [showMap, setShowMap] = useState(false);
-
-  useEffect(() => {
-    const fetchRequests = async () => {
-      try {
-        const res = await axios.get(`${API_URL}/api/demolish`);
-        setRequests(res.data);
-        setFilteredRequests(res.data);
-      } catch (err) {
-        console.error("Error fetching demolish requests:", err);
-        setError("Failed to fetch demolish requests.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRequests();
-  }, []);
-
-  useEffect(() => {
-    const filtered = requests.filter(
-      (req) =>
-        req.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        req.contact?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        req.description.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    setFilteredRequests(filtered);
-  }, [searchQuery, requests]);
-
-  // --- Action Handlers ---
-  const handleStatusUpdate = async (id, newStatus) => {
-    const confirm = await Swal.fire({
-      title: `Update status to "${newStatus}"?`,
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonText: "Yes, update it!",
-      cancelButtonText: "Cancel",
-    });
-    if (!confirm.isConfirmed) return;
-
-    try {
-      const res = await axios.patch(`${API_URL}/api/demolish/${id}`, {
-        status: newStatus,
-      });
-      setRequests((prev) =>
-        prev.map((req) =>
-          req._id === id ? { ...req, status: res.data.status } : req
-        )
-      );
-      setFilteredRequests((prev) =>
-        prev.map((req) =>
-          req._id === id ? { ...req, status: res.data.status } : req
-        )
-      );
-      toast.success(`Request ${newStatus}`);
-    } catch (error) {
-      console.error("Error updating status:", error);
-      toast.error("Failed to update status");
-    }
-  };
-
-  const handleDelete = async (id) => {
-    const confirm = await Swal.fire({
-      title: "Are you sure you want to delete this request?",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Delete",
-      cancelButtonText: "Cancel",
-    });
-    if (!confirm.isConfirmed) return;
-
-    try {
-      await axios.delete(`${API_URL}/api/demolish/${id}`);
-      setRequests((prev) => prev.filter((req) => req._id !== id));
-      setFilteredRequests((prev) => prev.filter((req) => req._id !== id));
-      toast.success("Request deleted");
-    } catch (error) {
-      console.error("Error deleting request:", error);
-      toast.error("Failed to delete request");
-    }
-  };
-
-  const handleDownloadExcel = () => {
-    const exportData = filteredRequests.map(({ image, ...rest }) => rest); // no image column
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Demolish Requests");
-    XLSX.writeFile(wb, "Demolish_Requests.xlsx");
-  };
-
-  const handleMenuOpen = (event, rowId) => {
-    setAnchorEl(event.currentTarget);
-    setActiveRowId(rowId);
-  };
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setActiveRowId(null);
-  };
-
-  return (
-    <Box sx={{ p: 3 }}>
-  <Toaster position="top-right" />
-
-  {loading ? (
-    // Loader skeleton
-    <Loader />
-  ) : (
-    <>
-      {/* Title + Map Toggle + Search */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Typography variant="h5">Demolish Requests</Typography>
-          <Tooltip title={showMap ? "Hide Map" : "Show Map"}>
-            <IconButton onClick={() => setShowMap((prev) => !prev)}>
-              <MapIcon color={showMap ? "primary" : "action"} />
-            </IconButton>
-          </Tooltip>
-        </Box>
-
-        <TextField
-          size="small"
-          placeholder="Search..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-      </Box>
-
-      {/* Map Section */}
-      {showMap && (
-        <Box sx={{ mb: 2 }}>
-          <DemolishDashboardMap
-            requests={filteredRequests}
-            onClose={() => setShowMap(false)}
-          />
-        </Box>
-      )}
-
-      {/* Table */}
-      {error ? (
-        <Typography color="error">{error}</Typography>
-      ) : (
-        <TableContainer component={Paper} sx={{ maxHeight: "60vh" }}>
-          <Table stickyHeader>
-            <TableHead>
-              <TableRow>
-                {[
-                  "ID",
-                  "Name",
-                  "Contact",
-                  "Location",
-                  "Description",
-                  "Status",
-                  "Actions",
-                ].map((head) => (
-                  <TableCell
-                    key={head}
-                    sx={{
-                      bgcolor: "grey.700",
-                      color: "white",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {head}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-
-            <TableBody>
-              {filteredRequests.length > 0 ? (
-                filteredRequests.map((req) => (
-                  <TableRow
-                    key={req._id}
-                    hover
-                    sx={{ cursor: "pointer" }}
-                    onClick={() => setSelectedRequest(req)}
-                  >
-                    <TableCell>{req._id}</TableCell>
-                    <TableCell>{req.name}</TableCell>
-                    <TableCell>{req.contact}</TableCell>
-                    <TableCell>
-                      {req.location?.lat && req.location?.lng
-                        ? `${req.location.lat}, ${req.location.lng}`
-                        : "N/A"}
-                    </TableCell>
-                    <TableCell>{req.description}</TableCell>
-                    <TableCell>
-                      <Typography
-                        sx={{
-                          borderColor:
-                            req.status === "accepted"
-                              ? "success.main"
-                              : req.status === "declined"
-                              ? "error.main"
-                              : "warning.main",
-                          color:
-                            req.status === "accepted"
-                              ? "success.main"
-                              : req.status === "declined"
-                              ? "error.main"
-                              : "warning.main",
-                          px: 1.5,
-                          py: 0.25,
-                          borderRadius: 1,
-                          display: "inline-block",
-                          fontWeight: 500,
-                          textTransform: "capitalize",
-                        }}
-                      >
-                        {req.status || "pending"}
-                      </Typography>
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <IconButton onClick={(e) => handleMenuOpen(e, req._id)}>
-                        <MoreVertIcon />
-                      </IconButton>
-                      <Menu
-                        anchorEl={anchorEl}
-                        open={activeRowId === req._id}
-                        onClose={handleMenuClose}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <MenuItem
-                          onClick={() => {
-                            handleStatusUpdate(req._id, "accepted");
-                            handleMenuClose();
-                          }}
-                          disabled={req.status === "accepted"}
-                          sx={{
-                            color: "success.main",
-                            fontWeight: 500,
-                            "&.Mui-disabled": { color: "success.light" },
-                            "&:hover": {
-                              bgcolor: "success.light",
-                              color: "white",
-                            },
-                          }}
-                        >
-                          Accept
-                        </MenuItem>
-                        <MenuItem
-                          onClick={() => {
-                            handleStatusUpdate(req._id, "declined");
-                            handleMenuClose();
-                          }}
-                          disabled={req.status === "declined"}
-                          sx={{
-                            color: "warning.main",
-                            fontWeight: 500,
-                            "&.Mui-disabled": { color: "warning.light" },
-                            "&:hover": {
-                              bgcolor: "warning.light",
-                              color: "white",
-                            },
-                          }}
-                        >
-                          Decline
-                        </MenuItem>
-                        <MenuItem
-                          onClick={() => {
-                            handleDelete(req._id);
-                            handleMenuClose();
-                          }}
-                          sx={{
-                            color: "error.main",
-                            fontWeight: 500,
-                            "&:hover": {
-                              bgcolor: "error.light",
-                              color: "white",
-                            },
-                          }}
-                        >
-                          Delete
-                        </MenuItem>
-                      </Menu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    No results found.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-
-      {/* Download Excel */}
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
-        <Button
-          variant="contained"
-          color="success"
-          onClick={handleDownloadExcel}
-        >
-          Download Excel
-        </Button>
-      </Box>
-
-      {/* Modal */}
-      {selectedRequest && (
-        <ReqDetailModal
-          request={selectedRequest}
-          onClose={() => setSelectedRequest(null)}
-        />
-      )}
-    </>
-  )}
-</Box>
 
     // <Box sx={{ p: 3 }}>
     //   <Toaster position="top-right" />
@@ -1181,6 +830,490 @@ const DemolishDashboard = () => {
     //     />
     //   )}
     // </Box>
+
+
+
+    
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import Swal from "sweetalert2";
+import toast, { Toaster } from "react-hot-toast";
+import {
+  Box,
+  Typography,
+  TextField,
+  TableContainer,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  Paper,
+  Button,
+  Menu,
+  MenuItem,
+  IconButton,
+  Tooltip,
+} from "@mui/material";
+import Loader from "./Loader";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import MapIcon from "@mui/icons-material/Map";
+import FilterListIcon from "@mui/icons-material/FilterList";
+import * as XLSX from "xlsx";
+import ReqDetailModal from "./ReqDetailModal";
+import DemolishDashboardMap from "./DemolishDashboardMap";
+
+const API_URL = process.env.REACT_APP_API_URL;
+
+const DemolishDashboard = () => {
+  const [requests, setRequests] = useState([]);
+  const [filteredRequests, setFilteredRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRequest, setSelectedRequest] = useState(null);
+
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [activeRowId, setActiveRowId] = useState(null);
+  const [showMap, setShowMap] = useState(false);
+
+  // Filter dropdown
+  const [filterAnchor, setFilterAnchor] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [priceFilter, setPriceFilter] = useState("");
+
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/demolish`);
+        setRequests(res.data);
+        setFilteredRequests(res.data);
+      } catch (err) {
+        console.error("Error fetching demolish requests:", err);
+        setError("Failed to fetch demolish requests.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRequests();
+  }, []);
+
+  useEffect(() => {
+    let filtered = requests.filter(
+      (req) =>
+        req.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        req.contact?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        req.description.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // Apply status filter
+    if (statusFilter) {
+      filtered = filtered.filter(
+        (req) => (req.status || "pending") === statusFilter
+      );
+    }
+
+    // Apply price filter
+    if (priceFilter === "low") {
+      filtered = filtered.filter((req) => req.price < 5000);
+    } else if (priceFilter === "mid") {
+      filtered = filtered.filter((req) => req.price >= 5000 && req.price <= 20000);
+    } else if (priceFilter === "high") {
+      filtered = filtered.filter((req) => req.price > 20000);
+    }
+
+    setFilteredRequests(filtered);
+  }, [searchQuery, statusFilter, priceFilter, requests]);
+
+  // --- Action Handlers ---
+  const handleStatusUpdate = async (id, newStatus) => {
+    const confirm = await Swal.fire({
+      title: `Update status to "${newStatus}"?`,
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, update it!",
+      cancelButtonText: "Cancel",
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+      const res = await axios.patch(`${API_URL}/api/demolish/${id}`, {
+        status: newStatus,
+      });
+      setRequests((prev) =>
+        prev.map((req) =>
+          req._id === id ? { ...req, status: res.data.status } : req
+        )
+      );
+      setFilteredRequests((prev) =>
+        prev.map((req) =>
+          req._id === id ? { ...req, status: res.data.status } : req
+        )
+      );
+      toast.success(`Request ${newStatus}`);
+    } catch (error) {
+      console.error("Error updating status:", error);
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const confirm = await Swal.fire({
+      title: "Are you sure you want to delete this request?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+      await axios.delete(`${API_URL}/api/demolish/${id}`);
+      setRequests((prev) => prev.filter((req) => req._id !== id));
+      setFilteredRequests((prev) => prev.filter((req) => req._id !== id));
+      toast.success("Request deleted");
+    } catch (error) {
+      console.error("Error deleting request:", error);
+      toast.error("Failed to delete request");
+    }
+  };
+
+  const handleDownloadExcel = () => {
+    const exportData = filteredRequests.map(({ image, ...rest }) => rest); // no image column
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Demolish Requests");
+    XLSX.writeFile(wb, "Demolish_Requests.xlsx");
+  };
+
+  const handleMenuOpen = (event, rowId) => {
+    setAnchorEl(event.currentTarget);
+    setActiveRowId(rowId);
+  };
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setActiveRowId(null);
+  };
+
+  // Filter menu
+  const handleFilterOpen = (event) => {
+    setFilterAnchor(event.currentTarget);
+  };
+  const handleFilterClose = () => {
+    setFilterAnchor(null);
+  };
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <Toaster position="top-right" />
+
+      {loading ? (
+        <Loader />
+      ) : (
+        <>
+          {/* Title + Map Toggle + Search + Filter */}
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="h5">Demolish Requests</Typography>
+              <Tooltip title={showMap ? "Hide Map" : "Show Map"}>
+                <IconButton onClick={() => setShowMap((prev) => !prev)}>
+                  <MapIcon color={showMap ? "primary" : "action"} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <TextField
+                size="small"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <Tooltip title="Filter">
+                <IconButton onClick={handleFilterOpen}>
+                  <FilterListIcon />
+                </IconButton>
+              </Tooltip>
+<Menu
+  anchorEl={filterAnchor}
+  open={Boolean(filterAnchor)}
+  onClose={handleFilterClose}
+>
+  <MenuItem disabled>Filter by Status</MenuItem>
+  <MenuItem
+    onClick={() => setStatusFilter("")}
+    sx={{
+      fontWeight: statusFilter === "" ? "bold" : "normal",
+      bgcolor: statusFilter === "" ? "grey.700" : "inherit",
+      color: statusFilter === "" ? "primary.contrastText" : "inherit",
+    }}
+  >
+    All
+  </MenuItem>
+  <MenuItem
+    onClick={() => setStatusFilter("pending")}
+    sx={{
+      fontWeight: statusFilter === "pending" ? "bold" : "normal",
+      bgcolor: statusFilter === "pending" ? "grey.700" : "inherit",
+      color: statusFilter === "pending" ? "primary.contrastText" : "inherit",
+    }}
+  >
+    Pending
+  </MenuItem>
+  <MenuItem
+    onClick={() => setStatusFilter("accepted")}
+    sx={{
+      fontWeight: statusFilter === "accepted" ? "bold" : "normal",
+      bgcolor: statusFilter === "accepted" ? "grey.700" : "inherit",
+      color: statusFilter === "accepted" ? "primary.contrastText" : "inherit",
+    }}
+  >
+    Accepted
+  </MenuItem>
+  <MenuItem
+    onClick={() => setStatusFilter("declined")}
+    sx={{
+      fontWeight: statusFilter === "declined" ? "bold" : "normal",
+      bgcolor: statusFilter === "declined" ? "grey.700" : "inherit",
+      color: statusFilter === "declined" ? "primary.contrastText" : "inherit",
+    }}
+  >
+    Declined
+  </MenuItem>
+
+  <MenuItem divider />
+  <MenuItem disabled>Filter by Price</MenuItem>
+  <MenuItem
+    onClick={() => setPriceFilter("")}
+    sx={{
+      fontWeight: priceFilter === "" ? "bold" : "normal",
+      bgcolor: priceFilter === "" ? "grey.700" : "inherit",
+      color: priceFilter === "" ? "primary.contrastText" : "inherit",
+    }}
+  >
+    All
+  </MenuItem>
+  <MenuItem
+    onClick={() => setPriceFilter("low")}
+    sx={{
+      fontWeight: priceFilter === "low" ? "bold" : "normal",
+      bgcolor: priceFilter === "low" ? "grey.700" : "inherit",
+      color: priceFilter === "low" ? "primary.contrastText" : "inherit",
+    }}
+  >
+    Below ₱5,000
+  </MenuItem>
+  <MenuItem
+    onClick={() => setPriceFilter("mid")}
+    sx={{
+      fontWeight: priceFilter === "mid" ? "bold" : "normal",
+      bgcolor: priceFilter === "mid" ? "grey.700" : "inherit",
+      color: priceFilter === "mid" ? "primary.contrastText" : "inherit",
+    }}
+  >
+    ₱5,000 – ₱20,000
+  </MenuItem>
+  <MenuItem
+    onClick={() => setPriceFilter("high")}
+    sx={{
+      fontWeight: priceFilter === "high" ? "bold" : "normal",
+      bgcolor: priceFilter === "high" ? "grey.700" : "inherit",
+      color: priceFilter === "high" ? "primary.contrastText" : "inherit",
+    }}
+  >
+    Above ₱20,000
+  </MenuItem>
+</Menu>
+
+            </Box>
+          </Box>
+
+          {/* Map Section */}
+          {showMap && (
+            <Box sx={{ mb: 2 }}>
+              <DemolishDashboardMap
+                requests={filteredRequests}
+                onClose={() => setShowMap(false)}
+              />
+            </Box>
+          )}
+
+          {/* Table */}
+          {error ? (
+            <Typography color="error">{error}</Typography>
+          ) : (
+            <TableContainer component={Paper} sx={{ maxHeight: "60vh" }}>
+              <Table stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    {[
+                      "ID",
+                      "Name",
+                      "Contact",
+                      "Location",
+                      "Price",
+                      "Description",
+                      "Status",
+                      "Actions",
+                    ].map((head) => (
+                      <TableCell
+                        key={head}
+                        sx={{
+                          bgcolor: "grey.700",
+                          color: "white",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {head}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {filteredRequests.length > 0 ? (
+                    filteredRequests.map((req) => (
+                      <TableRow
+                        key={req._id}
+                        hover
+                        sx={{ cursor: "pointer" }}
+                        onClick={() => setSelectedRequest(req)}
+                      >
+                        <TableCell>{req._id}</TableCell>
+                        <TableCell>{req.name}</TableCell>
+                        <TableCell>{req.contact}</TableCell>
+                        <TableCell>
+                          {req.location?.lat && req.location?.lng
+                            ? `${req.location.lat}, ${req.location.lng}`
+                            : "N/A"}
+                        </TableCell>
+                        <TableCell>₱{req.price}</TableCell>
+                        <TableCell>{req.description}</TableCell>
+                        <TableCell>
+                          <Typography
+                            sx={{
+                              borderColor:
+                                req.status === "accepted"
+                                  ? "success.main"
+                                  : req.status === "declined"
+                                  ? "error.main"
+                                  : "warning.main",
+                              color:
+                                req.status === "accepted"
+                                  ? "success.main"
+                                  : req.status === "declined"
+                                  ? "error.main"
+                                  : "warning.main",
+                              px: 1.5,
+                              py: 0.25,
+                              borderRadius: 1,
+                              display: "inline-block",
+                              fontWeight: 500,
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {req.status || "pending"}
+                          </Typography>
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <IconButton onClick={(e) => handleMenuOpen(e, req._id)}>
+                            <MoreVertIcon />
+                          </IconButton>
+                          <Menu
+                            anchorEl={anchorEl}
+                            open={activeRowId === req._id}
+                            onClose={handleMenuClose}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MenuItem
+                              onClick={() => {
+                                handleStatusUpdate(req._id, "accepted");
+                                handleMenuClose();
+                              }}
+                              disabled={req.status === "accepted"}
+                              sx={{
+                                color: "success.main",
+                                fontWeight: 500,
+                                "&.Mui-disabled": { color: "success.light" },
+                                "&:hover": {
+                                  bgcolor: "success.light",
+                                  color: "white",
+                                },
+                              }}
+                            >
+                              Accept
+                            </MenuItem>
+                            <MenuItem
+                              onClick={() => {
+                                handleStatusUpdate(req._id, "declined");
+                                handleMenuClose();
+                              }}
+                              disabled={req.status === "declined"}
+                              sx={{
+                                color: "warning.main",
+                                fontWeight: 500,
+                                "&.Mui-disabled": { color: "warning.light" },
+                                "&:hover": {
+                                  bgcolor: "warning.light",
+                                  color: "white",
+                                },
+                              }}
+                            >
+                              Decline
+                            </MenuItem>
+                            <MenuItem
+                              onClick={() => {
+                                handleDelete(req._id);
+                                handleMenuClose();
+                              }}
+                              sx={{
+                                color: "error.main",
+                                fontWeight: 500,
+                                "&:hover": {
+                                  bgcolor: "error.light",
+                                  color: "white",
+                                },
+                              }}
+                            >
+                              Delete
+                            </MenuItem>
+                          </Menu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center">
+                        No results found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          {/* Download Excel */}
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={handleDownloadExcel}
+            >
+              Download Excel
+            </Button>
+          </Box>
+
+          {/* Modal */}
+          {selectedRequest && (
+            <ReqDetailModal
+              request={selectedRequest}
+              onClose={() => setSelectedRequest(null)}
+            />
+          )}
+        </>
+      )}
+    </Box>
   );
 };
 
