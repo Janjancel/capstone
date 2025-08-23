@@ -167,8 +167,8 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import ForgotPassword from "./ForgotPassword";
 import { useAuth } from "../../context/AuthContext";
-import { GoogleLogin } from "@react-oauth/google"; // ✅ Google OAuth
-import { jwtDecode } from "jwt-decode"; // ✅ to decode Google JWT
+import { GoogleLogin } from "@react-oauth/google";
+import {jwtDecode} from "jwt-decode";
 
 export default function LoginForm({ onSuccess, toggleMode }) {
   const navigate = useNavigate();
@@ -197,10 +197,7 @@ export default function LoginForm({ onSuccess, toggleMode }) {
         );
 
         const { token, user } = res.data;
-
-        if (!token || !user) {
-          throw new Error("Invalid login response from server.");
-        }
+        if (!token || !user) throw new Error("Invalid login response from server.");
 
         localStorage.setItem("token", token);
         localStorage.setItem("userId", user._id);
@@ -208,16 +205,10 @@ export default function LoginForm({ onSuccess, toggleMode }) {
         setUser(user);
         toast.success(`Welcome back, ${user.username || "User"}!`);
 
-        if (user.role === "admin") {
-          navigate("/admin", { replace: true });
-        } else {
-          navigate("/", { replace: true });
-        }
-
+        navigate(user.role === "admin" ? "/admin" : "/", { replace: true });
         onSuccess?.();
       } catch (err) {
         const msg = err?.response?.data?.message;
-
         if (msg?.toLowerCase().includes("not verified")) {
           toast.error("Please verify your email before logging in.");
         } else {
@@ -237,42 +228,33 @@ export default function LoginForm({ onSuccess, toggleMode }) {
     },
   });
 
-  // ✅ Handle Google Login Success
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
+      if (!credentialResponse?.credential) throw new Error("No credential received");
+
+      // Optional: decode token for display
       const decoded = jwtDecode(credentialResponse.credential);
 
-      // Send the ID token to backend for verification/registration
       const res = await axios.post(
-        `${process.env.REACT_APP_API_URL}/api/auth/`,
+        `${process.env.REACT_APP_API_URL}/api/auth/google`,
         { token: credentialResponse.credential }
       );
 
       const { token, user } = res.data;
-
-      if (!token || !user) throw new Error("Invalid Google login response.");
 
       localStorage.setItem("token", token);
       localStorage.setItem("userId", user._id);
 
       setUser(user);
       toast.success(`Welcome, ${user.username || decoded.name || "User"}!`);
-
-      if (user.role === "admin") {
-        navigate("/admin", { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
-
-      onSuccess?.();
     } catch (err) {
       console.error("Google login failed:", err);
-      toast.error("Google login failed. Please try again.");
+      toast.error(err?.response?.data?.message || "Google login failed.");
     }
   };
 
   const handleGoogleFailure = () => {
-    toast.error("Google login was cancelled or failed.");
+    toast.error("Google login cancelled or failed.");
   };
 
   return (
@@ -316,11 +298,7 @@ export default function LoginForm({ onSuccess, toggleMode }) {
             <span
               className="text-primary"
               role="button"
-              style={{
-                cursor: "pointer",
-                fontSize: "0.875rem",
-                textDecoration: "underline",
-              }}
+              style={{ cursor: "pointer", fontSize: "0.875rem", textDecoration: "underline" }}
               onClick={() => setShowForgotModal(true)}
             >
               Forgot Password?
@@ -336,38 +314,25 @@ export default function LoginForm({ onSuccess, toggleMode }) {
           {loading ? <Spinner animation="border" size="sm" /> : "Login"}
         </Button>
 
-        {/* ✅ Divider */}
         <div className="d-flex align-items-center my-3">
           <hr className="flex-grow-1" />
           <span className="mx-2 text-muted">or</span>
           <hr className="flex-grow-1" />
         </div>
 
-        {/* ✅ Google Login Button */}
         <div className="d-flex justify-content-center mb-3">
-          <GoogleLogin
-            onSuccess={handleGoogleSuccess}
-            onError={handleGoogleFailure}
-          />
+          <GoogleLogin onSuccess={handleGoogleSuccess} onError={handleGoogleFailure} />
         </div>
 
         <div className="text-center mt-3">
           Don’t have an account?{" "}
-          <span
-            className="text-primary"
-            role="button"
-            style={{ cursor: "pointer" }}
-            onClick={toggleMode}
-          >
+          <span className="text-primary" role="button" style={{ cursor: "pointer" }} onClick={toggleMode}>
             Register
           </span>
         </div>
       </Form>
 
-      <ForgotPassword
-        show={showForgotModal}
-        onHide={() => setShowForgotModal(false)}
-      />
+      <ForgotPassword show={showForgotModal} onHide={() => setShowForgotModal(false)} />
     </>
   );
 }
