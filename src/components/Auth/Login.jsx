@@ -244,7 +244,7 @@ export default function LoginForm({ onSuccess, toggleMode }) {
 
       // Send the ID token to backend for verification/registration
       const res = await axios.post(
-        `${process.env.REACT_APP_API_URL}/api/auth/google`,
+        `${process.env.REACT_APP_API_URL}/api/auth/`,
         { token: credentialResponse.credential }
       );
 
