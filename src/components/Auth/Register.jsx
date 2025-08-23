@@ -74,6 +74,7 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
       onSuccess(res.data);
     } catch (err) {
       Swal.fire("Error", err?.response?.data?.message || "Google login failed", "error");
+      // console.log("Received token:", token?.slice(0, 20)); 
     } finally {
       setLoading(false);
     }
