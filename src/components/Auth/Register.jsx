@@ -1,16 +1,32 @@
 import React, { useState } from "react";
-import { Form, Button, InputGroup, Spinner } from "react-bootstrap";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
+import {
+  Box,
+  Button,
+  TextField,
+  IconButton,
+  InputAdornment,
+  CircularProgress,
+  Divider,
+  Typography,
+} from "@mui/material";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import Swal from "sweetalert2";
 import axios from "axios";
 import { GoogleLogin } from "@react-oauth/google";
+import {jwtDecode} from "jwt-decode";
+import toast from "react-hot-toast";
+import { useAuth } from "../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export default function RegisterForm({ onSuccess, toggleMode }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const navigate = useNavigate();
+  const { setUser } = useAuth();
 
   const formik = useFormik({
     initialValues: {
@@ -20,7 +36,9 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
       confirmPassword: "",
     },
     validationSchema: Yup.object({
-      username: Yup.string().min(3, "Too short").required("Username is required"),
+      username: Yup.string()
+        .min(3, "Too short")
+        .required("Username is required"),
       email: Yup.string().email("Invalid email").required("Email is required"),
       password: Yup.string()
         .matches(
@@ -59,134 +77,149 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
   });
 
   const handleGoogleSuccess = async (credentialResponse) => {
-    if (!credentialResponse?.credential) {
-      Swal.fire("Error", "No Google credentials received.", "error");
-      return;
-    }
-
-    setLoading(true);
     try {
+      if (!credentialResponse?.credential)
+        throw new Error("No credential received");
+
+      const decoded = jwtDecode(credentialResponse.credential);
+
       const res = await axios.post(
-        `${process.env.REACT_APP_API_URL}/api/auth/google-register`,
+        `${process.env.REACT_APP_API_URL}/api/auth/google`,
         { token: credentialResponse.credential }
       );
-      Swal.fire("Success", "Logged in with Google successfully!", "success");
-      onSuccess(res.data);
-      console.log(res.data);
+
+      const { token, user } = res.data;
+
+      localStorage.setItem("token", token);
+      localStorage.setItem("userId", user._id);
+
+      setUser(user);
+      navigate(user.role === "admin" ? "/admin" : "/", { replace: true });
+      toast.success(`Welcome, ${user.username || decoded.name || "User"}!`);
     } catch (err) {
-      Swal.fire("Error", err?.response?.data?.message || "Google login failed", "error");
-      console.error("Google login failed:", err.response?.data || err.message);
-      // console.log("Received token:", token?.slice(0, 20)); 
-    } finally {
-      setLoading(false);
+      console.error("Google login failed:", err);
+      toast.error(err?.response?.data?.message || "Google login failed.");
     }
   };
 
   const handleGoogleFailure = () => {
-    Swal.fire("Error", "Google login failed. Please try again.", "error");
+    toast.error("Google login cancelled or failed.");
   };
 
   return (
-    <Form onSubmit={formik.handleSubmit}>
+    <Box
+      component="form"
+      onSubmit={formik.handleSubmit}
+      sx={{ maxWidth: 400, mx: "auto", display: "flex", flexDirection: "column", gap: 2 }}
+    >
       {/* Username */}
-      <Form.Group className="mb-3">
-        <Form.Control
-          type="text"
-          name="username"
-          placeholder="Username"
-          {...formik.getFieldProps("username")}
-          isInvalid={formik.touched.username && formik.errors.username}
-        />
-        <Form.Control.Feedback type="invalid">
-          {formik.errors.username}
-        </Form.Control.Feedback>
-      </Form.Group>
+      <TextField
+        fullWidth
+        label="Username"
+        name="username"
+        {...formik.getFieldProps("username")}
+        error={formik.touched.username && Boolean(formik.errors.username)}
+        helperText={formik.touched.username && formik.errors.username}
+      />
 
       {/* Email */}
-      <Form.Group className="mb-3">
-        <Form.Control
-          type="email"
-          name="email"
-          placeholder="Email"
-          {...formik.getFieldProps("email")}
-          isInvalid={formik.touched.email && formik.errors.email}
-        />
-        <Form.Control.Feedback type="invalid">
-          {formik.errors.email}
-        </Form.Control.Feedback>
-      </Form.Group>
+      <TextField
+        fullWidth
+        label="Email"
+        name="email"
+        type="email"
+        {...formik.getFieldProps("email")}
+        error={formik.touched.email && Boolean(formik.errors.email)}
+        helperText={formik.touched.email && formik.errors.email}
+      />
 
       {/* Password */}
-      <InputGroup className="mb-3">
-        <Form.Control
-          type={showPassword ? "text" : "password"}
-          name="password"
-          placeholder="Password"
-          {...formik.getFieldProps("password")}
-          isInvalid={formik.touched.password && formik.errors.password}
-        />
-        <Button
-          variant="outline-secondary"
-          onClick={() => setShowPassword(!showPassword)}
-          tabIndex={-1}
-        >
-          {showPassword ? <FaEyeSlash /> : <FaEye />}
-        </Button>
-        <Form.Control.Feedback type="invalid">
-          {formik.errors.password}
-        </Form.Control.Feedback>
-      </InputGroup>
+      <TextField
+        fullWidth
+        label="Password"
+        name="password"
+        type={showPassword ? "text" : "password"}
+        {...formik.getFieldProps("password")}
+        error={formik.touched.password && Boolean(formik.errors.password)}
+        helperText={formik.touched.password && formik.errors.password}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                onClick={() => setShowPassword(!showPassword)}
+                edge="end"
+              >
+                {showPassword ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+      />
 
       {/* Confirm Password */}
-      <InputGroup className="mb-3">
-        <Form.Control
-          type={showConfirmPassword ? "text" : "password"}
-          name="confirmPassword"
-          placeholder="Confirm Password"
-          {...formik.getFieldProps("confirmPassword")}
-          isInvalid={formik.touched.confirmPassword && formik.errors.confirmPassword}
-        />
-        <Button
-          variant="outline-secondary"
-          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-          tabIndex={-1}
-        >
-          {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-        </Button>
-        <Form.Control.Feedback type="invalid">
-          {formik.errors.confirmPassword}
-        </Form.Control.Feedback>
-      </InputGroup>
+      <TextField
+        fullWidth
+        label="Confirm Password"
+        name="confirmPassword"
+        type={showConfirmPassword ? "text" : "password"}
+        {...formik.getFieldProps("confirmPassword")}
+        error={formik.touched.confirmPassword && Boolean(formik.errors.confirmPassword)}
+        helperText={formik.touched.confirmPassword && formik.errors.confirmPassword}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                edge="end"
+              >
+                {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+      />
 
       {/* Register Button */}
       <Button
         type="submit"
-        className="w-100 mt-2 btn btn-dark"
+        variant="contained"
+          sx={{
+    backgroundColor: "black",
+    color: "white",
+    "&:hover": {
+      backgroundColor: "#222", // slightly lighter black on hover
+    },
+  }}
+        fullWidth
         disabled={formik.isSubmitting || loading}
+        startIcon={loading && <CircularProgress size={20} />}
       >
-        {loading ? <Spinner animation="border" size="sm" /> : "Register"}
+        {loading ? "Registering..." : "Register"}
       </Button>
 
+      {/* Divider */}
+      <Box sx={{ display: "flex", alignItems: "center", my: 2 }}>
+        <Divider sx={{ flexGrow: 1 }} />
+        <Typography sx={{ mx: 2, color: "text.secondary" }}>or</Typography>
+        <Divider sx={{ flexGrow: 1 }} />
+      </Box>
+
+      {/* Google Login */}
+      <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+        <GoogleLogin onSuccess={handleGoogleSuccess} onError={handleGoogleFailure} />
+      </Box>
+
       {/* Toggle to Login */}
-      <div className="text-center mt-3">
+      <Typography align="center">
         Already have an account?{" "}
-        <span
-          className="text-primary"
-          role="button"
-          style={{ cursor: "pointer" }}
+        <Box
+          component="span"
+          sx={{ color: "primary.main", cursor: "pointer", fontWeight: "bold" }}
           onClick={toggleMode}
         >
           Login
-        </span>
-      </div>
-
-      {/* Google Login */}
-      <div className="text-center mt-3">
-        <GoogleLogin
-          onSuccess={handleGoogleSuccess}
-          onError={handleGoogleFailure}
-        />
-      </div>
-    </Form>
+        </Box>
+      </Typography>
+    </Box>
   );
 }
