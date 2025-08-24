@@ -27,7 +27,6 @@ const CartModal = ({
     houseNo: "",
     zipCode: "",
   });
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
@@ -72,6 +71,7 @@ const CartModal = ({
     </Form.Group>
   );
 
+  // --- Address and dependent dropdowns ---
   useEffect(() => {
     const loadRegions = () => {
       const regionList = Object.keys(addressData).map((regionCode) => ({
@@ -83,7 +83,6 @@ const CartModal = ({
 
     if (show && user) {
       loadRegions();
-
       const fetchAddress = async () => {
         try {
           const res = await axios.get(`${API_URL}/api/address/${user._id}`);
@@ -96,7 +95,6 @@ const CartModal = ({
           toast.error("Failed to load address.");
         }
       };
-
       fetchAddress();
     }
   }, [show, user]);
@@ -120,7 +118,8 @@ const CartModal = ({
 
   useEffect(() => {
     if (!address.province) return;
-    const provinceData = addressData[address.region]?.province_list[address.province];
+    const provinceData =
+      addressData[address.region]?.province_list[address.province];
     if (provinceData?.municipality_list) {
       const cities = Object.keys(provinceData.municipality_list).map((name) => ({
         name,
@@ -136,7 +135,9 @@ const CartModal = ({
 
   useEffect(() => {
     if (!address.city) return;
-    const cityData = addressData[address.region]?.province_list[address.province]?.municipality_list[address.city];
+    const cityData =
+      addressData[address.region]?.province_list[address.province]
+        ?.municipality_list[address.city];
     if (cityData?.barangay_list) {
       setOptions((prev) => ({
         ...prev,
@@ -157,7 +158,6 @@ const CartModal = ({
     if (!user) return toast.error("User not found.");
     const isComplete = Object.values(address).every((field) => field !== "");
     if (!isComplete) return toast.error("Please fill in all the fields.");
-
     try {
       await axios.post(`${API_URL}/api/address/save`, {
         userId: user._id,
@@ -172,36 +172,106 @@ const CartModal = ({
     }
   };
 
-  const handleOrderConfirmation = async () => {
-    if (!user || !isAddressComplete()) return;
+  // --- Order confirmation with image upload ---
+const handleOrderConfirmation = async () => {
+  if (!user || !isAddressComplete()) return;
 
-    setLoading(true);
-    try {
-      await axios.post(`${API_URL}/api/orders`, {
-        userId: user._id,
-        items: selectedItems,
-        total: parseFloat(totalPrice),
-        address,
-        notes: "",
-      });
+  setLoading(true);
+  try {
+    // Step 1: Upload any new images first
+    const updatedItems = await Promise.all(
+      selectedItems.map(async (item) => {
+        if (item.image instanceof File) {
+          const formData = new FormData();
+          formData.append("image", item.image);
 
-      await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
-        removeItems: selectedItems.map((i) => i.id),
-      });
+          const res = await axios.post(`${API_URL}/api/upload`, formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+          return { ...item, image: res.data.imageUrl };
+        }
+        return item; // already a URL, no need to upload
+      })
+    );
 
-      setCartItems([]);
-      setSelectedItems([]);
-      setCartCount(0);
-      setShowModal(false);
-      toast.success("Order placed successfully!");
-      onClose();
-    } catch (err) {
-      console.error("Order failed:", err);
-      setError("Failed to place the order. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Step 2: Place the order with image URLs
+    await axios.post(`${API_URL}/api/orders`, {
+      userId: user._id,
+      items: updatedItems,
+      total: parseFloat(totalPrice),
+      address,
+      notes: "",
+    });
+
+    // Step 3: Remove items from cart
+    await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
+      removeItems: selectedItems.map((i) => i.id),
+    });
+
+    // Step 4: Update local state
+    setCartItems([]);
+    setSelectedItems([]);
+    setCartCount(0);
+    setShowModal(false);
+    toast.success("Order placed successfully!");
+    onClose();
+  } catch (err) {
+    console.error("Order failed:", err);
+    setError("Failed to place the order. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // const handleOrderConfirmation = async () => {
+  //   if (!user || !isAddressComplete()) return;
+
+  //   setLoading(true);
+  //   setError("");
+
+  //   try {
+  //     // Upload item images if new files exist
+  //     const updatedItems = await Promise.all(
+  //       selectedItems.map(async (item) => {
+  //         if (item.imageFile) {
+  //           const formData = new FormData();
+  //           formData.append("image", item.imageFile);
+  //           const res = await axios.post(`${API_URL}/api/upload`, formData, {
+  //             headers: { "Content-Type": "multipart/form-data" },
+  //           });
+  //           return { ...item, image: res.data.imageUrl };
+  //         }
+  //         return item;
+  //       })
+  //     );
+
+  //     // Create order
+  //     await axios.post(`${API_URL}/api/orders`, {
+  //       userId: user._id,
+  //       items: updatedItems,
+  //       total: parseFloat(totalPrice),
+  //       address,
+  //       notes: "",
+  //     });
+
+  //     // Remove items from cart
+  //     await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
+  //       removeItems: selectedItems.map((i) => i.id),
+  //     });
+
+  //     setCartItems([]);
+  //     setSelectedItems([]);
+  //     setCartCount(0);
+  //     setShowModal(false);
+  //     toast.success("Order placed successfully!");
+  //     onClose();
+  //   } catch (err) {
+  //     console.error("Order failed:", err);
+  //     setError("Failed to place the order. Please try again.");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const renderViewMode = () => (
     <div className="card p-4 shadow-sm">
@@ -220,7 +290,11 @@ const CartModal = ({
       </div>
       {Object.entries(address).map(([key, value]) => (
         <p className="mb-1" key={key}>
-          <strong>{key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, " $1")}:</strong>{" "}
+          <strong>
+            {key.charAt(0).toUpperCase() +
+              key.slice(1).replace(/([A-Z])/g, " $1")}
+            :
+          </strong>{" "}
           {value || "Not Provided"}
         </p>
       ))}
@@ -249,15 +323,27 @@ const CartModal = ({
                 <Form>
                   <Form.Group className="mb-2">
                     <Form.Label>Name</Form.Label>
-                    <Form.Control type="text" value={user?.displayName || "N/A"} disabled />
+                    <Form.Control
+                      type="text"
+                      value={user?.displayName || "N/A"}
+                      disabled
+                    />
                   </Form.Group>
                   <Form.Group className="mb-2">
                     <Form.Label>Email</Form.Label>
-                    <Form.Control type="email" value={user?.email || "N/A"} disabled />
+                    <Form.Control
+                      type="email"
+                      value={user?.email || "N/A"}
+                      disabled
+                    />
                   </Form.Group>
                   <Form.Group className="mb-3">
                     <Form.Label>Phone Number</Form.Label>
-                    <Form.Control type="text" value={user?.phoneNumber || "N/A"} disabled />
+                    <Form.Control
+                      type="text"
+                      value={user?.phoneNumber || "N/A"}
+                      disabled
+                    />
                   </Form.Group>
 
                   {!isAddressComplete() && (
@@ -272,7 +358,10 @@ const CartModal = ({
 
                 <h5 className="mt-4">Order Summary</h5>
                 {selectedItems.length > 0 ? (
-                  <div className="table-responsive" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                  <div
+                    className="table-responsive"
+                    style={{ maxHeight: "200px", overflowY: "auto" }}
+                  >
                     <table className="table table-bordered text-center align-middle">
                       <thead className="table-light">
                         <tr>
@@ -290,14 +379,20 @@ const CartModal = ({
                               <img
                                 src={item.image || "/placeholder.jpg"}
                                 alt={item.name}
-                                style={{ width: "60px", height: "50px", objectFit: "cover" }}
+                                style={{
+                                  width: "60px",
+                                  height: "50px",
+                                  objectFit: "cover",
+                                }}
                                 className="img-thumbnail"
                               />
                             </td>
                             <td>{item.name}</td>
                             <td>{item.quantity}</td>
                             <td>₱{parseFloat(item.price).toFixed(2)}</td>
-                            <td>₱{(item.quantity * parseFloat(item.price)).toFixed(2)}</td>
+                            <td>
+                              ₱{(item.quantity * parseFloat(item.price)).toFixed(2)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -309,7 +404,10 @@ const CartModal = ({
 
                 <div className="d-flex justify-content-between align-items-center mt-3">
                   <h4>
-                    Total: <span className="text-success">₱{parseFloat(totalPrice).toFixed(2)}</span>
+                    Total:{" "}
+                    <span className="text-success">
+                      ₱{parseFloat(totalPrice).toFixed(2)}
+                    </span>
                   </h4>
                   <Button
                     variant="success"
