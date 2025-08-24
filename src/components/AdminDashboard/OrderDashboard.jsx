@@ -320,28 +320,19 @@ const OrderDashboard = () => {
   const intervalRef = useRef(null);
   const API_URL = process.env.REACT_APP_API_URL;
 
-  const fetchOrders = async () => {
-    try {
-      const [ordersRes, usersRes] = await Promise.all([
-        axios.get(`${API_URL}/api/orders`),
-        axios.get(`${API_URL}/api/users`),
-      ]);
-      const userMap = {};
-      usersRes.data.forEach((user) => {
-        userMap[user._id] = user;
-      });
-      setOrders(
-        ordersRes.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      );
-      setUserData(userMap);
-      setLoading(false);
-    } catch (err) {
-      console.error("Failed to fetch orders:", err);
-      setError("Failed to fetch orders.");
-      setLoading(false);
-    }
-  };
-
+const fetchOrders = async () => {
+  try {
+    const ordersRes = await axios.get(`${API_URL}/api/orders`);
+    setOrders(
+      ordersRes.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    );
+    setLoading(false);
+  } catch (err) {
+    console.error("Failed to fetch orders:", err);
+    setError("Failed to fetch orders.");
+    setLoading(false);
+  }
+};
   useEffect(() => {
     fetchOrders();
     intervalRef.current = setInterval(fetchOrders, 3000);
