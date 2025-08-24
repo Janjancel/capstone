@@ -615,28 +615,27 @@ const Demolition = () => {
     }
 
     try {
-    let imageUrl = null;
-    if (formData.image) {
-      const formDataToUpload = new FormData();
-      formDataToUpload.append("image", formData.image);
+      let imageUrl = null;
+      if (formData.image) {
+        const formDataToUpload = new FormData();
+        formDataToUpload.append("image", formData.image);
 
-      const { data } = await axios.post(`${API_URL}/api/upload`, formDataToUpload, {
-        headers: { "Content-Type": "multipart/form-data" },
+        const { data } = await axios.post(`${API_URL}/api/upload`, formDataToUpload, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        imageUrl = data.url || data.imageUrl || null;
+      }
+
+      await axios.post(`${API_URL}/api/demolish`, {
+        userId,
+        name: formData.name,
+        contact: formData.contact,
+        price: Number(formData.price),
+        description: formData.description,
+        image: imageUrl,
+        location: formData.location,
       });
-      imageUrl = data.imageUrl;
-    }
-
-    // Then send the request with the imageUrl
-    await axios.post(`${API_URL}/api/demolish`, {
-      userId,
-      name: formData.name,
-      contact: formData.contact,
-      price: Number(formData.price),
-      description: formData.description,
-      image: imageUrl,
-      location: formData.location,
-    });
-
 
       Swal.fire("Success!", "Your demolition request has been submitted.", "success");
 

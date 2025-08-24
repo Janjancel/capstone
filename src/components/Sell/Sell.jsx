@@ -456,7 +456,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 
-const API_URL = process.env.REACT_APP_API_URL;
+const API_URL = process.env.REACT_APP_API_URL || "https://capstone-backend-k4uu.onrender.com";
 
 // Fix Leaflet icon URLs
 delete L.Icon.Default.prototype._getIconUrl;
@@ -599,65 +599,67 @@ const Sell = () => {
     getLocation();
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsSubmitting(true);
 
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      Swal.fire("Login Required", "Please login to submit your request.", "warning");
-      setIsSubmitting(false);
-      return;
-    }
+  const userId = localStorage.getItem("userId");
+  if (!userId) {
+    Swal.fire("Login Required", "Please login to submit your request.", "warning");
+    setIsSubmitting(false);
+    return;
+  }
 
-    try {
-      let imageUrl = null;
+  try {
+    let imageUrl = null;
 
-      // Upload image if selected
-      if (formData.image) {
-        const uploadData = new FormData();
-        uploadData.append("image", formData.image);
+    // Upload image if selected
+    if (formData.image) {
+      const formDataToUpload = new FormData();
+      formDataToUpload.append("image", formData.image);
 
-        const uploadRes = await axios.post(`${API_URL}/api/upload`, uploadData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-
-        imageUrl = uploadRes.data.imageUrl; // server-returned URL
-      }
-
-      // Submit sell request
-      await axios.post(`${API_URL}/api/sell`, {
-        userId,
-        name: formData.name,
-        contact: formData.contact,
-        price: Number(formData.price),
-        description: formData.description,
-        image: imageUrl,
-        location: formData.location,
+      const { data } = await axios.post(`${API_URL}/api/upload`, formDataToUpload, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
-      Swal.fire("Success!", "Your selling request has been submitted.", "success");
-
-      setFormData({
-        location: { lat: null, lng: null },
-        name: "",
-        contact: "",
-        price: "",
-        description: "",
-        image: null,
-      });
-      setPreviewUrl(null);
-    } catch (error) {
-      console.error("Error submitting sell request:", error);
-      Swal.fire(
-        "Error!",
-        "Failed to submit the request. Please try again.",
-        "error"
-      );
-    } finally {
-      setIsSubmitting(false);
+      imageUrl = data.url || data.imageUrl || null;
     }
-  };
+
+    // Submit sell request
+    await axios.post(`${API_URL}/api/sell`, {
+      userId,
+      name: formData.name,
+      contact: formData.contact,
+      price: Number(formData.price),
+      description: formData.description,
+      image: imageUrl,
+      location: formData.location,
+    });
+
+    Swal.fire("Success!", "Your selling request has been submitted.", "success");
+
+    setFormData({
+      location: { lat: null, lng: null },
+      name: "",
+      contact: "",
+      price: "",
+      description: "",
+      image: null,
+    });
+    setPreviewUrl(null);
+
+  } catch (error) {
+    console.error("Error submitting sell request:", error.response?.data || error.message);
+    Swal.fire(
+      "Error!",
+      "Failed to submit the request. Please try again.",
+      "error"
+    );
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
 
   const defaultPosition = [13.5, 122];
 
