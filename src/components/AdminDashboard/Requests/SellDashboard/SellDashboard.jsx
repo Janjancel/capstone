@@ -588,6 +588,7 @@ import {
   MenuItem,
   IconButton,
   Tooltip,
+  Avatar,
 } from "@mui/material";
 import Loader from "./Loader";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -661,18 +662,18 @@ const SellDashboard = () => {
         request.description.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    // Apply status filter
     if (statusFilter) {
       filtered = filtered.filter(
         (req) => (req.status || "pending") === statusFilter
       );
     }
 
-    // Apply price filter
     if (priceFilter === "low") {
       filtered = filtered.filter((req) => req.price < 5000);
     } else if (priceFilter === "mid") {
-      filtered = filtered.filter((req) => req.price >= 5000 && req.price <= 20000);
+      filtered = filtered.filter(
+        (req) => req.price >= 5000 && req.price <= 20000
+      );
     } else if (priceFilter === "high") {
       filtered = filtered.filter((req) => req.price > 20000);
     }
@@ -746,8 +747,7 @@ const SellDashboard = () => {
       180
     );
     docPDF.text(description, 10, 90);
-    if (request.image)
-      docPDF.addImage(request.image, "JPEG", 120, 40, 70, 70);
+    if (request.image) docPDF.addImage(request.image, "JPEG", 120, 40, 70, 70);
     docPDF.save(`Sell_Request_${request._id}.pdf`);
   };
 
@@ -768,23 +768,16 @@ const SellDashboard = () => {
     setActiveRowId(null);
   };
 
-  // Filter menu
-  const handleFilterOpen = (event) => {
-    setFilterAnchor(event.currentTarget);
-  };
-  const handleFilterClose = () => {
-    setFilterAnchor(null);
-  };
+  const handleFilterOpen = (event) => setFilterAnchor(event.currentTarget);
+  const handleFilterClose = () => setFilterAnchor(null);
 
   return (
     <Box sx={{ p: 3 }}>
       <Toaster position="top-right" />
-
       {loading ? (
         <Loader />
       ) : (
         <>
-          {/* Title + Map Toggle + Search + Filter */}
           <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography variant="h5">Sell Requests</Typography>
@@ -807,101 +800,55 @@ const SellDashboard = () => {
                   <FilterListIcon />
                 </IconButton>
               </Tooltip>
-<Menu
-  anchorEl={filterAnchor}
-  open={Boolean(filterAnchor)}
-  onClose={handleFilterClose}
->
-  <MenuItem disabled>Filter by Status</MenuItem>
-  <MenuItem
-    onClick={() => setStatusFilter("")}
-    sx={{
-      fontWeight: statusFilter === "" ? "bold" : "normal",
-      bgcolor: statusFilter === "" ? "grey.700" : "inherit",
-      color: statusFilter === "" ? "primary.contrastText" : "inherit",
-    }}
-  >
-    All
-  </MenuItem>
-  <MenuItem
-    onClick={() => setStatusFilter("pending")}
-    sx={{
-      fontWeight: statusFilter === "pending" ? "bold" : "normal",
-      bgcolor: statusFilter === "pending" ? "grey.700" : "inherit",
-      color: statusFilter === "pending" ? "primary.contrastText" : "inherit",
-    }}
-  >
-    Pending
-  </MenuItem>
-  <MenuItem
-    onClick={() => setStatusFilter("accepted")}
-    sx={{
-      fontWeight: statusFilter === "accepted" ? "bold" : "normal",
-      bgcolor: statusFilter === "accepted" ? "grey.700" : "inherit",
-      color: statusFilter === "accepted" ? "primary.contrastText" : "inherit",
-    }}
-  >
-    Accepted
-  </MenuItem>
-  <MenuItem
-    onClick={() => setStatusFilter("declined")}
-    sx={{
-      fontWeight: statusFilter === "declined" ? "bold" : "normal",
-      bgcolor: statusFilter === "declined" ? "grey.700" : "inherit",
-      color: statusFilter === "declined" ? "primary.contrastText" : "inherit",
-    }}
-  >
-    Declined
-  </MenuItem>
-
-  <MenuItem divider />
-  <MenuItem disabled>Filter by Price</MenuItem>
-  <MenuItem
-    onClick={() => setPriceFilter("")}
-    sx={{
-      fontWeight: priceFilter === "" ? "bold" : "normal",
-      bgcolor: priceFilter === "" ? "grey.700" : "inherit",
-      color: priceFilter === "" ? "primary.contrastText" : "inherit",
-    }}
-  >
-    All
-  </MenuItem>
-  <MenuItem
-    onClick={() => setPriceFilter("low")}
-    sx={{
-      fontWeight: priceFilter === "low" ? "bold" : "normal",
-      bgcolor: priceFilter === "low" ? "grey.700" : "inherit",
-      color: priceFilter === "low" ? "primary.contrastText" : "inherit",
-    }}
-  >
-    Below ₱5,000
-  </MenuItem>
-  <MenuItem
-    onClick={() => setPriceFilter("mid")}
-    sx={{
-      fontWeight: priceFilter === "mid" ? "bold" : "normal",
-      bgcolor: priceFilter === "mid" ? "grey.700" : "inherit",
-      color: priceFilter === "mid" ? "primary.contrastText" : "inherit",
-    }}
-  >
-    ₱5,000 – ₱20,000
-  </MenuItem>
-  <MenuItem
-    onClick={() => setPriceFilter("high")}
-    sx={{
-      fontWeight: priceFilter === "high" ? "bold" : "normal",
-      bgcolor: priceFilter === "high" ? "grey.700" : "inherit",
-      color: priceFilter === "high" ? "primary.contrastText" : "inherit",
-    }}
-  >
-    Above ₱20,000
-  </MenuItem>
-</Menu>
-
+              <Menu
+                anchorEl={filterAnchor}
+                open={Boolean(filterAnchor)}
+                onClose={handleFilterClose}
+              >
+                {/* Status Filter */}
+                <MenuItem disabled>Filter by Status</MenuItem>
+                {["", "pending", "accepted", "declined"].map((status) => (
+                  <MenuItem
+                    key={status || "all"}
+                    onClick={() => setStatusFilter(status)}
+                    sx={{
+                      fontWeight: statusFilter === status ? "bold" : "normal",
+                      bgcolor: statusFilter === status ? "grey.700" : "inherit",
+                      color:
+                        statusFilter === status ? "primary.contrastText" : "inherit",
+                    }}
+                  >
+                    {status || "All"}
+                  </MenuItem>
+                ))}
+                <MenuItem divider />
+                {/* Price Filter */}
+                <MenuItem disabled>Filter by Price</MenuItem>
+                {[
+                  { label: "All", value: "" },
+                  { label: "Below ₱5,000", value: "low" },
+                  { label: "₱5,000 – ₱20,000", value: "mid" },
+                  { label: "Above ₱20,000", value: "high" },
+                ].map((price) => (
+                  <MenuItem
+                    key={price.value}
+                    onClick={() => setPriceFilter(price.value)}
+                    sx={{
+                      fontWeight: priceFilter === price.value ? "bold" : "normal",
+                      bgcolor: priceFilter === price.value ? "grey.700" : "inherit",
+                      color:
+                        priceFilter === price.value
+                          ? "primary.contrastText"
+                          : "inherit",
+                    }}
+                  >
+                    {price.label}
+                  </MenuItem>
+                ))}
+              </Menu>
             </Box>
           </Box>
 
-          {/* Map Section */}
           {showMap && (
             <Box sx={{ mb: 2 }}>
               <SellDashboardMap
@@ -911,14 +858,13 @@ const SellDashboard = () => {
             </Box>
           )}
 
-          {/* Table */}
           {error ? (
             <Typography color="error">{error}</Typography>
           ) : (
             <TableContainer component={Paper} sx={{ maxHeight: "60vh" }}>
               <Table stickyHeader>
                 <TableHead>
-                  <TableRow>
+                  <TableRow sx={{ bgcolor: "grey.900" }}>
                     {[
                       "ID",
                       "Name",
@@ -931,11 +877,7 @@ const SellDashboard = () => {
                     ].map((head) => (
                       <TableCell
                         key={head}
-                        sx={{
-                          bgcolor: "grey.700",
-                          color: "white",
-                          fontWeight: "bold",
-                        }}
+                        sx={{ color: "#202020ff", fontWeight: "bold", background: "#d3d3d3ff" }}
                       >
                         {head}
                       </TableCell>
@@ -1010,10 +952,7 @@ const SellDashboard = () => {
                                 color: "success.main",
                                 fontWeight: 500,
                                 "&.Mui-disabled": { color: "success.light" },
-                                "&:hover": {
-                                  bgcolor: "success.light",
-                                  color: "white",
-                                },
+                                "&:hover": { bgcolor: "success.light", color: "white" },
                               }}
                             >
                               Accept
@@ -1028,10 +967,7 @@ const SellDashboard = () => {
                                 color: "warning.main",
                                 fontWeight: 500,
                                 "&.Mui-disabled": { color: "warning.light" },
-                                "&:hover": {
-                                  bgcolor: "warning.light",
-                                  color: "white",
-                                },
+                                "&:hover": { bgcolor: "warning.light", color: "white" },
                               }}
                             >
                               Decline
@@ -1044,10 +980,7 @@ const SellDashboard = () => {
                               sx={{
                                 color: "error.main",
                                 fontWeight: 500,
-                                "&:hover": {
-                                  bgcolor: "error.light",
-                                  color: "white",
-                                },
+                                "&:hover": { bgcolor: "error.light", color: "white" },
                               }}
                             >
                               Delete
@@ -1060,10 +993,7 @@ const SellDashboard = () => {
                               sx={{
                                 color: "primary.main",
                                 fontWeight: 500,
-                                "&:hover": {
-                                  bgcolor: "primary.light",
-                                  color: "white",
-                                },
+                                "&:hover": { bgcolor: "primary.light", color: "white" },
                               }}
                             >
                               Download PDF
@@ -1074,7 +1004,7 @@ const SellDashboard = () => {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} align="center">
+                      <TableCell colSpan={8} align="center" sx={{ color: "grey.500" }}>
                         No results found.
                       </TableCell>
                     </TableRow>
@@ -1084,18 +1014,12 @@ const SellDashboard = () => {
             </TableContainer>
           )}
 
-          {/* Download Excel */}
           <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
-            <Button
-              variant="contained"
-              color="success"
-              onClick={handleDownloadExcel}
-            >
+            <Button variant="contained" color="success" onClick={handleDownloadExcel}>
               Download Excel
             </Button>
           </Box>
 
-          {/* Modal */}
           {selectedRequest && (
             <ReqDetailModal
               request={selectedRequest}

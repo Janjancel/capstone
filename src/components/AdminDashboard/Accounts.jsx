@@ -1,5 +1,26 @@
 import React, { useEffect, useState, useRef } from "react";
-import "bootstrap/dist/css/bootstrap.min.css";
+import {
+  Box,
+  Typography,
+  TextField,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Avatar,
+  Badge,
+  CircularProgress,
+  MenuItem,
+  Select,
+  FormControl,
+  IconButton,
+  Menu,
+} from "@mui/material";
+import { green, grey } from "@mui/material/colors";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import Swal from "sweetalert2";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -9,182 +30,288 @@ const AccountsDashboard = () => {
   const [filteredAccounts, setFilteredAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [error, setError] = useState(null);
-  const API_URL = process.env.REACT_APP_API_URL;
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedAccount, setSelectedAccount] = useState(null);
 
+  const API_URL = process.env.REACT_APP_API_URL;
+  const token = localStorage.getItem("token"); // JWT token
   const pollingRef = useRef(null);
 
+  // Fetch all accounts
   const fetchAccounts = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/users`);
+      const res = await axios.get(`${API_URL}/api/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setAccounts(res.data);
       setFilteredAccounts(res.data);
       setLoading(false);
     } catch (err) {
-      console.error("Error fetching users:", err);
+      console.error("Error fetching users:", err.response?.data || err);
       setError("Failed to load account data.");
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchAccounts();
+    pollingRef.current = setInterval(fetchAccounts, 3000);
+    return () => clearInterval(pollingRef.current);
+  }, [API_URL]);
+
+  // Filter accounts based on search, role, status
+  useEffect(() => {
+    let filtered = accounts.filter(
+      (account) =>
+        account.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        account.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    if (roleFilter !== "All") {
+      filtered = filtered.filter(
+        (account) => account.role?.toLowerCase() === roleFilter.toLowerCase()
+      );
+    }
+
+    if (statusFilter !== "All") {
+      filtered = filtered.filter(
+        (account) => account.status?.toLowerCase() === statusFilter.toLowerCase()
+      );
+    }
+
+    setFilteredAccounts(filtered);
+  }, [searchQuery, roleFilter, statusFilter, accounts]);
+
+  // Toggle user status
   const toggleStatus = async (account) => {
+    if (!account?._id) return;
     const newStatus = account.status === "online" ? "offline" : "online";
     try {
-      await axios.put(`${API_URL}/api/users/status/${account._id}`, {
-        status: newStatus,
-      });
+      await axios.patch(
+        `${API_URL}/api/users/status/${account._id}`,
+        { status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       toast.success(`User marked as ${newStatus}`);
-      fetchAccounts(); // refresh after toggle
+      fetchAccounts();
     } catch (err) {
-      console.error("Failed to update status:", err);
+      console.error("Failed to update status:", err.response?.data || err);
       toast.error("Failed to update user status.");
     }
   };
 
-  const handleChangePassword = async (account) => {
-    if (!account.email) {
-      toast.error("No email associated with this user.");
-      return;
-    }
+  // Menu handlers
+  const handleMenuOpen = (event, account) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedAccount(account);
+  };
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedAccount(null);
+  };
 
+  // Add admin
+  const handleAddAdmin = async () => {
+    if (!selectedAccount?._id) return;
+    try {
+      await axios.patch(
+        `${API_URL}/api/users/role/${selectedAccount._id}`,
+        { role: "admin" },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(`${selectedAccount.username} is now an Admin`);
+      fetchAccounts();
+    } catch (err) {
+      console.error("Add Admin Error:", err.response?.data || err);
+      toast.error(err.response?.data?.message || "Failed to update role");
+    } finally {
+      handleMenuClose();
+    }
+  };
+
+  // Remove admin
+  const handleRemoveAdmin = async () => {
+    if (!selectedAccount?._id) return;
+    try {
+      await axios.patch(
+        `${API_URL}/api/users/role/${selectedAccount._id}`,
+        { role: "client" },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(`${selectedAccount.username} removed as Admin`);
+      fetchAccounts();
+    } catch (err) {
+      console.error("Remove Admin Error:", err.response?.data || err);
+      toast.error(err.response?.data?.message || "Failed to update role");
+    } finally {
+      handleMenuClose();
+    }
+  };
+
+  // Delete user
+  const handleDeleteUser = async () => {
+    if (!selectedAccount?._id) return;
     Swal.fire({
-      title: `Send password reset email to ${account.email}?`,
-      icon: "question",
+      title: `Delete ${selectedAccount.username}?`,
+      icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Send Email",
+      confirmButtonText: "Delete",
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
-          await axios.post(`${API_URL}/api/auth/reset-password`, {
-            email: account.email,
+          await axios.delete(`${API_URL}/api/users/${selectedAccount._id}`, {
+            headers: { Authorization: `Bearer ${token}` },
           });
-          toast.success("Password reset email sent.");
-        } catch (error) {
-          console.error("Error sending reset email:", error);
-          toast.error(error.response?.data?.message || error.message);
+          toast.success(`${selectedAccount.username} deleted`);
+          fetchAccounts();
+        } catch (err) {
+          console.error("Delete User Error:", err.response?.data || err);
+          toast.error(err.response?.data?.message || "Failed to delete user");
+        } finally {
+          handleMenuClose();
         }
       }
     });
   };
 
-  useEffect(() => {
-    fetchAccounts();
-
-    pollingRef.current = setInterval(fetchAccounts, 3000); // poll every 3s
-    return () => clearInterval(pollingRef.current);
-  }, [API_URL]);
-
-  useEffect(() => {
-    const filtered = accounts.filter((account) =>
-      account.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      account.email?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    setFilteredAccounts(filtered);
-  }, [searchQuery, accounts]);
-
   return (
-    <div className="container-fluid d-flex justify-content-center mt-4">
-      <div className="bg-white p-4 rounded shadow" style={{ width: "90vw", maxHeight: "90vh" }}>
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <h2 className="mb-0">Accounts Management</h2>
-          <input
-            type="text"
-            className="form-control"
+    <Box display="flex" justifyContent="center" mt={4} px={2} overflow="auto">
+      <Paper
+        elevation={3}
+        sx={{
+          width: "90vw",
+          maxHeight: "90vh",
+          p: 3,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Typography variant="h5">Accounts Management</Typography>
+          <TextField
+            variant="outlined"
+            size="small"
             placeholder="Search by username or email..."
-            style={{ width: "250px" }}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            sx={{ width: 250 }}
           />
-        </div>
+        </Box>
 
         {loading ? (
-          <p className="text-center">Loading...</p>
+          <Box display="flex" justifyContent="center" py={5}>
+            <CircularProgress />
+          </Box>
         ) : error ? (
-          <p className="text-danger text-center">{error}</p>
+          <Typography color="error" textAlign="center">
+            {error}
+          </Typography>
         ) : (
-          <div className="table-responsive" style={{ maxHeight: "60vh", overflowY: "auto" }}>
-            <table className="table table-bordered text-center align-middle">
-              <thead className="table-dark">
-                <tr>
-                  <th>Profile</th>
-                  <th>Username</th>
-                  <th>Email</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+          <TableContainer component={Paper} sx={{ maxHeight: "60vh", overflowY: "auto" }}>
+            <Table stickyHeader>
+              <TableHead sx={{ backgroundColor: grey[900] }}>
+                <TableRow>
+                  <TableCell sx={{ color: "#202020ff" }}>Profile</TableCell>
+                  <TableCell sx={{ color: "#202020ff" }}>Username</TableCell>
+                  <TableCell sx={{ color: "#202020ff" }}>Email</TableCell>
+                  <TableCell sx={{ color: "#202020ff" }}>
+                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                      <Select
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                        sx={{ color: "#202020ff", fontWeight: 600, backgroundColor: grey[100] }}
+                      >
+                        <MenuItem value="All">All</MenuItem>
+                        <MenuItem value="admin">Admin</MenuItem>
+                        <MenuItem value="client">Client</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </TableCell>
+                  <TableCell sx={{ color: "#202020ff" }}>
+                    <FormControl size="small" sx={{ minWidth: 120 }}>
+                      <Select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        sx={{ color: "#202020ff", fontWeight: 600, backgroundColor: grey[100] }}
+                      >
+                        <MenuItem value="All">All</MenuItem>
+                        <MenuItem value="online">Online</MenuItem>
+                        <MenuItem value="offline">Offline</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </TableCell>
+                  <TableCell sx={{ color: "#202020ff" }}>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
                 {filteredAccounts.length > 0 ? (
                   filteredAccounts.map((account) => {
                     const isOnline = account.status === "online";
                     const imageSrc = account.profilePic || "default-profile.png";
-
                     return (
-                      <tr
+                      <TableRow
                         key={account._id}
-                        style={{
-                          border: `2px solid ${isOnline ? "#28a745" : "#ccc"}`,
-                          color: isOnline ? "#28a745" : "#6c757d",
+                        sx={{
+                          border: `2px solid ${isOnline ? green[500] : grey[300]}`,
+                          color: isOnline ? green[500] : grey[600],
                           fontWeight: 500,
                         }}
                       >
-                        <td>
-                          <div
-                            className="rounded-circle overflow-hidden mx-auto"
-                            style={{
-                              width: 45,
-                              height: 45,
-                              borderRadius: "50%",
-                              border: "1px solid #ccc",
-                              backgroundColor: "#f0f0f0",
-                            }}
-                          >
-                            <img
-                              src={imageSrc}
-                              alt="profile"
-                              className="w-100 h-100"
-                              style={{ objectFit: "cover" }}
-                            />
-                          </div>
-                        </td>
-                        <td>{account.username || "N/A"}</td>
-                        <td>{account.email || "N/A"}</td>
-                        <td>{account.role || "client"}</td>
-                        <td>
-                          <span
+                        <TableCell>
+                          <Avatar
+                            src={imageSrc}
+                            alt="profile"
+                            sx={{ width: 45, height: 45, mx: "auto", border: "1px solid #ccc", bgcolor: grey[200] }}
+                          />
+                        </TableCell>
+                        <TableCell>{account.username || "N/A"}</TableCell>
+                        <TableCell>{account.email || "N/A"}</TableCell>
+                        <TableCell>{account.role || "client"}</TableCell>
+                        <TableCell>
+                          <Badge
+                            badgeContent={isOnline ? "Online" : "Offline"}
+                            color={isOnline ? "success" : "secondary"}
+                            sx={{ cursor: "pointer" }}
                             onClick={() => toggleStatus(account)}
-                            style={{ cursor: "pointer" }}
-                            className={`badge px-3 py-1 ${isOnline ? "bg-success" : "bg-secondary"}`}
-                            title="Click to toggle status"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <IconButton onClick={(e) => handleMenuOpen(e, account)}>
+                            <MoreVertIcon />
+                          </IconButton>
+                          <Menu
+                            anchorEl={anchorEl}
+                            open={Boolean(anchorEl && selectedAccount?._id === account._id)}
+                            onClose={handleMenuClose}
                           >
-                            {isOnline ? "Online" : "Offline"}
-                          </span>
-                        </td>
-                        <td>
-                          <button
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={() => handleChangePassword(account)}
-                          >
-                            Change Password
-                          </button>
-                        </td>
-                      </tr>
+                            {account.role !== "admin" && (
+                              <MenuItem onClick={handleAddAdmin}>Add as Admin</MenuItem>
+                            )}
+                            {account.role === "admin" && (
+                              <MenuItem onClick={handleRemoveAdmin}>Remove Admin</MenuItem>
+                            )}
+                            <MenuItem onClick={handleDeleteUser}>Delete User</MenuItem>
+                          </Menu>
+                        </TableCell>
+                      </TableRow>
                     );
                   })
                 ) : (
-                  <tr>
-                    <td colSpan="6" className="text-muted text-center">
+                  <TableRow>
+                    <TableCell colSpan={6} align="center" sx={{ color: grey[500] }}>
                       No matching accounts found.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
-      </div>
-    </div>
+      </Paper>
+    </Box>
   );
 };
 
