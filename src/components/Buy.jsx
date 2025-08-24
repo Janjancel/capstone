@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Container,
   Box,
   Typography,
   TextField,
@@ -10,7 +11,6 @@ import {
   CardActions,
   Button,
   CircularProgress,
-  Popover,
   IconButton,
   Menu,
   MenuItem,
@@ -19,6 +19,7 @@ import {
 import toast from "react-hot-toast";
 import axios from "axios";
 import CartModal from "./Cart/CartModal";
+import BuyModal from "./BuyModal"; // new modal for item details
 import { useAuth } from "../context/AuthContext";
 import FilterListIcon from "@mui/icons-material/FilterList";
 
@@ -31,10 +32,9 @@ const Buy = () => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [showModal, setShowModal] = useState(false);
+  const [showCartModal, setShowCartModal] = useState(false);
+  const [showBuyModal, setShowBuyModal] = useState(false);
   const [userAddress, setUserAddress] = useState({});
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [popoverItem, setPopoverItem] = useState(null);
   const [filterAnchor, setFilterAnchor] = useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL;
@@ -73,7 +73,7 @@ const Buy = () => {
     fetchItems();
   }, []);
 
-  // Filter items based on search query and price
+  // Filter items
   useEffect(() => {
     let filtered = items.filter(
       (item) =>
@@ -84,7 +84,9 @@ const Buy = () => {
     if (priceFilter === "low") {
       filtered = filtered.filter((item) => item.price < 5000);
     } else if (priceFilter === "mid") {
-      filtered = filtered.filter((item) => item.price >= 5000 && item.price <= 20000);
+      filtered = filtered.filter(
+        (item) => item.price >= 5000 && item.price <= 20000
+      );
     } else if (priceFilter === "high") {
       filtered = filtered.filter((item) => item.price > 20000);
     }
@@ -116,7 +118,7 @@ const Buy = () => {
       return;
     }
     setSelectedItem({ ...item, quantity: 1 });
-    setShowModal(true);
+    setShowCartModal(true);
   };
 
   const handleOrderConfirm = async (address, notes) => {
@@ -131,21 +133,11 @@ const Buy = () => {
       });
       toast.success("Order placed successfully!");
       setSelectedItem(null);
-      setShowModal(false);
+      setShowCartModal(false);
     } catch (err) {
       console.error("Order failed:", err);
       toast.error("Failed to place order.");
     }
-  };
-
-  const handlePopoverOpen = (event, item) => {
-    setAnchorEl(event.currentTarget);
-    setPopoverItem(item);
-  };
-
-  const handlePopoverClose = () => {
-    setAnchorEl(null);
-    setPopoverItem(null);
   };
 
   const handleFilterOpen = (event) => {
@@ -156,10 +148,8 @@ const Buy = () => {
     setFilterAnchor(null);
   };
 
-  const open = Boolean(anchorEl);
-
   return (
-    <Box sx={{ minHeight: "100vh", p: 3 }}>
+    <Container maxWidth={false} disableGutters sx={{ minHeight: "100vh", p: 3 }}>
       {/* Header */}
       <Box
         sx={{
@@ -199,7 +189,8 @@ const Buy = () => {
               sx={{
                 fontWeight: priceFilter === "" ? "bold" : "normal",
                 bgcolor: priceFilter === "" ? "grey.700" : "inherit",
-                color: priceFilter === "" ? "primary.contrastText" : "inherit",
+                color:
+                  priceFilter === "" ? "primary.contrastText" : "inherit",
               }}
             >
               All
@@ -209,7 +200,8 @@ const Buy = () => {
               sx={{
                 fontWeight: priceFilter === "low" ? "bold" : "normal",
                 bgcolor: priceFilter === "low" ? "grey.700" : "inherit",
-                color: priceFilter === "low" ? "primary.contrastText" : "inherit",
+                color:
+                  priceFilter === "low" ? "primary.contrastText" : "inherit",
               }}
             >
               Below ₱5,000
@@ -219,7 +211,8 @@ const Buy = () => {
               sx={{
                 fontWeight: priceFilter === "mid" ? "bold" : "normal",
                 bgcolor: priceFilter === "mid" ? "grey.700" : "inherit",
-                color: priceFilter === "mid" ? "primary.contrastText" : "inherit",
+                color:
+                  priceFilter === "mid" ? "primary.contrastText" : "inherit",
               }}
             >
               ₱5,000 – ₱20,000
@@ -229,7 +222,8 @@ const Buy = () => {
               sx={{
                 fontWeight: priceFilter === "high" ? "bold" : "normal",
                 bgcolor: priceFilter === "high" ? "grey.700" : "inherit",
-                color: priceFilter === "high" ? "primary.contrastText" : "inherit",
+                color:
+                  priceFilter === "high" ? "primary.contrastText" : "inherit",
               }}
             >
               Above ₱20,000
@@ -249,22 +243,28 @@ const Buy = () => {
       {loading && <CircularProgress sx={{ mb: 2 }} />}
 
       {/* Items Grid */}
-      <Grid container spacing={2}>
+      <Grid container spacing={2} justifyContent="center">
         {!loading && filteredItems.length > 0 ? (
           filteredItems.map((item) => (
-            <Grid item xs={12} sm={6} md={3} lg={2} key={item._id}>
+            <Grid item key={item._id}>
               <Card
                 sx={{
+                  width: "300px",
                   borderRadius: 2,
                   boxShadow: 3,
                   height: "100%",
                   display: "flex",
                   flexDirection: "column",
+                  cursor: "pointer",
+                }}
+                onClick={() => {
+                  setSelectedItem(item);
+                  setShowBuyModal(true);
                 }}
               >
                 <CardMedia
                   component="img"
-                  height="150"
+                  height="200"
                   image={item.image || "placeholder.jpg"}
                   alt={item.name}
                   onError={(e) => (e.target.src = "placeholder.jpg")}
@@ -275,8 +275,6 @@ const Buy = () => {
                     variant="h6"
                     fontSize="1rem"
                     fontWeight="bold"
-                    sx={{ cursor: "pointer" }}
-                    onClick={(e) => handlePopoverOpen(e, item)}
                   >
                     {item.name}
                   </Typography>
@@ -304,8 +302,13 @@ const Buy = () => {
                   <Button
                     size="small"
                     variant="contained"
-                    color="dark"
-                    onClick={() => handleBuyNow(item)}
+                    // color="grey.700"
+                    // bgcolor=""
+                    sx={{ backgroundColor: "#272626ff", color: "white", "&:hover": { backgroundColor: "grey.800" } }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleBuyNow(item);
+                    }}
                   >
                     Buy Now
                   </Button>
@@ -313,7 +316,10 @@ const Buy = () => {
                     size="small"
                     variant="outlined"
                     color="dark"
-                    onClick={() => handleAddToCart(item._id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAddToCart(item._id);
+                    }}
                   >
                     Add to Cart
                   </Button>
@@ -326,78 +332,38 @@ const Buy = () => {
         ) : null}
       </Grid>
 
-      {/* Popover for item details */}
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={handlePopoverClose}
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "left",
-        }}
-        transformOrigin={{
-          vertical: "top",
-          horizontal: "left",
-        }}
-      >
-        {popoverItem && (
-          <Box sx={{ p: 2, maxWidth: 300 }}>
-            <Typography variant="h6" gutterBottom>
-              {popoverItem.name}
-            </Typography>
-            <img
-              src={popoverItem.image || "placeholder.jpg"}
-              alt={popoverItem.name}
-              style={{
-                width: "100%",
-                height: "auto",
-                borderRadius: "8px",
-                marginBottom: "8px",
-              }}
-              onError={(e) => (e.target.src = "placeholder.jpg")}
-            />
-            <Typography variant="body2" gutterBottom>
-              {popoverItem.description}
-            </Typography>
-            <Typography variant="subtitle1" fontWeight="bold">
-              ₱{popoverItem.price}
-            </Typography>
-            {popoverItem.origin && (
-              <Typography variant="body2">Origin: {popoverItem.origin}</Typography>
-            )}
-            {popoverItem.age && (
-              <Typography variant="body2">Age: {popoverItem.age}</Typography>
-            )}
-            {popoverItem.createdAt && (
-              <Typography variant="body2">
-                Created At: {new Date(popoverItem.createdAt).toLocaleString()}
-              </Typography>
-            )}
-          </Box>
-        )}
-      </Popover>
+      {/* Buy Modal */}
+      {selectedItem && (
+        <BuyModal
+          open={showBuyModal}
+          onClose={() => setShowBuyModal(false)}
+          item={selectedItem}
+        />
+      )}
 
       {/* Cart Modal */}
       {selectedItem && (
         <CartModal
-          show={showModal}
-          onClose={() => setShowModal(false)}
+          show={showCartModal}
+          onClose={() => setShowCartModal(false)}
           onConfirm={handleOrderConfirm}
           user={user}
           totalPrice={selectedItem.price}
           selectedItems={[selectedItem]}
           defaultAddress={userAddress}
-          setShowModal={setShowModal}
+          setShowModal={setShowCartModal}
           setSelectedItems={() => setSelectedItem(null)}
           setCartItems={() => {}}
           setCartCount={() => {}}
         />
       )}
-    </Box>
+    </Container>
   );
 };
 
 export default Buy;
+
+
 
 
 
