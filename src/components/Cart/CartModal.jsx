@@ -264,7 +264,6 @@ const handleOrderConfirmation = async () => {
 };
 
 
-
   const renderViewMode = () => (
     <div className="card p-4 shadow-sm">
       <div className="d-flex justify-content-between align-items-center">
