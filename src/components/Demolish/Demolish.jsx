@@ -430,7 +430,6 @@
 
 // export default Demolition;
 
-
 import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import axios from "axios";
@@ -470,17 +469,14 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
+// LocationMarker Component
 const LocationMarker = ({ formData, setFormData }) => {
   const map = useMap();
-
   useMapEvents({
     click(e) {
       setFormData((prev) => ({
         ...prev,
-        location: {
-          lat: e.latlng.lat,
-          lng: e.latlng.lng,
-        },
+        location: { lat: e.latlng.lat, lng: e.latlng.lng },
       }));
       map.flyTo([e.latlng.lat, e.latlng.lng], map.getZoom());
     },
@@ -504,15 +500,15 @@ const Demolition = () => {
     description: "",
     image: null,
   });
-
   const [searchAddress, setSearchAddress] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
 
-  const handleChange = (e) => {
+  // Handle input change
+  const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
 
+  // Handle image selection
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -521,6 +517,7 @@ const Demolition = () => {
     }
   };
 
+  // Geocode address search
   const geocodeAddress = async () => {
     if (!searchAddress.trim()) return;
     try {
@@ -544,6 +541,7 @@ const Demolition = () => {
     }
   };
 
+  // Get user's current location
   const getLocation = () => {
     if (!navigator.geolocation) {
       Swal.fire(
@@ -558,7 +556,10 @@ const Demolition = () => {
       (position) => {
         setFormData((prev) => ({
           ...prev,
-          location: { lat: position.coords.latitude, lng: position.coords.longitude },
+          location: {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          },
         }));
       },
       async (error) => {
@@ -603,6 +604,7 @@ const Demolition = () => {
     getLocation();
   }, []);
 
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -615,27 +617,24 @@ const Demolition = () => {
     }
 
     try {
-      let imageUrl = null;
+      const formDataToUpload = new FormData();
+      formDataToUpload.append("userId", userId);
+      formDataToUpload.append("name", formData.name);
+      formDataToUpload.append("contact", formData.contact);
+      formDataToUpload.append("price", formData.price);
+      formDataToUpload.append("description", formData.description);
+      formDataToUpload.append("location", JSON.stringify(formData.location));
+
       if (formData.image) {
-        const formDataToUpload = new FormData();
         formDataToUpload.append("image", formData.image);
-
-        const { data } = await axios.post(`${API_URL}/api/upload`, formDataToUpload, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-
-        imageUrl = data.url || data.imageUrl || null;
       }
 
-      await axios.post(`${API_URL}/api/demolish`, {
-        userId,
-        name: formData.name,
-        contact: formData.contact,
-        price: Number(formData.price),
-        description: formData.description,
-        image: imageUrl,
-        location: formData.location,
-      });
+      // DEBUG: log entries
+      for (let pair of formDataToUpload.entries()) {
+        console.log(pair[0], pair[1]);
+      }
+
+      const { data } = await axios.post(`${API_URL}/api/demolish`, formDataToUpload);
 
       Swal.fire("Success!", "Your demolition request has been submitted.", "success");
 
@@ -649,12 +648,11 @@ const Demolition = () => {
       });
       setPreviewUrl(null);
     } catch (error) {
-      console.error("Error submitting demolition request:", error);
-      Swal.fire(
-        "Error!",
-        "Failed to submit the request. Please try again.",
-        "error"
+      console.error(
+        "Error submitting demolition request:",
+        error.response?.data || error.message
       );
+      Swal.fire("Error!", "Failed to submit the request. Please try again.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -720,7 +718,6 @@ const Demolition = () => {
                   </MapContainer>
                 </Box>
 
-                {/* Retry Button */}
                 <Button
                   variant="outlined"
                   color="secondary"
