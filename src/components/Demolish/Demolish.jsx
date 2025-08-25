@@ -1,4 +1,5 @@
 
+
 // import React, { useState, useEffect } from "react";
 // import Swal from "sweetalert2";
 // import axios from "axios";
@@ -38,17 +39,14 @@
 //   shadowUrl: markerShadow,
 // });
 
+// // LocationMarker Component
 // const LocationMarker = ({ formData, setFormData }) => {
 //   const map = useMap();
-
 //   useMapEvents({
 //     click(e) {
 //       setFormData((prev) => ({
 //         ...prev,
-//         location: {
-//           lat: e.latlng.lat,
-//           lng: e.latlng.lng,
-//         },
+//         location: { lat: e.latlng.lat, lng: e.latlng.lng },
 //       }));
 //       map.flyTo([e.latlng.lat, e.latlng.lng], map.getZoom());
 //     },
@@ -72,32 +70,24 @@
 //     description: "",
 //     image: null,
 //   });
-
 //   const [searchAddress, setSearchAddress] = useState("");
 //   const [isSubmitting, setIsSubmitting] = useState(false);
 //   const [previewUrl, setPreviewUrl] = useState(null);
 
-//   const handleChange = (e) => {
+//   // Handle input change
+//   const handleChange = (e) =>
 //     setFormData({ ...formData, [e.target.name]: e.target.value });
-//   };
 
+//   // Handle image selection
 //   const handleImageChange = (e) => {
 //     const file = e.target.files[0];
 //     if (file) {
 //       setFormData({ ...formData, image: file });
-//       setPreviewUrl(URL.createObjectURL(file)); // set preview
+//       setPreviewUrl(URL.createObjectURL(file));
 //     }
 //   };
 
-//   const convertImageToBase64 = (file) => {
-//     return new Promise((resolve, reject) => {
-//       const reader = new FileReader();
-//       reader.onloadend = () => resolve(reader.result);
-//       reader.onerror = reject;
-//       reader.readAsDataURL(file);
-//     });
-//   };
-
+//   // Geocode address search
 //   const geocodeAddress = async () => {
 //     if (!searchAddress.trim()) return;
 //     try {
@@ -111,10 +101,7 @@
 //         const { lat, lon } = data[0];
 //         setFormData((prev) => ({
 //           ...prev,
-//           location: {
-//             lat: parseFloat(lat),
-//             lng: parseFloat(lon),
-//           },
+//           location: { lat: parseFloat(lat), lng: parseFloat(lon) },
 //         }));
 //       } else {
 //         Swal.fire("Not Found", "Address not found. Try a different one.", "info");
@@ -124,6 +111,7 @@
 //     }
 //   };
 
+//   // Get user's current location
 //   const getLocation = () => {
 //     if (!navigator.geolocation) {
 //       Swal.fire(
@@ -168,10 +156,7 @@
 //           if (data.latitude && data.longitude) {
 //             setFormData((prev) => ({
 //               ...prev,
-//               location: {
-//                 lat: data.latitude,
-//                 lng: data.longitude,
-//               },
+//               location: { lat: data.latitude, lng: data.longitude },
 //             }));
 //           }
 //         } catch (err) {
@@ -189,6 +174,7 @@
 //     getLocation();
 //   }, []);
 
+//   // Handle form submission
 //   const handleSubmit = async (e) => {
 //     e.preventDefault();
 //     setIsSubmitting(true);
@@ -201,26 +187,26 @@
 //     }
 
 //     try {
-//       let imageBase64 = null;
+//       const formDataToUpload = new FormData();
+//       formDataToUpload.append("userId", userId);
+//       formDataToUpload.append("name", formData.name);
+//       formDataToUpload.append("contact", formData.contact);
+//       formDataToUpload.append("price", formData.price);
+//       formDataToUpload.append("description", formData.description);
+//       formDataToUpload.append("location", JSON.stringify(formData.location));
+
 //       if (formData.image) {
-//         imageBase64 = await convertImageToBase64(formData.image);
+//         formDataToUpload.append("image", formData.image);
 //       }
 
-//       await axios.post(`${API_URL}/api/demolish`, {
-//         userId,
-//         name: formData.name,
-//         contact: formData.contact,
-//         price: Number(formData.price),
-//         description: formData.description,
-//         image: imageBase64,
-//         location: formData.location,
-//       });
+//       // DEBUG: log entries
+//       for (let pair of formDataToUpload.entries()) {
+//         console.log(pair[0], pair[1]);
+//       }
 
-//       Swal.fire(
-//         "Success!",
-//         "Your demolition request has been submitted.",
-//         "success"
-//       );
+//       const { data } = await axios.post(`${API_URL}/api/demolish`, formDataToUpload);
+
+//       Swal.fire("Success!", "Your demolition request has been submitted.", "success");
 
 //       setFormData({
 //         location: { lat: null, lng: null },
@@ -232,12 +218,11 @@
 //       });
 //       setPreviewUrl(null);
 //     } catch (error) {
-//       console.error("Error submitting demolition request:", error);
-//       Swal.fire(
-//         "Error!",
-//         "Failed to submit the request. Please try again.",
-//         "error"
+//       console.error(
+//         "Error submitting demolition request:",
+//         error.response?.data || error.message
 //       );
+//       Swal.fire("Error!", "Failed to submit the request. Please try again.", "error");
 //     } finally {
 //       setIsSubmitting(false);
 //     }
@@ -246,7 +231,7 @@
 //   const defaultPosition = [13.5, 122];
 
 //   return (
-//     <Container maxWidth="md" sx={{ mt: 5, mb:5 }}>
+//     <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
 //       <Box textAlign="center" mb={4}>
 //         <Typography variant="h4" fontWeight="bold">
 //           Demolition Request
@@ -269,11 +254,7 @@
 //                     value={searchAddress}
 //                     onChange={(e) => setSearchAddress(e.target.value)}
 //                   />
-//                   <Button
-//                     variant="contained"
-//                     color="primary"
-//                     onClick={geocodeAddress}
-//                   >
+//                   <Button variant="contained" color="primary" onClick={geocodeAddress}>
 //                     Search
 //                   </Button>
 //                 </Box>
@@ -302,14 +283,11 @@
 //                     />
 //                     <LocationMarker formData={formData} setFormData={setFormData} />
 //                     {formData.location.lat && formData.location.lng && (
-//                       <Marker
-//                         position={[formData.location.lat, formData.location.lng]}
-//                       />
+//                       <Marker position={[formData.location.lat, formData.location.lng]} />
 //                     )}
 //                   </MapContainer>
 //                 </Box>
 
-//                 {/* Retry Button */}
 //                 <Button
 //                   variant="outlined"
 //                   color="secondary"
@@ -330,7 +308,6 @@
 //                   required
 //                   margin="normal"
 //                 />
-
 //                 <TextField
 //                   fullWidth
 //                   label="Contact No"
@@ -340,7 +317,6 @@
 //                   required
 //                   margin="normal"
 //                 />
-
 //                 <TextField
 //                   fullWidth
 //                   type="number"
@@ -351,7 +327,6 @@
 //                   required
 //                   margin="normal"
 //                 />
-
 //                 <TextField
 //                   fullWidth
 //                   multiline
@@ -430,8 +405,10 @@
 
 // export default Demolition;
 
+
 import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
+import toast, { Toaster } from "react-hot-toast";
 import axios from "axios";
 import {
   MapContainer,
@@ -629,14 +606,11 @@ const Demolition = () => {
         formDataToUpload.append("image", formData.image);
       }
 
-      // DEBUG: log entries
-      for (let pair of formDataToUpload.entries()) {
-        console.log(pair[0], pair[1]);
-      }
+      await axios.post(`${API_URL}/api/demolish`, formDataToUpload, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
-      const { data } = await axios.post(`${API_URL}/api/demolish`, formDataToUpload);
-
-      Swal.fire("Success!", "Your demolition request has been submitted.", "success");
+      toast.success("Your demolition request has been submitted.");
 
       setFormData({
         location: { lat: null, lng: null },
@@ -652,7 +626,7 @@ const Demolition = () => {
         "Error submitting demolition request:",
         error.response?.data || error.message
       );
-      Swal.fire("Error!", "Failed to submit the request. Please try again.", "error");
+      toast.error("Failed to submit the request. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -662,6 +636,7 @@ const Demolition = () => {
 
   return (
     <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
+      <Toaster position="top-right" />
       <Box textAlign="center" mb={4}>
         <Typography variant="h4" fontWeight="bold">
           Demolition Request

@@ -173,28 +173,86 @@ const CartModal = ({
   };
 
   // --- Order confirmation with image upload ---
+// const handleOrderConfirmation = async () => {
+//   if (!user || !isAddressComplete()) return;
+
+//   setLoading(true);
+//   try {
+//     // Step 1: Upload any new images first
+//     const updatedItems = await Promise.all(
+//       selectedItems.map(async (item) => {
+//         if (item.image instanceof File) {
+//           const formData = new FormData();
+//           formData.append("image", item.image);
+
+//           const res = await axios.post(`${API_URL}/api/upload`, formData, {
+//             headers: { "Content-Type": "multipart/form-data" },
+//           });
+//           return { ...item, image: res.data.imageUrl };
+//         }
+//         return item; // already a URL, no need to upload
+//       })
+//     );
+
+//     // Step 2: Place the order with image URLs
+//     await axios.post(`${API_URL}/api/orders`, {
+//       userId: user._id,
+//       items: updatedItems,
+//       total: parseFloat(totalPrice),
+//       address,
+//       notes: "",
+//     });
+
+//     // Step 3: Remove items from cart
+//     await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
+//       removeItems: selectedItems.map((i) => i.id),
+//     });
+
+//     // Step 4: Update local state
+//     setCartItems([]);
+//     setSelectedItems([]);
+//     setCartCount(0);
+//     setShowModal(false);
+//     toast.success("Order placed successfully!");
+//     onClose();
+//   } catch (err) {
+//     console.error("Order failed:", err);
+//     setError("Failed to place the order. Please try again.");
+//   } finally {
+//     setLoading(false);
+//   }
+// };
+
 const handleOrderConfirmation = async () => {
   if (!user || !isAddressComplete()) return;
 
   setLoading(true);
   try {
-    // Step 1: Upload any new images first
+    // Step 1: Upload any new images directly to Cloudinary
     const updatedItems = await Promise.all(
       selectedItems.map(async (item) => {
         if (item.image instanceof File) {
           const formData = new FormData();
-          formData.append("image", item.image);
+          formData.append("file", item.image);
+          formData.append("upload_preset", "unika_images"); // or use signed upload
+          
+          // upload directly to Cloudinary (bypasses your server)
+          const res = await axios.post(
+            `https://api.cloudinary.com/v1_1/dd9xptuc4/image/upload`,
+            formData,
+            {
+              headers: { "Content-Type": "multipart/form-data" },
+            }
+          );
 
-          const res = await axios.post(`${API_URL}/api/upload`, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
-          return { ...item, image: res.data.imageUrl };
+          // replace file with Cloudinary URL
+          return { ...item, image: res.data.secure_url };
         }
-        return item; // already a URL, no need to upload
+        return item; // already URL
       })
     );
 
-    // Step 2: Place the order with image URLs
+    // Step 2: Place the order with only URLs + metadata
     await axios.post(`${API_URL}/api/orders`, {
       userId: user._id,
       items: updatedItems,
@@ -208,7 +266,7 @@ const handleOrderConfirmation = async () => {
       removeItems: selectedItems.map((i) => i.id),
     });
 
-    // Step 4: Update local state
+    // Step 4: Reset state
     setCartItems([]);
     setSelectedItems([]);
     setCartCount(0);
@@ -223,55 +281,6 @@ const handleOrderConfirmation = async () => {
   }
 };
 
-  // const handleOrderConfirmation = async () => {
-  //   if (!user || !isAddressComplete()) return;
-
-  //   setLoading(true);
-  //   setError("");
-
-  //   try {
-  //     // Upload item images if new files exist
-  //     const updatedItems = await Promise.all(
-  //       selectedItems.map(async (item) => {
-  //         if (item.imageFile) {
-  //           const formData = new FormData();
-  //           formData.append("image", item.imageFile);
-  //           const res = await axios.post(`${API_URL}/api/upload`, formData, {
-  //             headers: { "Content-Type": "multipart/form-data" },
-  //           });
-  //           return { ...item, image: res.data.imageUrl };
-  //         }
-  //         return item;
-  //       })
-  //     );
-
-  //     // Create order
-  //     await axios.post(`${API_URL}/api/orders`, {
-  //       userId: user._id,
-  //       items: updatedItems,
-  //       total: parseFloat(totalPrice),
-  //       address,
-  //       notes: "",
-  //     });
-
-  //     // Remove items from cart
-  //     await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
-  //       removeItems: selectedItems.map((i) => i.id),
-  //     });
-
-  //     setCartItems([]);
-  //     setSelectedItems([]);
-  //     setCartCount(0);
-  //     setShowModal(false);
-  //     toast.success("Order placed successfully!");
-  //     onClose();
-  //   } catch (err) {
-  //     console.error("Order failed:", err);
-  //     setError("Failed to place the order. Please try again.");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
 
   const renderViewMode = () => (
     <div className="card p-4 shadow-sm">
