@@ -222,51 +222,33 @@ const CartModal = ({
 //     setLoading(false);
 //   }
 // };
-
 const handleOrderConfirmation = async () => {
   if (!user || !isAddressComplete()) return;
 
   setLoading(true);
   try {
-    // Step 1: Upload any new images directly to Cloudinary
-    const updatedItems = await Promise.all(
-      selectedItems.map(async (item) => {
-        if (item.image instanceof File) {
-          const formData = new FormData();
-          formData.append("file", item.image);
-          formData.append("upload_preset", "unika_images"); // or use signed upload
-          
-          // upload directly to Cloudinary (bypasses your server)
-          const res = await axios.post(
-            `https://api.cloudinary.com/v1_1/dd9xptuc4/image/upload`,
-            formData,
-            {
-              headers: { "Content-Type": "multipart/form-data" },
-            }
-          );
+    const formData = new FormData();
+    formData.append("userId", user._id);
+    formData.append("items", JSON.stringify(selectedItems));
+    formData.append("address", JSON.stringify(address));
+    formData.append("notes", "");
 
-          // replace file with Cloudinary URL
-          return { ...item, image: res.data.secure_url };
-        }
-        return item; // already URL
-      })
-    );
-
-    // Step 2: Place the order with only URLs + metadata
-    await axios.post(`${API_URL}/api/orders`, {
-      userId: user._id,
-      items: updatedItems,
-      total: parseFloat(totalPrice),
-      address,
-      notes: "",
+    // append images (if any are File objects)
+    selectedItems.forEach((item) => {
+      if (item.image instanceof File) {
+        formData.append("images", item.image);
+      }
     });
 
-    // Step 3: Remove items from cart
+    await axios.post(`${API_URL}/api/orders`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    // remove from cart etc...
     await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
       removeItems: selectedItems.map((i) => i.id),
     });
 
-    // Step 4: Reset state
     setCartItems([]);
     setSelectedItems([]);
     setCartCount(0);
