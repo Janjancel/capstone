@@ -611,33 +611,29 @@ const handleSubmit = async (e) => {
   }
 
   try {
-    let imageUrl = null;
+    const formDataToUpload = new FormData();
 
-    // Upload image if selected
+    // Append image if selected
     if (formData.image) {
-      const formDataToUpload = new FormData();
       formDataToUpload.append("image", formData.image);
-
-      const { data } = await axios.post(`${API_URL}/api/upload`, formDataToUpload, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      imageUrl = data.url || data.imageUrl || null;
     }
 
-    // Submit sell request
-    await axios.post(`${API_URL}/api/sell`, {
-      userId,
-      name: formData.name,
-      contact: formData.contact,
-      price: Number(formData.price),
-      description: formData.description,
-      image: imageUrl,
-      location: formData.location,
+    // Append other form fields
+    formDataToUpload.append("userId", userId);
+    formDataToUpload.append("name", formData.name);
+    formDataToUpload.append("contact", formData.contact);
+    formDataToUpload.append("price", Number(formData.price));
+    formDataToUpload.append("description", formData.description);
+    formDataToUpload.append("location", JSON.stringify(formData.location));
+
+    // Submit sell request (image + data)
+    await axios.post(`${API_URL}/api/sell`, formDataToUpload, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
 
     Swal.fire("Success!", "Your selling request has been submitted.", "success");
 
+    // Reset form
     setFormData({
       location: { lat: null, lng: null },
       name: "",
@@ -659,6 +655,7 @@ const handleSubmit = async (e) => {
     setIsSubmitting(false);
   }
 };
+
 
 
   const defaultPosition = [13.5, 122];
