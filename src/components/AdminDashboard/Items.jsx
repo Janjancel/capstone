@@ -1,19 +1,7 @@
-
 // import React, { useState, useEffect } from "react";
 // import { Button, Table, Modal, Form, Spinner } from "react-bootstrap";
-// import {
-//   getFirestore,
-//   collection,
-//   setDoc,
-//   query,
-//   orderBy,
-//   onSnapshot,
-//   doc,
-//   deleteDoc
-// } from "firebase/firestore";
-// import { app, auth } from "../../firebase/firebase";
+// import axios from "axios";
 // import Swal from "sweetalert2";
-// import "bootstrap/dist/css/bootstrap.min.css";
 // import EditItemModal from "./EditItemModal";
 
 // const Items = () => {
@@ -33,8 +21,6 @@
 //   const [loading, setLoading] = useState(false);
 //   const [fetching, setFetching] = useState(false);
 
-//   const db = getFirestore(app);
-
 //   const convertImageToBase64 = (file) =>
 //     new Promise((resolve, reject) => {
 //       const reader = new FileReader();
@@ -43,15 +29,22 @@
 //       reader.readAsDataURL(file);
 //     });
 
+//   const fetchItems = async () => {
+//     setFetching(true);
+//     try {
+//       const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/items`);
+//       setItems(response.data);
+//       setAllItems(response.data);
+//     } catch (error) {
+//       Swal.fire("Error", "Failed to fetch items", "error");
+//     } finally {
+//       setFetching(false);
+//     }
+//   };
+
 //   useEffect(() => {
-//     const q = query(collection(db, "items"), orderBy("name", "asc"));
-//     const unsubscribe = onSnapshot(q, (snapshot) => {
-//       const fetched = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-//       setItems(fetched);
-//       setAllItems(fetched);
-//     });
-//     return () => unsubscribe();
-//   }, [db]);
+//     fetchItems();
+//   }, []);
 
 //   const handleDeleteItem = (itemId) => {
 //     Swal.fire({
@@ -63,8 +56,9 @@
 //     }).then(async (result) => {
 //       if (result.isConfirmed) {
 //         try {
-//           await deleteDoc(doc(db, "items", itemId));
+//           await axios.delete(`${process.env.REACT_APP_API_URL}/api/items/${itemId}`);
 //           Swal.fire("Deleted!", "The item has been deleted.", "success");
+//           fetchItems();
 //         } catch (error) {
 //           Swal.fire("Error", "Issue deleting the item.", "error");
 //         }
@@ -85,30 +79,15 @@
 //         imageBase64 = await convertImageToBase64(newItem.image);
 //       }
 
-//       const user = auth.currentUser;
-//       if (!user) {
-//         Swal.fire("Error", "User not authenticated.", "error");
-//         setLoading(false);
-//         return;
-//       }
-
-//       await setDoc(
-//         doc(db, "items", newItem.name),
-//         {
-//           name: newItem.name,
-//           description: newItem.description,
-//           price: newItem.price,
-//           origin: newItem.origin || "",
-//           age: newItem.age || "",
-//           image: imageBase64,
-//           createdAt: new Date(),
-//         },
-//         { merge: true }
-//       );
+//       await axios.post(`${process.env.REACT_APP_API_URL}/api/items`, {
+//         ...newItem,
+//         image: imageBase64,
+//       });
 
 //       Swal.fire("Success", "Item added successfully!", "success");
 //       setNewItem({ name: "", description: "", price: "", origin: "", age: "", image: null });
 //       setShowAddModal(false);
+//       fetchItems();
 //     } catch (error) {
 //       Swal.fire("Error", "There was an issue adding the item.", "error");
 //     } finally {
@@ -156,7 +135,7 @@
 //           <tbody>
 //             {items.length ? (
 //               items.map((item) => (
-//                 <tr key={item.id}>
+//                 <tr key={item._id}>
 //                   <td>{item.name}</td>
 //                   <td>₱{item.price}</td>
 //                   <td>
@@ -181,7 +160,7 @@
 //                     >
 //                       Edit
 //                     </Button>
-//                     <Button variant="danger" onClick={() => handleDeleteItem(item.id)}>
+//                     <Button variant="danger" onClick={() => handleDeleteItem(item._id)}>
 //                       Delete
 //                     </Button>
 //                   </td>
@@ -198,14 +177,19 @@
 //         </Table>
 //       )}
 
-//       {/* Add Modal */}
 //       <Modal show={showAddModal} onHide={() => setShowAddModal(false)} backdrop="static">
 //         <Modal.Header closeButton>
 //           <Modal.Title>Add New Antique</Modal.Title>
 //         </Modal.Header>
 //         <Modal.Body>
 //           <Form>
-//             {["name", "description", "price", "origin", "age"].map((field) => (
+//             {[
+//               "name",
+//               "description",
+//               "price",
+//               "origin",
+//               "age",
+//             ].map((field) => (
 //               <Form.Group className="mb-3" key={field}>
 //                 <Form.Label>{field.charAt(0).toUpperCase() + field.slice(1)}</Form.Label>
 //                 <Form.Control
@@ -237,7 +221,6 @@
 //         </Modal.Footer>
 //       </Modal>
 
-//       {/* Edit Modal */}
 //       {selectedItem && (
 //         <EditItemModal
 //           show={showEditModal}
@@ -253,8 +236,6 @@
 // };
 
 // export default Items;
-
-// FRONTEND: Items.jsx (Updated to use Express + MongoDB backend)
 
 import React, { useState, useEffect } from "react";
 import { Button, Table, Modal, Form, Spinner } from "react-bootstrap";
@@ -279,18 +260,12 @@ const Items = () => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
 
-  const convertImageToBase64 = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
   const fetchItems = async () => {
     setFetching(true);
     try {
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/items`);
+      const response = await axios.get(
+        `${process.env.REACT_APP_API_URL}/api/items`
+      );
       setItems(response.data);
       setAllItems(response.data);
     } catch (error) {
@@ -314,7 +289,9 @@ const Items = () => {
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
-          await axios.delete(`${process.env.REACT_APP_API_URL}/api/items/${itemId}`);
+          await axios.delete(
+            `${process.env.REACT_APP_API_URL}/api/items/${itemId}`
+          );
           Swal.fire("Deleted!", "The item has been deleted.", "success");
           fetchItems();
         } catch (error) {
@@ -332,18 +309,33 @@ const Items = () => {
 
     setLoading(true);
     try {
-      let imageBase64 = "";
+      const formData = new FormData();
+      formData.append("name", newItem.name);
+      formData.append("description", newItem.description);
+      formData.append("price", newItem.price);
+      formData.append("origin", newItem.origin);
+      formData.append("age", newItem.age);
       if (newItem.image) {
-        imageBase64 = await convertImageToBase64(newItem.image);
+        formData.append("image", newItem.image);
       }
 
-      await axios.post(`${process.env.REACT_APP_API_URL}/api/items`, {
-        ...newItem,
-        image: imageBase64,
-      });
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/api/items`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
 
       Swal.fire("Success", "Item added successfully!", "success");
-      setNewItem({ name: "", description: "", price: "", origin: "", age: "", image: null });
+      setNewItem({
+        name: "",
+        description: "",
+        price: "",
+        origin: "",
+        age: "",
+        image: null,
+      });
       setShowAddModal(false);
       fetchItems();
     } catch (error) {
@@ -369,7 +361,7 @@ const Items = () => {
             if (!value) {
               setItems(allItems);
             } else {
-              const filtered = allItems.filter(item =>
+              const filtered = allItems.filter((item) =>
                 item.name.toLowerCase().includes(value)
               );
               setItems(filtered);
@@ -401,7 +393,11 @@ const Items = () => {
                       <img
                         src={item.image}
                         alt={item.name}
-                        style={{ width: 50, height: 50, objectFit: "cover" }}
+                        style={{
+                          width: 50,
+                          height: 50,
+                          objectFit: "cover",
+                        }}
                       />
                     ) : (
                       "No image"
@@ -418,7 +414,10 @@ const Items = () => {
                     >
                       Edit
                     </Button>
-                    <Button variant="danger" onClick={() => handleDeleteItem(item._id)}>
+                    <Button
+                      variant="danger"
+                      onClick={() => handleDeleteItem(item._id)}
+                    >
                       Delete
                     </Button>
                   </td>
@@ -435,25 +434,34 @@ const Items = () => {
         </Table>
       )}
 
-      <Modal show={showAddModal} onHide={() => setShowAddModal(false)} backdrop="static">
+      {/* Add Item Modal */}
+      <Modal
+        show={showAddModal}
+        onHide={() => setShowAddModal(false)}
+        backdrop="static"
+      >
         <Modal.Header closeButton>
           <Modal.Title>Add New Antique</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
-            {[
-              "name",
-              "description",
-              "price",
-              "origin",
-              "age",
-            ].map((field) => (
+            {["name", "description", "price", "origin", "age"].map((field) => (
               <Form.Group className="mb-3" key={field}>
-                <Form.Label>{field.charAt(0).toUpperCase() + field.slice(1)}</Form.Label>
+                <Form.Label>
+                  {field.charAt(0).toUpperCase() + field.slice(1)}
+                </Form.Label>
                 <Form.Control
-                  type={field === "description" ? "textarea" : field === "price" || field === "age" ? "number" : "text"}
+                  type={
+                    field === "description"
+                      ? "textarea"
+                      : field === "price" || field === "age"
+                      ? "number"
+                      : "text"
+                  }
                   value={newItem[field]}
-                  onChange={(e) => setNewItem({ ...newItem, [field]: e.target.value })}
+                  onChange={(e) =>
+                    setNewItem({ ...newItem, [field]: e.target.value })
+                  }
                   as={field === "description" ? "textarea" : "input"}
                   rows={field === "description" ? 3 : undefined}
                 />
@@ -464,7 +472,9 @@ const Items = () => {
               <Form.Control
                 type="file"
                 accept="image/*"
-                onChange={(e) => setNewItem({ ...newItem, image: e.target.files[0] })}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, image: e.target.files[0] })
+                }
               />
             </Form.Group>
           </Form>
@@ -473,12 +483,17 @@ const Items = () => {
           <Button variant="secondary" onClick={() => setShowAddModal(false)}>
             Close
           </Button>
-          <Button variant="primary" onClick={handleAddItem} disabled={loading}>
+          <Button
+            variant="primary"
+            onClick={handleAddItem}
+            disabled={loading}
+          >
             {loading ? "Adding..." : "Add Antique"}
           </Button>
         </Modal.Footer>
       </Modal>
 
+      {/* Edit Modal */}
       {selectedItem && (
         <EditItemModal
           show={showEditModal}
