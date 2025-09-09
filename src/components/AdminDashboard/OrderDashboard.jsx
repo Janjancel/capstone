@@ -320,19 +320,20 @@ const OrderDashboard = () => {
   const intervalRef = useRef(null);
   const API_URL = process.env.REACT_APP_API_URL;
 
-const fetchOrders = async () => {
-  try {
-    const ordersRes = await axios.get(`${API_URL}/api/orders`);
-    setOrders(
-      ordersRes.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    );
-    setLoading(false);
-  } catch (err) {
-    console.error("Failed to fetch orders:", err);
-    setError("Failed to fetch orders.");
-    setLoading(false);
-  }
-};
+  const fetchOrders = async () => {
+    try {
+      const ordersRes = await axios.get(`${API_URL}/api/orders`);
+      setOrders(
+        ordersRes.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      );
+      setLoading(false);
+    } catch (err) {
+      console.error("Failed to fetch orders:", err);
+      setError("Failed to fetch orders.");
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
     intervalRef.current = setInterval(fetchOrders, 3000);
@@ -400,14 +401,21 @@ const fetchOrders = async () => {
 
   const getStatusColor = (status) => {
     switch ((status || "").toLowerCase()) {
-      case "pending": return "default";
-      case "processing": return "primary";
-      case "shipped": return "info";
-      case "delivered": return "success";
+      case "pending":
+        return "default";
+      case "processing":
+        return "primary";
+      case "shipped":
+        return "info";
+      case "delivered":
+        return "success";
       case "cancel requested":
-      case "cancellation requested": return "warning";
-      case "cancelled": return "error";
-      default: return "default";
+      case "cancellation requested":
+        return "warning";
+      case "cancelled":
+        return "error";
+      default:
+        return "default";
     }
   };
 
@@ -438,7 +446,7 @@ const fetchOrders = async () => {
         onChange={(e, val) => setStatusTab(val)}
         textColor="primary"
         indicatorColor="primary"
-        className="mb-3"
+        sx={{ mb: 2 }}
       >
         {["All", "Pending", "Cancelled", "Cancellation Requested", "Shipped", "Delivered"].map(
           (status) => (
@@ -455,7 +463,7 @@ const fetchOrders = async () => {
           size="small"
           value={searchEmail}
           onChange={(e) => setSearchEmail(e.target.value)}
-          style={{ width: 300 }}
+          sx={{ width: 300 }}
         />
         <Button
           variant="contained"
@@ -483,9 +491,13 @@ const fetchOrders = async () => {
       </Box>
 
       {loading ? (
-        <Box display="flex" justifyContent="center"><CircularProgress /></Box>
+        <Box display="flex" justifyContent="center">
+          <CircularProgress />
+        </Box>
       ) : error ? (
-        <Typography color="error" align="center">{error}</Typography>
+        <Typography color="error" align="center">
+          {error}
+        </Typography>
       ) : filteredOrders.length === 0 ? (
         <Typography align="center">No orders found.</Typography>
       ) : (
@@ -500,8 +512,13 @@ const fetchOrders = async () => {
               <Card key={order._id} variant="outlined" sx={{ mb: 2, p: 2 }}>
                 <CardContent>
                   <Typography variant="h6">Order ID: {order._id}</Typography>
-                  <Typography><strong>Order Date:</strong> {new Date(order.createdAt).toLocaleString()}</Typography>
-                  <Typography><strong>Email:</strong> {email}</Typography>
+                  <Typography>
+                    <strong>Order Date:</strong>{" "}
+                    {new Date(order.createdAt).toLocaleString()}
+                  </Typography>
+                  <Typography>
+                    <strong>Email:</strong> {email}
+                  </Typography>
 
                   <Divider sx={{ my: 1 }} />
 
@@ -515,31 +532,63 @@ const fetchOrders = async () => {
                     ))}
                   </ul>
 
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
+                  <Box
+                    display="flex"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    mt={2}
+                  >
                     <Box>
-                      <Typography><strong>Total:</strong> ₱{parseFloat(order.total || 0).toFixed(2)}</Typography>
+                      <Typography>
+                        <strong>Total:</strong> ₱
+                        {parseFloat(order.total || 0).toFixed(2)}
+                      </Typography>
                       <Box display="flex" alignItems="center" gap={1}>
-                        <Typography><strong>Status:</strong></Typography>
-                        <Chip label={order.status || "Pending"} color={getStatusColor(order.status)} />
+                        <Typography>
+                          <strong>Status:</strong>
+                        </Typography>
+                        <Chip
+                          label={order.status || "Pending"}
+                          color={getStatusColor(order.status)}
+                        />
                       </Box>
 
                       {!isFinal && (
                         <Box display="flex" flexWrap="wrap" gap={1} mt={1}>
-                          <Button variant="outlined" color="info" size="small" onClick={() => handleStatusChange(order, "Shipped")}>
+                          <Button
+                            variant="outlined"
+                            color="info"
+                            size="small"
+                            onClick={() => handleStatusChange(order, "Shipped")}
+                          >
                             Mark Shipped
                           </Button>
-                          <Button variant="outlined" color="success" size="small" onClick={() => handleStatusChange(order, "Delivered")}>
+                          <Button
+                            variant="outlined"
+                            color="success"
+                            size="small"
+                            onClick={() => handleStatusChange(order, "Delivered")}
+                          >
                             Mark Delivered
                           </Button>
                           {isCancelable && (
-                            <Button variant="contained" color="error" size="small" onClick={() => handleApproveCancellation(order)}>
+                            <Button
+                              variant="contained"
+                              color="error"
+                              size="small"
+                              onClick={() => handleApproveCancellation(order)}
+                            >
                               Approve Cancellation
                             </Button>
                           )}
                         </Box>
                       )}
                     </Box>
-                    <Button variant="outlined" color="primary" onClick={() => handleShowInvoice(order)}>
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      onClick={() => handleShowInvoice(order)}
+                    >
                       View Details
                     </Button>
                   </Box>
