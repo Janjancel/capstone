@@ -2,7 +2,7 @@ import React from "react";
 import { Row, Col, ProgressBar, Card } from "react-bootstrap";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, defs
+  ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell
 } from "recharts";
 
 const COLORS = ["#0d6efd", "#198754", "#ffc107", "#dc3545", "#6610f2", "#20c997", "#fd7e14"];

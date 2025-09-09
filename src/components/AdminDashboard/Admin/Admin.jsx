@@ -6,11 +6,11 @@ import DashboardNavbar from "../DashboardNavbar";
 import Sidebar from "../Sidebar/Sidebar";
 import Items from "../Items";
 import Accounts from "../Accounts";
-// import Dashboard from "../Dashboard";
+import Dashboard from "../Dashboard";
 import SellRequests from "../Requests/SellDashboard/SellDashboard";
 import DemolitionRequests from "../Requests/DemolishDashboard/DemolishDashboard";
 import OrderDashboard from "../OrderDashboard";
-// import ReportDashboard from "../ReportDashboard";
+import ReportDashboard from "../ReportDashboard";
 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../../../App.css";
@@ -100,15 +100,15 @@ const Admin = () => {
 
           <div>
             <Routes>
-              {/* <Route path="/" element={<Navigate to="dashboard" />} /> */}
+              <Route path="/" element={<Navigate to="dashboard" />} />
               <Route path="accounts" element={<Accounts />} />
-              {/* <Route path="dashboard" element={<Dashboard />} /> */}
+              <Route path="dashboard" element={<Dashboard />} />
               <Route path="sellDashboard" element={<SellRequests />} />
               <Route path="demolishDashboard" element={<DemolitionRequests />} />
               <Route path="items" element={<Items />} />
               <Route path="orders" element={<OrderDashboard />} />
-              {/* <Route path="report" element={<ReportDashboard />} />
-              <Route path="*" element={<Navigate to="dashboard" />} /> */}
+              <Route path="report" element={<ReportDashboard />} />
+              <Route path="*" element={<Navigate to="dashboard" />} />
             </Routes>
           </div>
         </div>
