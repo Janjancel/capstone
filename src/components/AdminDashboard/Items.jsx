@@ -528,10 +528,23 @@ const Items = () => {
     price: "",
     origin: "",
     age: "",
+    category: "", // ✅ new field
     images: [], // ✅ store multiple files
   });
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+
+  const categories = [
+    "Table",
+    "Chair",
+    "Flooring",
+    "Cabinet",
+    "Post",
+    "Scraps",
+    "Stones",
+    "Windows",
+    "Bed",
+  ];
 
   const fetchItems = async () => {
     setFetching(true);
@@ -575,8 +588,13 @@ const Items = () => {
   };
 
   const handleAddItem = async () => {
-    if (!newItem.name || !newItem.description || !newItem.price) {
-      Swal.fire("Error", "Please fill in the required fields.", "error");
+    if (
+      !newItem.name ||
+      !newItem.description ||
+      !newItem.price ||
+      !newItem.category
+    ) {
+      Swal.fire("Error", "Please fill in all required fields.", "error");
       return;
     }
 
@@ -588,6 +606,7 @@ const Items = () => {
       formData.append("price", newItem.price);
       formData.append("origin", newItem.origin);
       formData.append("age", newItem.age);
+      formData.append("category", newItem.category); // ✅ include category
 
       if (newItem.images.length > 0) {
         newItem.images.forEach((file) => {
@@ -610,6 +629,7 @@ const Items = () => {
         price: "",
         origin: "",
         age: "",
+        category: "",
         images: [],
       });
       setShowAddModal(false);
@@ -653,6 +673,7 @@ const Items = () => {
           <thead>
             <tr>
               <th>Item Name</th>
+              <th>Category</th>
               <th>Price</th>
               <th>Images</th>
               <th>Actions</th>
@@ -663,6 +684,7 @@ const Items = () => {
               items.map((item) => (
                 <tr key={item._id}>
                   <td>{item.name}</td>
+                  <td>{item.category}</td>
                   <td>₱{item.price}</td>
                   <td>
                     {item.images && item.images.length > 0 ? (
@@ -706,7 +728,7 @@ const Items = () => {
               ))
             ) : (
               <tr>
-                <td colSpan="4" className="text-center">
+                <td colSpan="5" className="text-center">
                   No items available.
                 </td>
               </tr>
@@ -748,6 +770,25 @@ const Items = () => {
                 />
               </Form.Group>
             ))}
+
+            {/* ✅ Category Dropdown */}
+            <Form.Group className="mb-3">
+              <Form.Label>Category</Form.Label>
+              <Form.Select
+                value={newItem.category}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, category: e.target.value })
+                }
+              >
+                <option value="">-- Select Category --</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+
             <Form.Group className="mb-3">
               <Form.Label>Images</Form.Label>
               <Form.Control

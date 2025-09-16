@@ -111,12 +111,25 @@ const EditItemModal = ({ show, onHide, item }) => {
     price: item.price || "",
     origin: item.origin || "",
     age: item.age || "",
+    category: item.category || "Table", // ✅ ensure category is included
     images: [], // new uploads
   });
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(item.images || []); // ✅ multiple images
+
+  const categories = [
+    "Table",
+    "Chair",
+    "Flooring",
+    "Cabinet",
+    "Post",
+    "Scraps",
+    "Stones",
+    "Windows",
+    "Bed",
+  ];
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
@@ -146,6 +159,7 @@ const EditItemModal = ({ show, onHide, item }) => {
       formData.append("price", updatedItem.price);
       formData.append("origin", updatedItem.origin);
       formData.append("age", updatedItem.age);
+      formData.append("category", updatedItem.category); // ✅ send category
 
       // Append new images
       if (updatedItem.images.length > 0) {
@@ -201,6 +215,23 @@ const EditItemModal = ({ show, onHide, item }) => {
               />
             </Form.Group>
           ))}
+
+          {/* ✅ Category Dropdown */}
+          <Form.Group className="mb-3">
+            <Form.Label>Category</Form.Label>
+            <Form.Select
+              value={updatedItem.category}
+              onChange={(e) =>
+                setUpdatedItem({ ...updatedItem, category: e.target.value })
+              }
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
 
           <Form.Group className="mb-3">
             <Form.Label>Item Images</Form.Label>
