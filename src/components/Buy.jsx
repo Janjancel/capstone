@@ -265,7 +265,12 @@ const Buy = () => {
                 <CardMedia
                   component="img"
                   height="200"
-                  image={item.image || "placeholder.jpg"}
+                  // image={item.image || "placeholder.jpg"}
+                    image={
+    Array.isArray(item.images) && item.images.length > 0
+      ? item.images[0] // ✅ show only the first image
+      : "placeholder.jpg"
+  }
                   alt={item.name}
                   onError={(e) => (e.target.src = "placeholder.jpg")}
                   sx={{ borderRadius: "8px 8px 0 0" }}
