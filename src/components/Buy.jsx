@@ -15,6 +15,7 @@ import {
   Menu,
   MenuItem,
   Tooltip,
+  Divider,
 } from "@mui/material";
 import toast from "react-hot-toast";
 import axios from "axios";
@@ -29,6 +30,7 @@ const Buy = () => {
   const [filteredItems, setFilteredItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [priceFilter, setPriceFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState(""); // ✅ new state for categories
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -38,6 +40,18 @@ const Buy = () => {
   const [filterAnchor, setFilterAnchor] = useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL;
+
+  const categories = [
+    "Table",
+    "Chair",
+    "Flooring",
+    "Cabinet",
+    "Post",
+    "Scraps",
+    "Stones",
+    "Windows",
+    "Bed",
+  ];
 
   // Fetch user address
   useEffect(() => {
@@ -81,6 +95,7 @@ const Buy = () => {
         item.description?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    // ✅ price filter
     if (priceFilter === "low") {
       filtered = filtered.filter((item) => item.price < 5000);
     } else if (priceFilter === "mid") {
@@ -91,8 +106,16 @@ const Buy = () => {
       filtered = filtered.filter((item) => item.price > 20000);
     }
 
+    // ✅ category filter
+    if (categoryFilter) {
+      filtered = filtered.filter(
+        (item) =>
+          item.category?.toLowerCase() === categoryFilter.toLowerCase()
+      );
+    }
+
     setFilteredItems(filtered);
-  }, [searchQuery, priceFilter, items]);
+  }, [searchQuery, priceFilter, categoryFilter, items]);
 
   const truncateText = (text, length) =>
     text?.length > length ? text.substring(0, length) + "..." : text;
@@ -173,7 +196,7 @@ const Buy = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             sx={{ width: 250 }}
           />
-          <Tooltip title="Filter by Price">
+          <Tooltip title="Filter by Price / Category">
             <IconButton onClick={handleFilterOpen}>
               <FilterListIcon />
             </IconButton>
@@ -184,50 +207,28 @@ const Buy = () => {
             onClose={handleFilterClose}
           >
             <MenuItem disabled>Filter by Price</MenuItem>
-            <MenuItem
-              onClick={() => setPriceFilter("")}
-              sx={{
-                fontWeight: priceFilter === "" ? "bold" : "normal",
-                bgcolor: priceFilter === "" ? "grey.700" : "inherit",
-                color:
-                  priceFilter === "" ? "primary.contrastText" : "inherit",
-              }}
-            >
-              All
-            </MenuItem>
-            <MenuItem
-              onClick={() => setPriceFilter("low")}
-              sx={{
-                fontWeight: priceFilter === "low" ? "bold" : "normal",
-                bgcolor: priceFilter === "low" ? "grey.700" : "inherit",
-                color:
-                  priceFilter === "low" ? "primary.contrastText" : "inherit",
-              }}
-            >
-              Below ₱5,000
-            </MenuItem>
-            <MenuItem
-              onClick={() => setPriceFilter("mid")}
-              sx={{
-                fontWeight: priceFilter === "mid" ? "bold" : "normal",
-                bgcolor: priceFilter === "mid" ? "grey.700" : "inherit",
-                color:
-                  priceFilter === "mid" ? "primary.contrastText" : "inherit",
-              }}
-            >
-              ₱5,000 – ₱20,000
-            </MenuItem>
-            <MenuItem
-              onClick={() => setPriceFilter("high")}
-              sx={{
-                fontWeight: priceFilter === "high" ? "bold" : "normal",
-                bgcolor: priceFilter === "high" ? "grey.700" : "inherit",
-                color:
-                  priceFilter === "high" ? "primary.contrastText" : "inherit",
-              }}
-            >
-              Above ₱20,000
-            </MenuItem>
+            <MenuItem onClick={() => setPriceFilter("")}>All</MenuItem>
+            <MenuItem onClick={() => setPriceFilter("low")}>Below ₱5,000</MenuItem>
+            <MenuItem onClick={() => setPriceFilter("mid")}>₱5,000 – ₱20,000</MenuItem>
+            <MenuItem onClick={() => setPriceFilter("high")}>Above ₱20,000</MenuItem>
+            <Divider />
+            <MenuItem disabled>Filter by Category</MenuItem>
+            <MenuItem onClick={() => setCategoryFilter("")}>All</MenuItem>
+            {categories.map((cat) => (
+              <MenuItem
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                sx={{
+                  fontWeight:
+                    categoryFilter === cat ? "bold" : "normal",
+                  bgcolor: categoryFilter === cat ? "grey.700" : "inherit",
+                  color:
+                    categoryFilter === cat ? "primary.contrastText" : "inherit",
+                }}
+              >
+                {cat}
+              </MenuItem>
+            ))}
           </Menu>
         </Box>
       </Box>
@@ -265,22 +266,17 @@ const Buy = () => {
                 <CardMedia
                   component="img"
                   height="200"
-                  // image={item.image || "placeholder.jpg"}
-                    image={
-    Array.isArray(item.images) && item.images.length > 0
-      ? item.images[0] // ✅ show only the first image
-      : "placeholder.jpg"
-  }
+                  image={
+                    Array.isArray(item.images) && item.images.length > 0
+                      ? item.images[0]
+                      : "placeholder.jpg"
+                  }
                   alt={item.name}
                   onError={(e) => (e.target.src = "placeholder.jpg")}
                   sx={{ borderRadius: "8px 8px 0 0" }}
                 />
                 <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography
-                    variant="h6"
-                    fontSize="1rem"
-                    fontWeight="bold"
-                  >
+                  <Typography variant="h6" fontSize="1rem" fontWeight="bold">
                     {item.name}
                   </Typography>
                   <Typography
@@ -302,14 +298,19 @@ const Buy = () => {
                   >
                     ₱{item.price}
                   </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {item.category || "Uncategorized"}
+                  </Typography>
                 </CardContent>
                 <CardActions>
                   <Button
                     size="small"
                     variant="contained"
-                    // color="grey.700"
-                    // bgcolor=""
-                    sx={{ backgroundColor: "#272626ff", color: "white", "&:hover": { backgroundColor: "grey.800" } }}
+                    sx={{
+                      backgroundColor: "#272626ff",
+                      color: "white",
+                      "&:hover": { backgroundColor: "grey.800" },
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleBuyNow(item);
@@ -367,6 +368,7 @@ const Buy = () => {
 };
 
 export default Buy;
+
 
 
 
