@@ -2,88 +2,128 @@
 // import React, { useState, useEffect } from "react";
 // import { FaBell } from "react-icons/fa";
 // import { Button, Badge, Modal, Spinner } from "react-bootstrap";
-// import {
-//   doc,
-//   updateDoc,
-//   onSnapshot,
-//   collection,
-//   query,
-//   orderBy,
-//   deleteDoc,
-//   getDoc,
-// } from "firebase/firestore";
-// import { onAuthStateChanged } from "firebase/auth";
-// import { db, auth } from "../../firebase/firebase";
 // import Swal from "sweetalert2";
 // import "animate.css";
+// import axios from "axios";
 // import OrderDetailModal from "../MyOrder/OrderDetailModal";
 
 // export default function NotificationBell() {
+//   const [userId, setUserId] = useState(null);
 //   const [notifications, setNotifications] = useState([]);
 //   const [unreadCount, setUnreadCount] = useState(0);
+//   const [startPolling, setStartPolling] = useState(false);
 //   const [showNotifModal, setShowNotifModal] = useState(false);
 //   const [showOrderModal, setShowOrderModal] = useState(false);
-//   const [userId, setUserId] = useState(null);
 //   const [selectedOrder, setSelectedOrder] = useState(null);
-//   const [userEmail, setUserEmail] = useState("");
 //   const [orderLoading, setOrderLoading] = useState(false);
+//   const [userEmail, setUserEmail] = useState("");
+
+//   const API_URL = process.env.REACT_APP_API_URL;
 
 //   useEffect(() => {
-//     const unsubscribe = onAuthStateChanged(auth, (user) => {
-//       if (user) {
-//         setUserId(user.uid);
-//         setUserEmail(user.email || "");
-//       } else {
-//         setUserId(null);
-//         setNotifications([]);
+//     const loadUserId = async () => {
+//       const storedId = localStorage.getItem("userId");
+//       const token = localStorage.getItem("token");
+
+//       if (storedId) {
+//         setUserId(storedId);
+//         return;
 //       }
-//     });
-//     return () => unsubscribe();
+
+//       if (token) {
+//         try {
+//           const res = await axios.get(`${API_URL}/api/users/me`, {
+//             headers: { Authorization: `Bearer ${token}` },
+//           });
+//           if (res.data?._id) {
+//             localStorage.setItem("userId", res.data._id);
+//             setUserId(res.data._id);
+//           }
+//         } catch {
+//           console.warn("Auth token invalid");
+//           localStorage.removeItem("token");
+//           localStorage.removeItem("userId");
+//         }
+//       }
+//     };
+
+//     loadUserId();
 //   }, []);
 
 //   useEffect(() => {
 //     if (!userId) return;
 
-//     const q = query(
-//       collection(db, "users", userId, "notifications"),
-//       orderBy("createdAt", "desc")
-//     );
+//     const fetchInitial = async () => {
+//       try {
+//         const res = await axios.get(`${API_URL}/api/notifications/users/${userId}/notifications`);
+//         const list = Array.isArray(res.data) ? res.data : [];
+//         setNotifications(list);
+//         const unread = list.filter((n) => !n.read).length;
+//         setUnreadCount(unread);
+//         if (unread > 0) setStartPolling(true);
+//       } catch (err) {
+//         console.error("Initial notification fetch failed:", err);
+//       }
+//     };
 
-//     const unsub = onSnapshot(q, (snapshot) => {
-//       const data = snapshot.docs.map((doc) => ({
-//         id: doc.id,
-//         ...doc.data(),
-//       }));
-//       setNotifications(data);
-//       setUnreadCount(data.filter((n) => !n.read).length);
-//     });
-
-//     return () => unsub();
+//     fetchInitial();
 //   }, [userId]);
 
-//   const handleMarkAsRead = async (notification) => {
+//   useEffect(() => {
+//     if (!userId || !startPolling) return;
+
+//     const poll = async () => {
+//       try {
+//         const res = await axios.get(`${API_URL}/api/notifications/users/${userId}/notifications`);
+//         const list = Array.isArray(res.data) ? res.data : [];
+//         setNotifications(list);
+//         const unread = list.filter((n) => !n.read).length;
+//         setUnreadCount(unread);
+//         if (unread === 0) setStartPolling(false);
+//       } catch (err) {
+//         console.error("Polling error:", err);
+//       }
+//     };
+
+//     const intervalId = setInterval(poll, 3000);
+//     return () => clearInterval(intervalId);
+//   }, [userId, startPolling]);
+
+//   const handleMarkAsRead = async (notifId) => {
 //     try {
-//       await updateDoc(
-//         doc(db, "users", userId, "notifications", notification.id),
-//         { read: true }
+//       const token = localStorage.getItem("token");
+//       await axios.patch(
+//         `${API_URL}/api/notifications/users/${userId}/notifications/${notifId}`,
+//         { read: true },
+//         { headers: { Authorization: `Bearer ${token}` } }
 //       );
-//     } catch (error) {
-//       console.error("Error marking as read:", error);
-//       Swal.fire("Error", "Failed to mark as read.", "error");
+
+//       setNotifications((prev) =>
+//         prev.map((n) => (n._id === notifId ? { ...n, read: true } : n))
+//       );
+
+//       setUnreadCount((prev) => {
+//         const next = Math.max(prev - 1, 0);
+//         if (next === 0) setStartPolling(false);
+//         return next;
+//       });
+//     } catch (err) {
+//       console.error("Failed to mark as read:", err);
+//       Swal.fire("Error", "Failed to mark as read", "error");
 //     }
 //   };
 
 //   const handleClearNotifications = async () => {
 //     try {
-//       const refs = notifications.map((n) =>
-//         doc(db, "users", userId, "notifications", n.id)
-//       );
-//       await Promise.all(refs.map((ref) => deleteDoc(ref)));
+//       const token = localStorage.getItem("token");
+//       await axios.delete(`${API_URL}/api/notifications/users/${userId}/notifications`, {
+//         headers: { Authorization: `Bearer ${token}` },
+//       });
 //       setNotifications([]);
 //       setUnreadCount(0);
-//     } catch (error) {
-//       console.error("Error clearing notifications:", error);
-//       Swal.fire("Error", "Failed to clear notifications.", "error");
+//       setStartPolling(false);
+//     } catch (err) {
+//       Swal.fire("Error", "Failed to clear notifications", "error");
 //     }
 //   };
 
@@ -91,47 +131,31 @@
 //     setShowNotifModal(false);
 //     setOrderLoading(true);
 
-//     // Mark as read before fetching order
 //     try {
-//       if (notifId) {
-//         await updateDoc(
-//           doc(db, "users", userId, "notifications", notifId),
-//           { read: true }
-//         );
-//       }
-
-//       const orderRef = doc(db, "orders", orderId);
-//       const orderSnap = await getDoc(orderRef);
-//       if (orderSnap.exists()) {
-//         setSelectedOrder({ id: orderSnap.id, ...orderSnap.data() });
-//         setShowOrderModal(true);
-//       } else {
-//         Swal.fire("Not Found", "Order not found.", "info");
-//       }
-//     } catch (error) {
-//       console.error("Error fetching order:", error);
-//       Swal.fire("Error", "Failed to fetch order details.", "error");
+//       if (notifId) await handleMarkAsRead(notifId);
+//       const res = await axios.get(`${API_URL}/api/orders/${orderId}`);
+//       setSelectedOrder(res.data);
+//       setUserEmail(res.data?.email || "");
+//       setShowOrderModal(true);
+//     } catch (err) {
+//       Swal.fire("Error", "Failed to fetch order", "error");
 //     } finally {
 //       setOrderLoading(false);
 //     }
 //   };
+
+//   if (!userId) return null;
 
 //   return (
 //     <div className="me-3">
 //       <Button
 //         variant="light"
 //         onClick={() => setShowNotifModal(true)}
-//         className={`position-relative ${
-//           unreadCount > 0 ? "animate__animated animate__tada" : ""
-//         }`}
+//         className={`position-relative ${unreadCount > 0 ? "animate__animated animate__tada" : ""}`}
 //       >
 //         <FaBell size={20} />
 //         {unreadCount > 0 && (
-//           <Badge
-//             bg="danger"
-//             pill
-//             className="position-absolute top-0 start-100 translate-middle"
-//           >
+//           <Badge bg="danger" pill className="position-absolute top-0 start-100 translate-middle">
 //             {unreadCount}
 //           </Badge>
 //         )}
@@ -142,11 +166,7 @@
 //           <Modal.Title className="w-100 d-flex justify-content-between align-items-center">
 //             Notifications
 //             {notifications.length > 0 && (
-//               <Button
-//                 variant="link"
-//                 className="p-0 text-danger"
-//                 onClick={handleClearNotifications}
-//               >
+//               <Button variant="link" className="p-0 text-danger" onClick={handleClearNotifications}>
 //                 Clear All
 //               </Button>
 //             )}
@@ -159,31 +179,27 @@
 //           ) : (
 //             notifications.map((n) => (
 //               <div
-//                 key={n.id}
-//                 className={`border rounded mb-2 p-2 small ${
-//                   n.read ? "bg-light" : "bg-secondary text-white"
-//                 }`}
+//                 key={n._id}
+//                 className={`border rounded mb-2 p-2 small ${n.read ? "bg-light" : "bg-secondary text-white"}`}
 //               >
 //                 <div>{n.message}</div>
-
 //                 <div className="d-flex justify-content-between mt-1">
 //                   {n.orderId && (
 //                     <Button
 //                       size="sm"
 //                       variant="link"
 //                       className="p-0 text-info text-decoration-underline"
-//                       onClick={() => handleViewOrder(n.orderId, n.id)}
+//                       onClick={() => handleViewOrder(n.orderId, n._id)}
 //                     >
 //                       View Order
 //                     </Button>
 //                   )}
-
 //                   {!n.read && (
 //                     <Button
 //                       size="sm"
 //                       variant="link"
 //                       className="p-0 text-light text-decoration-underline"
-//                       onClick={() => handleMarkAsRead(n)}
+//                       onClick={() => handleMarkAsRead(n._id)}
 //                     >
 //                       Mark as Read
 //                     </Button>
@@ -201,7 +217,6 @@
 //         </Modal.Footer>
 //       </Modal>
 
-//       {/* Order Detail Modal */}
 //       {selectedOrder && (
 //         <OrderDetailModal
 //           show={showOrderModal}
@@ -211,24 +226,37 @@
 //           }}
 //           order={selectedOrder}
 //           userEmail={userEmail}
-//           updateParentOrders={(updatedOrder) => {
-//             setSelectedOrder(updatedOrder);
-//           }}
+//           updateParentOrders={(updated) => setSelectedOrder(updated)}
 //         />
 //       )}
 
-//       {/* Optional loading overlay */}
 //       {orderLoading && (
-//         <div className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex justify-content-center align-items-center" style={{ zIndex: 1050 }}>
+//         <div
+//           className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex justify-content-center align-items-center"
+//           style={{ zIndex: 1050 }}
+//         >
 //           <Spinner animation="border" variant="light" />
 //         </div>
 //       )}
 //     </div>
 //   );
 // }
-import React, { useState, useEffect } from "react";
+
+import React, { useState, useEffect, useMemo } from "react";
 import { FaBell } from "react-icons/fa";
-import { Button, Badge, Modal, Spinner } from "react-bootstrap";
+import {
+  IconButton,
+  Badge,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  CircularProgress,
+  Typography,
+  Box,
+  Paper,
+} from "@mui/material";
 import Swal from "sweetalert2";
 import "animate.css";
 import axios from "axios";
@@ -245,8 +273,10 @@ export default function NotificationBell() {
   const [orderLoading, setOrderLoading] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
-  const API_URL = process.env.REACT_APP_API_URL;
+  // Memoize API_URL so linter doesn't complain
+  const API_URL = useMemo(() => process.env.REACT_APP_API_URL, []);
 
+  // Load userId from localStorage or API
   useEffect(() => {
     const loadUserId = async () => {
       const storedId = localStorage.getItem("userId");
@@ -275,14 +305,17 @@ export default function NotificationBell() {
     };
 
     loadUserId();
-  }, []);
+  }, [API_URL]);
 
+  // Fetch initial notifications
   useEffect(() => {
     if (!userId) return;
 
     const fetchInitial = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/notifications/users/${userId}/notifications`);
+        const res = await axios.get(
+          `${API_URL}/api/notifications/users/${userId}/notifications`
+        );
         const list = Array.isArray(res.data) ? res.data : [];
         setNotifications(list);
         const unread = list.filter((n) => !n.read).length;
@@ -294,14 +327,17 @@ export default function NotificationBell() {
     };
 
     fetchInitial();
-  }, [userId]);
+  }, [userId, API_URL]);
 
+  // Poll for notifications if unread exists
   useEffect(() => {
     if (!userId || !startPolling) return;
 
     const poll = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/notifications/users/${userId}/notifications`);
+        const res = await axios.get(
+          `${API_URL}/api/notifications/users/${userId}/notifications`
+        );
         const list = Array.isArray(res.data) ? res.data : [];
         setNotifications(list);
         const unread = list.filter((n) => !n.read).length;
@@ -314,7 +350,7 @@ export default function NotificationBell() {
 
     const intervalId = setInterval(poll, 3000);
     return () => clearInterval(intervalId);
-  }, [userId, startPolling]);
+  }, [userId, startPolling, API_URL]);
 
   const handleMarkAsRead = async (notifId) => {
     try {
@@ -343,9 +379,12 @@ export default function NotificationBell() {
   const handleClearNotifications = async () => {
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(`${API_URL}/api/notifications/users/${userId}/notifications`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axios.delete(
+        `${API_URL}/api/notifications/users/${userId}/notifications`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       setNotifications([]);
       setUnreadCount(0);
       setStartPolling(false);
@@ -374,48 +413,65 @@ export default function NotificationBell() {
   if (!userId) return null;
 
   return (
-    <div className="me-3">
-      <Button
-        variant="light"
+    <Box sx={{ mr: 2 }}>
+      <IconButton
         onClick={() => setShowNotifModal(true)}
-        className={`position-relative ${unreadCount > 0 ? "animate__animated animate__tada" : ""}`}
+        className={unreadCount > 0 ? "animate__animated animate__tada" : ""}
       >
-        <FaBell size={20} />
-        {unreadCount > 0 && (
-          <Badge bg="danger" pill className="position-absolute top-0 start-100 translate-middle">
-            {unreadCount}
-          </Badge>
-        )}
-      </Button>
+        <Badge badgeContent={unreadCount} color="error">
+          <FaBell size={20} />
+        </Badge>
+      </IconButton>
 
-      <Modal show={showNotifModal} onHide={() => setShowNotifModal(false)} centered scrollable>
-        <Modal.Header closeButton>
-          <Modal.Title className="w-100 d-flex justify-content-between align-items-center">
-            Notifications
-            {notifications.length > 0 && (
-              <Button variant="link" className="p-0 text-danger" onClick={handleClearNotifications}>
-                Clear All
-              </Button>
-            )}
-          </Modal.Title>
-        </Modal.Header>
+      {/* Notifications Dialog */}
+      <Dialog
+        open={showNotifModal}
+        onClose={() => setShowNotifModal(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between" }}>
+          Notifications
+          {notifications.length > 0 && (
+            <Button
+              color="error"
+              variant="text"
+              onClick={handleClearNotifications}
+            >
+              Clear All
+            </Button>
+          )}
+        </DialogTitle>
 
-        <Modal.Body style={{ maxHeight: "400px", overflowY: "auto" }}>
+        <DialogContent dividers sx={{ maxHeight: "400px" }}>
           {notifications.length === 0 ? (
-            <div className="text-muted text-center">No notifications</div>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              align="center"
+              sx={{ mt: 2 }}
+            >
+              No notifications
+            </Typography>
           ) : (
             notifications.map((n) => (
-              <div
+              <Paper
                 key={n._id}
-                className={`border rounded mb-2 p-2 small ${n.read ? "bg-light" : "bg-secondary text-white"}`}
+                sx={{
+                  p: 1.5,
+                  mb: 1,
+                  bgcolor: n.read ? "grey.100" : "grey.800",
+                  color: n.read ? "text.primary" : "#fff",
+                  fontSize: "0.85rem",
+                }}
               >
                 <div>{n.message}</div>
-                <div className="d-flex justify-content-between mt-1">
+                <Box display="flex" justifyContent="space-between" mt={1}>
                   {n.orderId && (
                     <Button
-                      size="sm"
-                      variant="link"
-                      className="p-0 text-info text-decoration-underline"
+                      size="small"
+                      variant="text"
+                      color="info"
                       onClick={() => handleViewOrder(n.orderId, n._id)}
                     >
                       View Order
@@ -423,27 +479,28 @@ export default function NotificationBell() {
                   )}
                   {!n.read && (
                     <Button
-                      size="sm"
-                      variant="link"
-                      className="p-0 text-light text-decoration-underline"
+                      size="small"
+                      variant="text"
+                      color="inherit"
                       onClick={() => handleMarkAsRead(n._id)}
                     >
                       Mark as Read
                     </Button>
                   )}
-                </div>
-              </div>
+                </Box>
+              </Paper>
             ))
           )}
-        </Modal.Body>
+        </DialogContent>
 
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowNotifModal(false)}>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => setShowNotifModal(false)}>
             Close
           </Button>
-        </Modal.Footer>
-      </Modal>
+        </DialogActions>
+      </Dialog>
 
+      {/* Order Detail Modal */}
       {selectedOrder && (
         <OrderDetailModal
           show={showOrderModal}
@@ -457,14 +514,25 @@ export default function NotificationBell() {
         />
       )}
 
+      {/* Loading Overlay */}
       {orderLoading && (
-        <div
-          className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex justify-content-center align-items-center"
-          style={{ zIndex: 1050 }}
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            bgcolor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 1300,
+          }}
         >
-          <Spinner animation="border" variant="light" />
-        </div>
+          <CircularProgress color="inherit" />
+        </Box>
       )}
-    </div>
+    </Box>
   );
 }
