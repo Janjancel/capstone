@@ -100,9 +100,18 @@
 // export default EditItemModal;
 
 import React, { useState } from "react";
-import { Modal, Form, Button, Image, Spinner, Row, Col } from "react-bootstrap";
+import {
+  Modal,
+  Form,
+  Button,
+  Image,
+  Spinner,
+  Row,
+  Col,
+} from "react-bootstrap";
 import Swal from "sweetalert2";
 import axios from "axios";
+import toast from "react-hot-toast";
 
 const EditItemModal = ({ show, onHide, item }) => {
   const [updatedItem, setUpdatedItem] = useState({
@@ -111,13 +120,13 @@ const EditItemModal = ({ show, onHide, item }) => {
     price: item.price || "",
     origin: item.origin || "",
     age: item.age || "",
-    category: item.category || "Table", // ✅ ensure category is included
+    category: item.category || "Table", // ✅ default to current or Table
     images: [], // new uploads
   });
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState(item.images || []); // ✅ multiple images
+  const [preview, setPreview] = useState(item.images || []); // ✅ show existing images
 
   const categories = [
     "Table",
@@ -151,6 +160,17 @@ const EditItemModal = ({ show, onHide, item }) => {
   };
 
   const handleSave = async () => {
+    // ✅ SweetAlert confirmation before save
+    const confirm = await Swal.fire({
+      title: "Are you sure?",
+      text: "Do you want to save these changes?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, save it!",
+    });
+
+    if (!confirm.isConfirmed) return;
+
     setLoading(true);
     try {
       const formData = new FormData();
@@ -176,11 +196,11 @@ const EditItemModal = ({ show, onHide, item }) => {
         }
       );
 
-      Swal.fire("Updated!", "Item updated successfully.", "success");
+      toast.success("Item updated successfully!");
       onHide();
     } catch (error) {
       console.error("Update error:", error);
-      Swal.fire("Error", "Failed to update item.", "error");
+      toast.error("Failed to update item.");
     } finally {
       setLoading(false);
     }
@@ -216,7 +236,7 @@ const EditItemModal = ({ show, onHide, item }) => {
             </Form.Group>
           ))}
 
-          {/* ✅ Category Dropdown */}
+          {/* ✅ Category Dropdown with current category pre-selected */}
           <Form.Group className="mb-3">
             <Form.Label>Category</Form.Label>
             <Form.Select
