@@ -631,6 +631,24 @@ const Items = () => {
                         <MenuItem onClick={() => handleDelete(item._id)}>
                           Delete
                         </MenuItem>
+                        <MenuItem
+  onClick={async () => {
+    try {
+      await axios.post(
+        `${process.env.REACT_APP_API_URL}/api/items/${item._id}/feature`
+      );
+      toast.success("Item added as featured");
+    } catch (error) {
+      toast.error(
+        error.response?.data?.error || "Failed to add as featured"
+      );
+    }
+    handleMenuClose();
+  }}
+>
+  Add as Featured Item
+</MenuItem>
+
                       </Menu>
                     </TableCell>
                   </TableRow>
