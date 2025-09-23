@@ -350,7 +350,6 @@ function Section3({ title, description }) {
   const [featured, setFeatured] = useState([]);
 
   useEffect(() => {
-    // ✅ Scroll animation
     const observer = new IntersectionObserver(
       ([entry]) =>
         setAnimationClass(
@@ -365,11 +364,10 @@ function Section3({ title, description }) {
   }, []);
 
   useEffect(() => {
-    // ✅ Fetch featured items
     const fetchFeatured = async () => {
       try {
         const res = await axios.get(
-          `${process.env.REACT_APP_API_URL}/api/featured`
+          `${process.env.REACT_APP_API_URL}/api/featured-items`
         );
         setFeatured(res.data);
       } catch (err) {
@@ -378,6 +376,64 @@ function Section3({ title, description }) {
     };
     fetchFeatured();
   }, []);
+
+  // Automatic carousel component
+  const Carousel = ({ images = [], itemName }) => {
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const carouselImages = images.length > 0 ? images : ["/placeholder.jpg"];
+
+    // Automatically slide every 3 seconds
+    useEffect(() => {
+      const interval = setInterval(() => {
+        setCurrentIndex((prev) => (prev + 1) % carouselImages.length);
+      }, 3000);
+      return () => clearInterval(interval);
+    }, [carouselImages.length]);
+
+    return (
+      <div style={{ position: "relative", textAlign: "center" }}>
+        <img
+          src={carouselImages[currentIndex]}
+          alt={itemName}
+          style={{
+            width: "100%",
+            height: "280px",
+            objectFit: "cover",
+            borderTopLeftRadius: "0.5rem",
+            borderTopRightRadius: "0.5rem",
+            transition: "opacity 0.5s ease-in-out",
+          }}
+          onError={(e) => (e.target.src = "/placeholder.jpg")}
+        />
+
+        {/* Dots indicator */}
+        {carouselImages.length > 1 && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginTop: "0.5rem",
+            }}
+          >
+            {carouselImages.map((_, idx) => (
+              <div
+                key={idx}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  margin: "0 4px",
+                  backgroundColor:
+                    currentIndex === idx ? "#0d6efd" : "#c4c4c4",
+                  transition: "background-color 0.3s",
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <section className="py-5 bg-white" ref={sectionRef} id="home-sec3">
@@ -388,8 +444,6 @@ function Section3({ title, description }) {
             <h2 className="fw-bold">{title}</h2>
             <p className="text-muted">{description}</p>
           </div>
-
-          {/* Shop All Button */}
           <div>
             <button
               className="btn btn-outline-dark px-4"
@@ -403,67 +457,18 @@ function Section3({ title, description }) {
         {/* Product Grid */}
         <div className="row g-4">
           {featured.length > 0 ? (
-            featured.map((f, idx) => (
+            featured.map((f) => (
               <div className="col-12 col-sm-6 col-lg-3" key={f._id}>
                 <div
                   className="card border-0 h-100 shadow-sm rounded-3"
                   style={{ transition: "all 0.3s ease" }}
                 >
-                  {/* Product Image Carousel */}
-                  <div
-                    id={`carousel-${idx}`}
-                    className="carousel slide"
-                    data-bs-ride="carousel"
-                    data-bs-interval="3000" // ✅ Auto slide every 3s
-                  >
-                    <div className="carousel-inner">
-                      {f.item.images && f.item.images.length > 0 ? (
-                        f.item.images.map((img, imgIdx) => (
-                          <div
-                            key={imgIdx}
-                            className={`carousel-item ${
-                              imgIdx === 0 ? "active" : ""
-                            }`}
-                          >
-                            <img
-                              src={img}
-                              alt={`${f.item.name}-${imgIdx}`}
-                              className="d-block w-100 bg-light"
-                              style={{
-                                height: "280px",
-                                objectFit: "cover",
-                                borderTopLeftRadius: "0.5rem",
-                                borderTopRightRadius: "0.5rem",
-                              }}
-                              onError={(e) =>
-                                (e.target.src = "/placeholder.jpg")
-                              }
-                            />
-                          </div>
-                        ))
-                      ) : (
-                        <div className="carousel-item active">
-                          <img
-                            src="/placeholder.jpg"
-                            alt="placeholder"
-                            className="d-block w-100 bg-light"
-                            style={{
-                              height: "280px",
-                              objectFit: "cover",
-                              borderTopLeftRadius: "0.5rem",
-                              borderTopRightRadius: "0.5rem",
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  {/* Carousel */}
+                  <Carousel images={f.item.images} itemName={f.item.name} />
 
                   {/* Card Content */}
                   <div className="card-body text-center">
-                    <p className="small text-muted mb-1">
-                      {f.item.description}
-                    </p>
+                    <p className="small text-muted mb-1">{f.item.description}</p>
                     <h6 className="fw-semibold">{f.item.name}</h6>
                     <p className="fw-bold mb-0">₱{f.item.price}</p>
                   </div>
