@@ -369,7 +369,7 @@ function Section3({ title, description }) {
     const fetchFeatured = async () => {
       try {
         const res = await axios.get(
-          `${process.env.REACT_APP_API_URL}/api/featured-items`
+          `${process.env.REACT_APP_API_URL}/api/featured`
         );
         setFeatured(res.data);
       } catch (err) {
@@ -403,23 +403,60 @@ function Section3({ title, description }) {
         {/* Product Grid */}
         <div className="row g-4">
           {featured.length > 0 ? (
-            featured.map((f) => (
+            featured.map((f, idx) => (
               <div className="col-12 col-sm-6 col-lg-3" key={f._id}>
                 <div
                   className="card border-0 h-100 shadow-sm rounded-3"
-                  style={{
-                    transition: "all 0.3s ease",
-                  }}
+                  style={{ transition: "all 0.3s ease" }}
                 >
-                  {/* Product Image */}
-                  <div className="position-relative">
-                    <img
-                      src={f.item.images?.[0] || "/placeholder.jpg"}
-                      alt={f.item.name}
-                      className="card-img-top bg-light"
-                      style={{ height: "280px", objectFit: "cover" }}
-                      onError={(e) => (e.target.src = "/placeholder.jpg")}
-                    />
+                  {/* Product Image Carousel */}
+                  <div
+                    id={`carousel-${idx}`}
+                    className="carousel slide"
+                    data-bs-ride="carousel"
+                    data-bs-interval="3000" // ✅ Auto slide every 3s
+                  >
+                    <div className="carousel-inner">
+                      {f.item.images && f.item.images.length > 0 ? (
+                        f.item.images.map((img, imgIdx) => (
+                          <div
+                            key={imgIdx}
+                            className={`carousel-item ${
+                              imgIdx === 0 ? "active" : ""
+                            }`}
+                          >
+                            <img
+                              src={img}
+                              alt={`${f.item.name}-${imgIdx}`}
+                              className="d-block w-100 bg-light"
+                              style={{
+                                height: "280px",
+                                objectFit: "cover",
+                                borderTopLeftRadius: "0.5rem",
+                                borderTopRightRadius: "0.5rem",
+                              }}
+                              onError={(e) =>
+                                (e.target.src = "/placeholder.jpg")
+                              }
+                            />
+                          </div>
+                        ))
+                      ) : (
+                        <div className="carousel-item active">
+                          <img
+                            src="/placeholder.jpg"
+                            alt="placeholder"
+                            className="d-block w-100 bg-light"
+                            style={{
+                              height: "280px",
+                              objectFit: "cover",
+                              borderTopLeftRadius: "0.5rem",
+                              borderTopRightRadius: "0.5rem",
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Card Content */}
