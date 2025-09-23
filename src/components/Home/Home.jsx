@@ -369,7 +369,7 @@ function Section3({ title, description }) {
     const fetchFeatured = async () => {
       try {
         const res = await axios.get(
-          `${process.env.REACT_APP_API_URL}/api/featured`
+          `${process.env.REACT_APP_API_URL}/api/featured-items`
         );
         setFeatured(res.data);
       } catch (err) {
