@@ -172,6 +172,56 @@
 //     }
 //   };
 
+//   // --- Order confirmation with image upload ---
+// // const handleOrderConfirmation = async () => {
+// //   if (!user || !isAddressComplete()) return;
+
+// //   setLoading(true);
+// //   try {
+// //     // Step 1: Upload any new images first
+// //     const updatedItems = await Promise.all(
+// //       selectedItems.map(async (item) => {
+// //         if (item.image instanceof File) {
+// //           const formData = new FormData();
+// //           formData.append("image", item.image);
+
+// //           const res = await axios.post(`${API_URL}/api/upload`, formData, {
+// //             headers: { "Content-Type": "multipart/form-data" },
+// //           });
+// //           return { ...item, image: res.data.imageUrl };
+// //         }
+// //         return item; // already a URL, no need to upload
+// //       })
+// //     );
+
+// //     // Step 2: Place the order with image URLs
+// //     await axios.post(`${API_URL}/api/orders`, {
+// //       userId: user._id,
+// //       items: updatedItems,
+// //       total: parseFloat(totalPrice),
+// //       address,
+// //       notes: "",
+// //     });
+
+// //     // Step 3: Remove items from cart
+// //     await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
+// //       removeItems: selectedItems.map((i) => i.id),
+// //     });
+
+// //     // Step 4: Update local state
+// //     setCartItems([]);
+// //     setSelectedItems([]);
+// //     setCartCount(0);
+// //     setShowModal(false);
+// //     toast.success("Order placed successfully!");
+// //     onClose();
+// //   } catch (err) {
+// //     console.error("Order failed:", err);
+// //     setError("Failed to place the order. Please try again.");
+// //   } finally {
+// //     setLoading(false);
+// //   }
+// // };
 // const handleOrderConfirmation = async () => {
 //   if (!user || !isAddressComplete()) return;
 
@@ -386,12 +436,10 @@
 
 // export default CartModal;
 
-
 import React, { useState, useEffect } from "react";
 import { Modal, Button, Spinner, Form, Alert } from "react-bootstrap";
 import toast from "react-hot-toast";
 import axios from "axios";
-import { useSocket } from "../../hooks/useSocket"; // custom hook for Socket.IO
 import EditAddressModal from "../Profile/EditAddressModal";
 import addressData from "../../data/addressData.json";
 
@@ -407,7 +455,6 @@ const CartModal = ({
   setShowModal,
 }) => {
   const API_URL = process.env.REACT_APP_API_URL;
-  const socket = useSocket(user); // initialize socket with user
 
   const [address, setAddress] = useState({
     region: "",
@@ -427,18 +474,6 @@ const CartModal = ({
     cities: [],
     barangays: [],
   });
-
-  // --- Listen for real-time notifications ---
-  useEffect(() => {
-    if (!socket) return;
-    socket.on("notification", (data) => {
-      toast.success(data.message);
-    });
-
-    return () => {
-      socket.off("notification");
-    };
-  }, [socket]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -474,7 +509,7 @@ const CartModal = ({
     </Form.Group>
   );
 
-  // --- Load regions and user address ---
+  // --- Address and dependent dropdowns ---
   useEffect(() => {
     const loadRegions = () => {
       const regionList = Object.keys(addressData).map((regionCode) => ({
@@ -500,7 +535,7 @@ const CartModal = ({
       };
       fetchAddress();
     }
-  }, [show, user, API_URL]);
+  }, [show, user]);
 
   useEffect(() => {
     if (!address.region) return;
@@ -575,6 +610,7 @@ const CartModal = ({
     }
   };
 
+  // --- Order confirmation ---
   const handleOrderConfirmation = async () => {
     if (!user || !isAddressComplete()) return;
 
@@ -586,18 +622,31 @@ const CartModal = ({
       formData.append("address", JSON.stringify(address));
       formData.append("notes", "");
 
-      // append images if any are File objects
+      // append images (if any are File objects)
       selectedItems.forEach((item) => {
         if (item.image instanceof File) {
           formData.append("images", item.image);
         }
       });
 
-      await axios.post(`${API_URL}/api/orders`, formData, {
+      const orderRes = await axios.post(`${API_URL}/api/orders`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // remove from cart
+      const orderId = orderRes.data?._id;
+
+      // 🔹 Create notification for admin
+      if (orderId) {
+        await axios.post(`${API_URL}/api/notifications`, {
+          userId: user._id,
+          orderId,
+          role: "admin",
+          status: "new",
+          message: `New order placed by ${user.displayName || user.email}`,
+        });
+      }
+
+      // remove from cart etc...
       await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
         removeItems: selectedItems.map((i) => i.id),
       });
@@ -692,7 +741,8 @@ const CartModal = ({
                   {!isAddressComplete() && (
                     <Alert variant="warning">
                       Your shipping address is incomplete. Please{" "}
-                      <a href="/profile">add your address</a> in your profile first.
+                      <a href="/profile">add your address</a> in your profile
+                      first.
                     </Alert>
                   )}
 
@@ -734,7 +784,9 @@ const CartModal = ({
                             <td>{item.quantity}</td>
                             <td>₱{parseFloat(item.price).toFixed(2)}</td>
                             <td>
-                              ₱{(item.quantity * parseFloat(item.price)).toFixed(2)}
+                              ₱{(
+                                item.quantity * parseFloat(item.price)
+                              ).toFixed(2)}
                             </td>
                           </tr>
                         ))}
