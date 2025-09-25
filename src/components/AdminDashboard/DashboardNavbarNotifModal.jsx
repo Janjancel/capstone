@@ -122,6 +122,7 @@
 // };
 
 // export default DashboardNavbarNotifModal;
+// DashboardNavbarNotifModal.jsx
 import React, { useEffect, useState } from "react";
 import { Modal, Button, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
@@ -134,7 +135,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
   const navigate = useNavigate();
   const API_URL = process.env.REACT_APP_API_URL;
 
-  // Fetch persisted notifications (fallback + initial load)
+  // Fetch persisted notifications
   const fetchNotifications = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/orders/notifications`);
@@ -151,7 +152,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     if (show) fetchNotifications();
   }, [show]);
 
-  // 🔴 Listen for realtime notifications via SSE
+  // Realtime SSE
   useEffect(() => {
     const evtSource = new EventSource(
       `${API_URL}/api/orders/stream/notifications`
