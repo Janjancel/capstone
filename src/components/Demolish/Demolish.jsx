@@ -1,7 +1,7 @@
 
-
 // import React, { useState, useEffect } from "react";
 // import Swal from "sweetalert2";
+// import toast, { Toaster } from "react-hot-toast";
 // import axios from "axios";
 // import {
 //   MapContainer,
@@ -199,14 +199,11 @@
 //         formDataToUpload.append("image", formData.image);
 //       }
 
-//       // DEBUG: log entries
-//       for (let pair of formDataToUpload.entries()) {
-//         console.log(pair[0], pair[1]);
-//       }
+//       await axios.post(`${API_URL}/api/demolish`, formDataToUpload, {
+//         headers: { "Content-Type": "multipart/form-data" },
+//       });
 
-//       const { data } = await axios.post(`${API_URL}/api/demolish`, formDataToUpload);
-
-//       Swal.fire("Success!", "Your demolition request has been submitted.", "success");
+//       toast.success("Your demolition request has been submitted.");
 
 //       setFormData({
 //         location: { lat: null, lng: null },
@@ -222,7 +219,7 @@
 //         "Error submitting demolition request:",
 //         error.response?.data || error.message
 //       );
-//       Swal.fire("Error!", "Failed to submit the request. Please try again.", "error");
+//       toast.error("Failed to submit the request. Please try again.");
 //     } finally {
 //       setIsSubmitting(false);
 //     }
@@ -232,6 +229,7 @@
 
 //   return (
 //     <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
+//       <Toaster position="top-right" />
 //       <Box textAlign="center" mb={4}>
 //         <Typography variant="h4" fontWeight="bold">
 //           Demolition Request
@@ -404,7 +402,6 @@
 // };
 
 // export default Demolition;
-
 
 import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
@@ -606,8 +603,18 @@ const Demolition = () => {
         formDataToUpload.append("image", formData.image);
       }
 
-      await axios.post(`${API_URL}/api/demolish`, formDataToUpload, {
+      // Save demolition request
+      const demolishRes = await axios.post(`${API_URL}/api/demolish`, formDataToUpload, {
         headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      // Create a notification for admin
+      await axios.post(`${API_URL}/api/notifications`, {
+        userId,
+        status: "pending",
+        message: `New demolition request from ${formData.name}`,
+        role: "admin",
+        read: false,
       });
 
       toast.success("Your demolition request has been submitted.");

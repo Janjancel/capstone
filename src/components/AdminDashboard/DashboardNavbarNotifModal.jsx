@@ -3,21 +3,28 @@ import { Modal, Button, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import axios from "axios";
-import { io } from "socket.io-client";
 
 const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [polling, setPolling] = useState(false);
   const navigate = useNavigate();
   const API_URL = process.env.REACT_APP_API_URL;
 
-  // Fetch notifications from backend
+  // Fetch notifications (admin only)
   const fetchNotifications = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/notifications`);
-      const adminNotifs = res.data.filter((n) => n.role === "admin");
+      const adminNotifs = Array.isArray(res.data)
+        ? res.data.filter((n) => n.role === "admin")
+        : [];
+
       setNotifications(adminNotifs);
-      setUnreadCount(adminNotifs.filter((n) => !n.read).length);
+
+      const unread = adminNotifs.filter((n) => !n.read).length;
+      setUnreadCount(unread);
+      if (unread > 0) setPolling(true);
+      else setPolling(false);
     } catch (err) {
       console.error("Error fetching notifications:", err);
     } finally {
@@ -25,24 +32,20 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     }
   };
 
-  // --- Real-time Socket.IO notifications ---
+  // Fetch when modal opens
   useEffect(() => {
-    const socket = io(API_URL, { transports: ["websocket"] });
-    socket.emit("join", { userId: "admin123", role: "admin" });
-
-    socket.on("notification", (notif) => {
-      setNotifications((prev) => [notif, ...prev]);
-      setUnreadCount((prev) => prev + 1);
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [API_URL, setUnreadCount]);
-
-  useEffect(() => {
-    if (show) fetchNotifications();
+    if (show) {
+      setLoading(true);
+      fetchNotifications();
+    }
   }, [show]);
+
+  // Poll if unread exists
+  useEffect(() => {
+    if (!polling) return;
+    const intervalId = setInterval(fetchNotifications, 3000);
+    return () => clearInterval(intervalId);
+  }, [polling]);
 
   const handleMarkAsRead = async (id) => {
     try {
@@ -50,10 +53,14 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, read: true } : n))
       );
-      setUnreadCount((prev) => Math.max(prev - 1, 0));
+      setUnreadCount((prev) => {
+        const next = Math.max(prev - 1, 0);
+        if (next === 0) setPolling(false);
+        return next;
+      });
     } catch (err) {
       console.error("Error marking as read:", err);
-      Swal.fire("Error", "Failed to mark as read.", "error");
+      Swal.fire("Error", "Failed to mark as read", "error");
     }
   };
 
@@ -62,15 +69,20 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
       await axios.delete(`${API_URL}/api/notifications/clear`);
       setNotifications([]);
       setUnreadCount(0);
+      setPolling(false);
     } catch (err) {
       console.error("Error clearing notifications:", err);
-      Swal.fire("Error", "Failed to clear notifications.", "error");
+      Swal.fire("Error", "Failed to clear notifications", "error");
     }
   };
 
   const handleLearnMore = (notification) => {
     if (notification.type === "cancel_request") {
       navigate("/admin/orders");
+    } else if (notification.type === "sell_request") {
+      navigate("/sellDashboard");
+    } else if (notification.type === "demolish_request") {
+      navigate("/demolishDashboard");
     }
     onHide();
   };
@@ -104,19 +116,23 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
             <div
               key={n._id}
               className={`border rounded mb-2 p-2 small ${
-                n.read ? "bg-light" : "bg-secondary text-white"
+                n.read ? "bg-light text-dark" : "bg-secondary text-white"
               }`}
             >
               <div>{n.message}</div>
               <div className="d-flex justify-content-between mt-1">
-                {n.type === "cancel_request" && (
+                {n.orderId && (
                   <Button
                     size="sm"
                     variant="link"
                     className="p-0 text-info text-decoration-underline"
                     onClick={() => handleLearnMore(n)}
                   >
-                    Learn More
+                    {n.type === "sell_request"
+                      ? "View Request"
+                      : n.type === "demolish_request"
+                      ? "View Demolition"
+                      : "View Order"}
                   </Button>
                 )}
                 {!n.read && (

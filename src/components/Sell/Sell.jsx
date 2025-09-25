@@ -30,7 +30,8 @@
 //   CircularProgress,
 // } from "@mui/material";
 
-// const API_URL = process.env.REACT_APP_API_URL || "https://capstone-backend-k4uu.onrender.com";
+// const API_URL =
+//   process.env.REACT_APP_API_URL || "https://capstone-backend-k4uu.onrender.com";
 
 // // Fix Leaflet icon URLs
 // delete L.Icon.Default.prototype._getIconUrl;
@@ -106,11 +107,13 @@
 //           ...prev,
 //           location: { lat: parseFloat(lat), lng: parseFloat(lon) },
 //         }));
+//         toast.success("Address pinned on map ✅");
 //       } else {
-//         Swal.fire("Not Found", "Address not found. Try a different one.", "info");
+//         toast.error("Address not found. Try again.");
 //       }
 //     } catch (error) {
 //       console.error("Geocode Error:", error);
+//       toast.error("Error searching address.");
 //     }
 //   };
 
@@ -128,8 +131,12 @@
 //       (position) => {
 //         setFormData((prev) => ({
 //           ...prev,
-//           location: { lat: position.coords.latitude, lng: position.coords.longitude },
+//           location: {
+//             lat: position.coords.latitude,
+//             lng: position.coords.longitude,
+//           },
 //         }));
+//         toast.success("Location detected 📍");
 //       },
 //       async (error) => {
 //         let message = "";
@@ -157,6 +164,7 @@
 //               ...prev,
 //               location: { lat: data.latitude, lng: data.longitude },
 //             }));
+//             toast.success("Location detected via IP 📡");
 //           }
 //         } catch (err) {
 //           Swal.fire(
@@ -173,69 +181,63 @@
 //     getLocation();
 //   }, []);
 
-// const handleSubmit = async (e) => {
-//   e.preventDefault();
-//   setIsSubmitting(true);
+//   const handleSubmit = async (e) => {
+//     e.preventDefault();
+//     setIsSubmitting(true);
 
-//   const userId = localStorage.getItem("userId");
-//   if (!userId) {
-//     Swal.fire("Login Required", "Please login to submit your request.", "warning");
-//     setIsSubmitting(false);
-//     return;
-//   }
-
-//   try {
-//     const formDataToUpload = new FormData();
-
-//     // Append image if selected
-//     if (formData.image) {
-//       formDataToUpload.append("image", formData.image);
+//     const userId = localStorage.getItem("userId");
+//     if (!userId) {
+//       Swal.fire("Login Required", "Please login to submit your request.", "warning");
+//       setIsSubmitting(false);
+//       return;
 //     }
 
-//     // Append other form fields
-//     formDataToUpload.append("userId", userId);
-//     formDataToUpload.append("name", formData.name);
-//     formDataToUpload.append("contact", formData.contact);
-//     formDataToUpload.append("price", Number(formData.price));
-//     formDataToUpload.append("description", formData.description);
-//     formDataToUpload.append("location", JSON.stringify(formData.location));
+//     try {
+//       const formDataToUpload = new FormData();
 
-//     // Submit sell request (image + data)
-//     await axios.post(`${API_URL}/api/sell`, formDataToUpload, {
-//       headers: { "Content-Type": "multipart/form-data" },
-//     });
+//       if (formData.image) {
+//         formDataToUpload.append("image", formData.image);
+//       }
 
-//     Swal.fire("Success!", "Your selling request has been submitted.", "success");
+//       formDataToUpload.append("userId", userId);
+//       formDataToUpload.append("name", formData.name);
+//       formDataToUpload.append("contact", formData.contact);
+//       formDataToUpload.append("price", Number(formData.price));
+//       formDataToUpload.append("description", formData.description);
+//       formDataToUpload.append("location", JSON.stringify(formData.location));
 
-//     // Reset form
-//     setFormData({
-//       location: { lat: null, lng: null },
-//       name: "",
-//       contact: "",
-//       price: "",
-//       description: "",
-//       image: null,
-//     });
-//     setPreviewUrl(null);
+//       const res = await axios.post(`${API_URL}/api/sell`, formDataToUpload, {
+//         headers: { "Content-Type": "multipart/form-data" },
+//       });
 
-//   } catch (error) {
-//     console.error("Error submitting sell request:", error.response?.data || error.message);
-//     Swal.fire(
-//       "Error!",
-//       "Failed to submit the request. Please try again.",
-//       "error"
-//     );
-//   } finally {
-//     setIsSubmitting(false);
-//   }
-// };
-
-
+//       if (res.data.success) {
+//         toast.success("Your selling request has been submitted 🎉");
+//         setFormData({
+//           location: { lat: null, lng: null },
+//           name: "",
+//           contact: "",
+//           price: "",
+//           description: "",
+//           image: null,
+//         });
+//         setPreviewUrl(null);
+//       } else {
+//         toast.error(res.data.message || "Failed to submit request ❌");
+//       }
+//     } catch (error) {
+//       console.error("Error submitting sell request:", error.response?.data || error.message);
+//       toast.error("Server error. Please try again later.");
+//     } finally {
+//       setIsSubmitting(false);
+//     }
+//   };
 
 //   const defaultPosition = [13.5, 122];
 
 //   return (
-//     <Container maxWidth="md" sx={{ mt: 5, mb:5 }}>
+//     <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
+//       <Toaster position="top-right" reverseOrder={false} />
+
 //       <Box textAlign="center" mb={4}>
 //         <Typography variant="h4" fontWeight="bold">
 //           Sell Request
@@ -258,7 +260,11 @@
 //                     value={searchAddress}
 //                     onChange={(e) => setSearchAddress(e.target.value)}
 //                   />
-//                   <Button variant="contained" color="primary" onClick={geocodeAddress}>
+//                   <Button
+//                     variant="contained"
+//                     color="primary"
+//                     onClick={geocodeAddress}
+//                   >
 //                     Search
 //                   </Button>
 //                 </Box>
@@ -285,9 +291,17 @@
 //                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 //                       attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
 //                     />
-//                     <LocationMarker formData={formData} setFormData={setFormData} />
+//                     <LocationMarker
+//                       formData={formData}
+//                       setFormData={setFormData}
+//                     />
 //                     {formData.location.lat && formData.location.lng && (
-//                       <Marker position={[formData.location.lat, formData.location.lng]} />
+//                       <Marker
+//                         position={[
+//                           formData.location.lat,
+//                           formData.location.lng,
+//                         ]}
+//                       />
 //                     )}
 //                   </MapContainer>
 //                 </Box>
@@ -346,7 +360,12 @@
 
 //                 {/* Image Upload + Preview */}
 //                 <Box mt={2}>
-//                   <Button variant="outlined" color="success" component="label" fullWidth>
+//                   <Button
+//                     variant="outlined"
+//                     color="success"
+//                     component="label"
+//                     fullWidth
+//                   >
 //                     Upload Image
 //                     <input
 //                       type="file"
@@ -451,6 +470,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
+// Location Marker Component
 const LocationMarker = ({ formData, setFormData }) => {
   const map = useMap();
 
@@ -490,10 +510,12 @@ const Sell = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
 
+  // Handle text input changes
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Handle image selection
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -502,6 +524,7 @@ const Sell = () => {
     }
   };
 
+  // Search address with OpenStreetMap
   const geocodeAddress = async () => {
     if (!searchAddress.trim()) return;
     try {
@@ -527,6 +550,7 @@ const Sell = () => {
     }
   };
 
+  // Detect location
   const getLocation = () => {
     if (!navigator.geolocation) {
       Swal.fire(
@@ -591,6 +615,7 @@ const Sell = () => {
     getLocation();
   }, []);
 
+  // Submit handler
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -622,6 +647,20 @@ const Sell = () => {
 
       if (res.data.success) {
         toast.success("Your selling request has been submitted 🎉");
+
+        // 🔔 Create notification for admin
+        try {
+          await axios.post(`${API_URL}/api/notifications`, {
+            userId: "admin123", // admin target ID
+            role: "admin",
+            message: `New sell request: ${formData.name} (₱${formData.price})`,
+            type: "sell_request",
+          });
+        } catch (notifErr) {
+          console.error("Notification error:", notifErr);
+        }
+
+        // Reset form
         setFormData({
           location: { lat: null, lng: null },
           name: "",
