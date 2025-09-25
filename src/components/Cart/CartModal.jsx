@@ -172,56 +172,7 @@ const CartModal = ({
     }
   };
 
-  // --- Order confirmation with image upload ---
-// const handleOrderConfirmation = async () => {
-//   if (!user || !isAddressComplete()) return;
 
-//   setLoading(true);
-//   try {
-//     // Step 1: Upload any new images first
-//     const updatedItems = await Promise.all(
-//       selectedItems.map(async (item) => {
-//         if (item.image instanceof File) {
-//           const formData = new FormData();
-//           formData.append("image", item.image);
-
-//           const res = await axios.post(`${API_URL}/api/upload`, formData, {
-//             headers: { "Content-Type": "multipart/form-data" },
-//           });
-//           return { ...item, image: res.data.imageUrl };
-//         }
-//         return item; // already a URL, no need to upload
-//       })
-//     );
-
-//     // Step 2: Place the order with image URLs
-//     await axios.post(`${API_URL}/api/orders`, {
-//       userId: user._id,
-//       items: updatedItems,
-//       total: parseFloat(totalPrice),
-//       address,
-//       notes: "",
-//     });
-
-//     // Step 3: Remove items from cart
-//     await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
-//       removeItems: selectedItems.map((i) => i.id),
-//     });
-
-//     // Step 4: Update local state
-//     setCartItems([]);
-//     setSelectedItems([]);
-//     setCartCount(0);
-//     setShowModal(false);
-//     toast.success("Order placed successfully!");
-//     onClose();
-//   } catch (err) {
-//     console.error("Order failed:", err);
-//     setError("Failed to place the order. Please try again.");
-//   } finally {
-//     setLoading(false);
-//   }
-// };
 const handleOrderConfirmation = async () => {
   if (!user || !isAddressComplete()) return;
 
