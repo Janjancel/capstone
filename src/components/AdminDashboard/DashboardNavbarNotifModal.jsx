@@ -122,7 +122,6 @@
 // };
 
 // export default DashboardNavbarNotifModal;
-
 import React, { useEffect, useState } from "react";
 import { Modal, Button, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
@@ -135,13 +134,12 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
   const navigate = useNavigate();
   const API_URL = process.env.REACT_APP_API_URL;
 
-  // Fetch notifications from Redis
+  // Fetch persisted notifications (fallback + initial load)
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/notifications`);
-      const adminNotifs = res.data.filter((n) => n.role === "admin");
-      setNotifications(adminNotifs);
-      setUnreadCount(adminNotifs.filter((n) => !n.read).length);
+      const res = await axios.get(`${API_URL}/api/orders/notifications`);
+      setNotifications(res.data || []);
+      setUnreadCount(res.data.filter((n) => !n.read).length);
     } catch (err) {
       console.error("Error fetching notifications:", err);
     } finally {
@@ -153,7 +151,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     if (show) fetchNotifications();
   }, [show]);
 
-  // SSE listener for realtime notifications
+  // 🔴 Listen for realtime notifications via SSE
   useEffect(() => {
     const evtSource = new EventSource(
       `${API_URL}/api/orders/stream/notifications`
@@ -162,10 +160,8 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     evtSource.onmessage = (event) => {
       try {
         const notif = JSON.parse(event.data);
-        if (notif.role === "admin") {
-          setNotifications((prev) => [notif, ...prev]);
-          setUnreadCount((prev) => prev + 1);
-        }
+        setNotifications((prev) => [notif, ...prev]);
+        setUnreadCount((prev) => prev + 1);
       } catch (err) {
         console.error("Invalid notification data:", err);
       }
@@ -181,7 +177,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
 
   const handleMarkAsRead = async (id) => {
     try {
-      await axios.patch(`${API_URL}/api/notifications/${id}/read`);
+      await axios.patch(`${API_URL}/api/orders/notifications/${id}/read`);
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n))
       );
@@ -194,7 +190,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
 
   const handleClearNotifications = async () => {
     try {
-      await axios.delete(`${API_URL}/api/notifications/clear`);
+      await axios.delete(`${API_URL}/api/orders/notifications/clear`);
       setNotifications([]);
       setUnreadCount(0);
     } catch (err) {
@@ -235,9 +231,9 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
         ) : notifications.length === 0 ? (
           <div className="text-muted text-center">No notifications</div>
         ) : (
-          notifications.map((n) => (
+          notifications.map((n, idx) => (
             <div
-              key={n.id}
+              key={n.id || idx}
               className={`border rounded mb-2 p-2 small ${
                 n.read ? "bg-light" : "bg-secondary text-white"
               }`}
