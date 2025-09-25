@@ -1,7 +1,397 @@
+// import React, { useState, useEffect } from "react";
+// import { Modal, Button, Spinner, Form, Alert } from "react-bootstrap";
+// import toast from "react-hot-toast";
+// import axios from "axios";
+// import EditAddressModal from "../Profile/EditAddressModal";
+// import addressData from "../../data/addressData.json";
+
+// const CartModal = ({
+//   show,
+//   onClose,
+//   user,
+//   totalPrice,
+//   selectedItems,
+//   setCartItems,
+//   setSelectedItems,
+//   setCartCount,
+//   setShowModal,
+// }) => {
+//   const API_URL = process.env.REACT_APP_API_URL;
+
+//   const [address, setAddress] = useState({
+//     region: "",
+//     province: "",
+//     city: "",
+//     barangay: "",
+//     street: "",
+//     houseNo: "",
+//     zipCode: "",
+//   });
+//   const [loading, setLoading] = useState(false);
+//   const [error, setError] = useState("");
+//   const [isEditing, setIsEditing] = useState(false);
+//   const [options, setOptions] = useState({
+//     regions: [],
+//     provinces: [],
+//     cities: [],
+//     barangays: [],
+//   });
+
+//   const handleInputChange = (e) => {
+//     const { name, value } = e.target;
+//     setAddress((prev) => ({
+//       ...prev,
+//       [name]: value,
+//       ...(name === "region" ? { province: "", city: "", barangay: "" } : {}),
+//       ...(name === "province" ? { city: "", barangay: "" } : {}),
+//       ...(name === "city" ? { barangay: "" } : {}),
+//     }));
+//   };
+
+//   const renderDropdown = (label, name, list) => (
+//     <Form.Group className="mb-3" controlId={`form-${name}`}>
+//       <Form.Label>{label}</Form.Label>
+//       <Form.Select
+//         name={name}
+//         value={address[name]}
+//         onChange={handleInputChange}
+//         disabled={
+//           (name === "province" && !address.region) ||
+//           (name === "city" && !address.province) ||
+//           (name === "barangay" && !address.city)
+//         }
+//       >
+//         <option value="">Select {label}</option>
+//         {list.map((item, idx) => (
+//           <option key={idx} value={item.code || item.name}>
+//             {item.name || item}
+//           </option>
+//         ))}
+//       </Form.Select>
+//     </Form.Group>
+//   );
+
+//   // --- Address and dependent dropdowns ---
+//   useEffect(() => {
+//     const loadRegions = () => {
+//       const regionList = Object.keys(addressData).map((regionCode) => ({
+//         code: regionCode,
+//         name: addressData[regionCode].region_name,
+//       }));
+//       setOptions((prev) => ({ ...prev, regions: regionList }));
+//     };
+
+//     if (show && user) {
+//       loadRegions();
+//       const fetchAddress = async () => {
+//         try {
+//           const res = await axios.get(`${API_URL}/api/address/${user._id}`);
+//           const userAddress = res.data;
+//           if (userAddress && Object.keys(userAddress).length > 0) {
+//             setAddress(userAddress);
+//           }
+//         } catch (err) {
+//           console.error("Error fetching user address:", err);
+//           toast.error("Failed to load address.");
+//         }
+//       };
+//       fetchAddress();
+//     }
+//   }, [show, user]);
+
+//   useEffect(() => {
+//     if (!address.region) return;
+//     const regionData = addressData[address.region];
+//     if (regionData?.province_list) {
+//       const provinces = Object.keys(regionData.province_list).map((name) => ({
+//         name,
+//         code: name,
+//       }));
+//       setOptions((prev) => ({
+//         ...prev,
+//         provinces,
+//         cities: [],
+//         barangays: [],
+//       }));
+//     }
+//   }, [address.region]);
+
+//   useEffect(() => {
+//     if (!address.province) return;
+//     const provinceData =
+//       addressData[address.region]?.province_list[address.province];
+//     if (provinceData?.municipality_list) {
+//       const cities = Object.keys(provinceData.municipality_list).map((name) => ({
+//         name,
+//         code: name,
+//       }));
+//       setOptions((prev) => ({
+//         ...prev,
+//         cities,
+//         barangays: [],
+//       }));
+//     }
+//   }, [address.province, address.region]);
+
+//   useEffect(() => {
+//     if (!address.city) return;
+//     const cityData =
+//       addressData[address.region]?.province_list[address.province]
+//         ?.municipality_list[address.city];
+//     if (cityData?.barangay_list) {
+//       setOptions((prev) => ({
+//         ...prev,
+//         barangays: cityData.barangay_list,
+//       }));
+//     }
+//   }, [address.city, address.province, address.region]);
+
+//   const isAddressComplete = () =>
+//     address.region &&
+//     address.province &&
+//     address.city &&
+//     address.barangay &&
+//     address.street &&
+//     address.houseNo;
+
+//   const handleSaveAddress = async () => {
+//     if (!user) return toast.error("User not found.");
+//     const isComplete = Object.values(address).every((field) => field !== "");
+//     if (!isComplete) return toast.error("Please fill in all the fields.");
+//     try {
+//       await axios.post(`${API_URL}/api/address/save`, {
+//         userId: user._id,
+//         address,
+//       });
+//       toast.success("Address saved!");
+//       setIsEditing(false);
+//       setShowModal(true);
+//     } catch (err) {
+//       console.error("Save error:", err);
+//       toast.error("Failed to save address.");
+//     }
+//   };
+
+// const handleOrderConfirmation = async () => {
+//   if (!user || !isAddressComplete()) return;
+
+//   setLoading(true);
+//   try {
+//     const formData = new FormData();
+//     formData.append("userId", user._id);
+//     formData.append("items", JSON.stringify(selectedItems));
+//     formData.append("address", JSON.stringify(address));
+//     formData.append("notes", "");
+
+//     // append images (if any are File objects)
+//     selectedItems.forEach((item) => {
+//       if (item.image instanceof File) {
+//         formData.append("images", item.image);
+//       }
+//     });
+
+//     await axios.post(`${API_URL}/api/orders`, formData, {
+//       headers: { "Content-Type": "multipart/form-data" },
+//     });
+
+//     // remove from cart etc...
+//     await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
+//       removeItems: selectedItems.map((i) => i.id),
+//     });
+
+//     setCartItems([]);
+//     setSelectedItems([]);
+//     setCartCount(0);
+//     setShowModal(false);
+//     toast.success("Order placed successfully!");
+//     onClose();
+//   } catch (err) {
+//     console.error("Order failed:", err);
+//     setError("Failed to place the order. Please try again.");
+//   } finally {
+//     setLoading(false);
+//   }
+// };
+
+
+//   const renderViewMode = () => (
+//     <div className="card p-4 shadow-sm">
+//       <div className="d-flex justify-content-between align-items-center">
+//         <h4 className="mb-3">Shipping Address</h4>
+//         <button
+//           type="button"
+//           className="btn btn-sm btn-outline-primary"
+//           onClick={() => {
+//             setShowModal(false);
+//             setIsEditing(true);
+//           }}
+//         >
+//           Edit Address
+//         </button>
+//       </div>
+//       {Object.entries(address).map(([key, value]) => (
+//         <p className="mb-1" key={key}>
+//           <strong>
+//             {key.charAt(0).toUpperCase() +
+//               key.slice(1).replace(/([A-Z])/g, " $1")}
+//             :
+//           </strong>{" "}
+//           {value || "Not Provided"}
+//         </p>
+//       ))}
+//     </div>
+//   );
+
+//   return (
+//     <>
+//       {!isEditing && (
+//         <Modal show={show} onHide={onClose} centered size="lg" backdrop="static">
+//           <Modal.Header closeButton>
+//             <Modal.Title>Confirm Your Order</Modal.Title>
+//           </Modal.Header>
+//           <Modal.Body>
+//             {loading ? (
+//               <div className="text-center">
+//                 <Spinner animation="border" variant="primary" />
+//               </div>
+//             ) : error ? (
+//               <Alert variant="danger" className="text-center">
+//                 {error}
+//               </Alert>
+//             ) : (
+//               <>
+//                 <h5>User Information</h5>
+//                 <Form>
+//                   <Form.Group className="mb-2">
+//                     <Form.Label>Name</Form.Label>
+//                     <Form.Control
+//                       type="text"
+//                       value={user?.displayName || "N/A"}
+//                       disabled
+//                     />
+//                   </Form.Group>
+//                   <Form.Group className="mb-2">
+//                     <Form.Label>Email</Form.Label>
+//                     <Form.Control
+//                       type="email"
+//                       value={user?.email || "N/A"}
+//                       disabled
+//                     />
+//                   </Form.Group>
+//                   <Form.Group className="mb-3">
+//                     <Form.Label>Phone Number</Form.Label>
+//                     <Form.Control
+//                       type="text"
+//                       value={user?.phoneNumber || "N/A"}
+//                       disabled
+//                     />
+//                   </Form.Group>
+
+//                   {!isAddressComplete() && (
+//                     <Alert variant="warning">
+//                       Your shipping address is incomplete. Please{" "}
+//                       <a href="/profile">add your address</a> in your profile first.
+//                     </Alert>
+//                   )}
+
+//                   {renderViewMode()}
+//                 </Form>
+
+//                 <h5 className="mt-4">Order Summary</h5>
+//                 {selectedItems.length > 0 ? (
+//                   <div
+//                     className="table-responsive"
+//                     style={{ maxHeight: "200px", overflowY: "auto" }}
+//                   >
+//                     <table className="table table-bordered text-center align-middle">
+//                       <thead className="table-light">
+//                         <tr>
+//                           <th>Image</th>
+//                           <th>Item</th>
+//                           <th>Qty</th>
+//                           <th>Price</th>
+//                           <th>Subtotal</th>
+//                         </tr>
+//                       </thead>
+//                       <tbody>
+//                         {selectedItems.map((item) => (
+//                           <tr key={item.id}>
+//                             <td>
+//                               <img
+//                                 src={item.image || "/placeholder.jpg"}
+//                                 alt={item.name}
+//                                 style={{
+//                                   width: "60px",
+//                                   height: "50px",
+//                                   objectFit: "cover",
+//                                 }}
+//                                 className="img-thumbnail"
+//                               />
+//                             </td>
+//                             <td>{item.name}</td>
+//                             <td>{item.quantity}</td>
+//                             <td>₱{parseFloat(item.price).toFixed(2)}</td>
+//                             <td>
+//                               ₱{(item.quantity * parseFloat(item.price)).toFixed(2)}
+//                             </td>
+//                           </tr>
+//                         ))}
+//                       </tbody>
+//                     </table>
+//                   </div>
+//                 ) : (
+//                   <p className="text-muted">No items selected.</p>
+//                 )}
+
+//                 <div className="d-flex justify-content-between align-items-center mt-3">
+//                   <h4>
+//                     Total:{" "}
+//                     <span className="text-success">
+//                       ₱{parseFloat(totalPrice).toFixed(2)}
+//                     </span>
+//                   </h4>
+//                   <Button
+//                     variant="success"
+//                     onClick={handleOrderConfirmation}
+//                     disabled={!isAddressComplete()}
+//                   >
+//                     Confirm Order
+//                   </Button>
+//                 </div>
+//               </>
+//             )}
+//           </Modal.Body>
+//           <Modal.Footer>
+//             <Button variant="secondary" onClick={onClose}>
+//               Close
+//             </Button>
+//           </Modal.Footer>
+//         </Modal>
+//       )}
+
+//       {isEditing && (
+//         <EditAddressModal
+//           isEditing={isEditing}
+//           setIsEditing={setIsEditing}
+//           address={address}
+//           setAddress={setAddress}
+//           handleSaveAddress={handleSaveAddress}
+//           options={options}
+//           renderDropdown={renderDropdown}
+//         />
+//       )}
+//     </>
+//   );
+// };
+
+// export default CartModal;
+
+
 import React, { useState, useEffect } from "react";
 import { Modal, Button, Spinner, Form, Alert } from "react-bootstrap";
 import toast from "react-hot-toast";
 import axios from "axios";
+import { useSocket } from "../../hooks/useSocket"; // custom hook for Socket.IO
 import EditAddressModal from "../Profile/EditAddressModal";
 import addressData from "../../data/addressData.json";
 
@@ -17,6 +407,7 @@ const CartModal = ({
   setShowModal,
 }) => {
   const API_URL = process.env.REACT_APP_API_URL;
+  const socket = useSocket(user); // initialize socket with user
 
   const [address, setAddress] = useState({
     region: "",
@@ -36,6 +427,18 @@ const CartModal = ({
     cities: [],
     barangays: [],
   });
+
+  // --- Listen for real-time notifications ---
+  useEffect(() => {
+    if (!socket) return;
+    socket.on("notification", (data) => {
+      toast.success(data.message);
+    });
+
+    return () => {
+      socket.off("notification");
+    };
+  }, [socket]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -71,7 +474,7 @@ const CartModal = ({
     </Form.Group>
   );
 
-  // --- Address and dependent dropdowns ---
+  // --- Load regions and user address ---
   useEffect(() => {
     const loadRegions = () => {
       const regionList = Object.keys(addressData).map((regionCode) => ({
@@ -97,7 +500,7 @@ const CartModal = ({
       };
       fetchAddress();
     }
-  }, [show, user]);
+  }, [show, user, API_URL]);
 
   useEffect(() => {
     if (!address.region) return;
@@ -172,48 +575,46 @@ const CartModal = ({
     }
   };
 
+  const handleOrderConfirmation = async () => {
+    if (!user || !isAddressComplete()) return;
 
-const handleOrderConfirmation = async () => {
-  if (!user || !isAddressComplete()) return;
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("userId", user._id);
+      formData.append("items", JSON.stringify(selectedItems));
+      formData.append("address", JSON.stringify(address));
+      formData.append("notes", "");
 
-  setLoading(true);
-  try {
-    const formData = new FormData();
-    formData.append("userId", user._id);
-    formData.append("items", JSON.stringify(selectedItems));
-    formData.append("address", JSON.stringify(address));
-    formData.append("notes", "");
+      // append images if any are File objects
+      selectedItems.forEach((item) => {
+        if (item.image instanceof File) {
+          formData.append("images", item.image);
+        }
+      });
 
-    // append images (if any are File objects)
-    selectedItems.forEach((item) => {
-      if (item.image instanceof File) {
-        formData.append("images", item.image);
-      }
-    });
+      await axios.post(`${API_URL}/api/orders`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
-    await axios.post(`${API_URL}/api/orders`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+      // remove from cart
+      await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
+        removeItems: selectedItems.map((i) => i.id),
+      });
 
-    // remove from cart etc...
-    await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
-      removeItems: selectedItems.map((i) => i.id),
-    });
-
-    setCartItems([]);
-    setSelectedItems([]);
-    setCartCount(0);
-    setShowModal(false);
-    toast.success("Order placed successfully!");
-    onClose();
-  } catch (err) {
-    console.error("Order failed:", err);
-    setError("Failed to place the order. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
-
+      setCartItems([]);
+      setSelectedItems([]);
+      setCartCount(0);
+      setShowModal(false);
+      toast.success("Order placed successfully!");
+      onClose();
+    } catch (err) {
+      console.error("Order failed:", err);
+      setError("Failed to place the order. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const renderViewMode = () => (
     <div className="card p-4 shadow-sm">
