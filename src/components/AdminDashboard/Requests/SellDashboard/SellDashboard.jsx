@@ -595,8 +595,21 @@ import MapIcon from "@mui/icons-material/Map";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import SellDashboardMap from "./SellDashboardMap";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import ReqDetailModal from "./ReqDetailModal";
+import SellDashboardMap from "./SellDashboardMap";
+
+const markerIcon2x = require("leaflet/dist/images/marker-icon-2x.png");
+const markerIcon = require("leaflet/dist/images/marker-icon.png");
+const markerShadow = require("leaflet/dist/images/marker-shadow.png");
+
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -616,7 +629,6 @@ const SellDashboard = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [priceFilter, setPriceFilter] = useState("");
 
-  // Fetch all sell requests
   useEffect(() => {
     const fetchRequests = async () => {
       try {
@@ -633,12 +645,11 @@ const SellDashboard = () => {
     fetchRequests();
   }, []);
 
-  // Filter requests based on search, status, and price
   useEffect(() => {
     let filtered = requests.filter(
       (request) =>
         request.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        request.contact.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (request.contact || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         request.description.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
@@ -651,7 +662,9 @@ const SellDashboard = () => {
     if (priceFilter === "low") {
       filtered = filtered.filter((req) => req.price < 5000);
     } else if (priceFilter === "mid") {
-      filtered = filtered.filter((req) => req.price >= 5000 && req.price <= 20000);
+      filtered = filtered.filter(
+        (req) => req.price >= 5000 && req.price <= 20000
+      );
     } else if (priceFilter === "high") {
       filtered = filtered.filter((req) => req.price > 20000);
     }
@@ -676,13 +689,42 @@ const SellDashboard = () => {
       });
       setRequests((prev) =>
         prev.map((req) =>
-          req._id === id ? { ...req, status: res.data.status } : req
+          req._id === id ? { ...req, status: res.data.sellRequest.status } : req
         )
       );
       toast.success(`Request ${newStatus}`);
     } catch (error) {
       console.error("Error updating status:", error);
       toast.error("Failed to update status");
+    }
+  };
+
+  // --- Schedule Ocular Visit ---
+  const handleScheduleOcular = async (id) => {
+    const { value: date } = await Swal.fire({
+      title: "Pick an ocular visit date",
+      input: "date",
+      inputAttributes: { min: new Date().toISOString().split("T")[0] },
+      showCancelButton: true,
+      confirmButtonText: "Schedule",
+    });
+    if (!date) return;
+
+    try {
+      const res = await axios.patch(`${API_URL}/api/sell/${id}/schedule-ocular`, {
+        date,
+      });
+
+      setRequests((prev) =>
+        prev.map((r) => (r._id === id ? { ...r, ...res.data } : r))
+      );
+
+      toast.success(
+        `Ocular visit scheduled on ${new Date(date).toLocaleDateString()}`
+      );
+    } catch (error) {
+      console.error("Error scheduling ocular visit:", error);
+      toast.error("Failed to schedule ocular visit");
     }
   };
 
@@ -715,7 +757,7 @@ const SellDashboard = () => {
     docPDF.text(`Name: ${request.name}`, 10, 50);
     docPDF.text(`Contact: ${request.contact}`, 10, 60);
     docPDF.text(
-      `Location: ${request.location?.lat || "N/A"}, ${request.location?.lng || "N/A"}`,
+      `Location: ${request.location?.lat}, ${request.location?.lng}`,
       10,
       70
     );
@@ -725,6 +767,12 @@ const SellDashboard = () => {
       180
     );
     docPDF.text(description, 10, 90);
+    if (request.scheduledDate)
+      docPDF.text(
+        `Scheduled Date: ${new Date(request.scheduledDate).toLocaleDateString()}`,
+        10,
+        110
+      );
     if (request.image) docPDF.addImage(request.image, "JPEG", 120, 40, 70, 70);
     docPDF.save(`Sell_Request_${request._id}.pdf`);
   };
@@ -748,45 +796,6 @@ const SellDashboard = () => {
 
   const handleFilterOpen = (event) => setFilterAnchor(event.currentTarget);
   const handleFilterClose = () => setFilterAnchor(null);
-
-  // --- Schedule Ocular Visit ---
-  const handleScheduleOcular = async (id) => {
-    const { value: date } = await Swal.fire({
-      title: "Pick an ocular visit date",
-      input: "date",
-      inputAttributes: { min: new Date().toISOString().split("T")[0] },
-      showCancelButton: true,
-      confirmButtonText: "Schedule",
-    });
-    if (!date) return;
-
-    try {
-      const res = await axios.patch(`${API_URL}/api/sell/${id}/schedule-ocular`, {
-        date,
-      });
-
-      if (res.data) {
-        setRequests((prev) =>
-          prev.map((r) =>
-            r._id === id
-              ? {
-                  ...r,
-                  status: res.data.status || "ocular_scheduled",
-                  scheduledDate: res.data.scheduledDate || date,
-                }
-              : r
-          )
-        );
-
-        toast.success(
-          `Ocular visit scheduled on ${new Date(date).toLocaleDateString()}`
-        );
-      }
-    } catch (error) {
-      console.error("Error scheduling ocular visit:", error);
-      toast.error("Failed to schedule ocular visit");
-    }
-  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -822,24 +831,22 @@ const SellDashboard = () => {
                 open={Boolean(filterAnchor)}
                 onClose={handleFilterClose}
               >
-                {/* Status Filter */}
                 <MenuItem disabled>Filter by Status</MenuItem>
-                {["", "pending", "accepted", "declined"].map((status) => (
-                  <MenuItem
-                    key={status || "all"}
-                    onClick={() => setStatusFilter(status)}
-                    sx={{
-                      fontWeight: statusFilter === status ? "bold" : "normal",
-                      bgcolor: statusFilter === status ? "grey.700" : "inherit",
-                      color:
-                        statusFilter === status ? "primary.contrastText" : "inherit",
-                    }}
-                  >
-                    {status || "All"}
-                  </MenuItem>
-                ))}
+                {["", "pending", "accepted", "declined", "ocular_scheduled"].map(
+                  (status) => (
+                    <MenuItem
+                      key={status || "all"}
+                      onClick={() => {
+                        setStatusFilter(status);
+                        handleFilterClose();
+                      }}
+                      selected={statusFilter === status}
+                    >
+                      {status || "All"}
+                    </MenuItem>
+                  )
+                )}
                 <MenuItem divider />
-                {/* Price Filter */}
                 <MenuItem disabled>Filter by Price</MenuItem>
                 {[
                   { label: "All", value: "" },
@@ -849,15 +856,11 @@ const SellDashboard = () => {
                 ].map((price) => (
                   <MenuItem
                     key={price.value}
-                    onClick={() => setPriceFilter(price.value)}
-                    sx={{
-                      fontWeight: priceFilter === price.value ? "bold" : "normal",
-                      bgcolor: priceFilter === price.value ? "grey.700" : "inherit",
-                      color:
-                        priceFilter === price.value
-                          ? "primary.contrastText"
-                          : "inherit",
+                    onClick={() => {
+                      setPriceFilter(price.value);
+                      handleFilterClose();
                     }}
+                    selected={priceFilter === price.value}
                   >
                     {price.label}
                   </MenuItem>
@@ -890,6 +893,7 @@ const SellDashboard = () => {
                       "Price",
                       "Description",
                       "Status",
+                      "Scheduled Date",
                       "Actions",
                     ].map((head) => (
                       <TableCell
@@ -925,13 +929,15 @@ const SellDashboard = () => {
                           <Typography
                             sx={{
                               borderColor:
-                                request.status === "accepted"
+                                request.status === "accepted" ||
+                                request.status === "ocular_scheduled"
                                   ? "success.main"
                                   : request.status === "declined"
                                   ? "error.main"
                                   : "warning.main",
                               color:
-                                request.status === "accepted"
+                                request.status === "accepted" ||
+                                request.status === "ocular_scheduled"
                                   ? "success.main"
                                   : request.status === "declined"
                                   ? "error.main"
@@ -946,6 +952,11 @@ const SellDashboard = () => {
                           >
                             {request.status || "pending"}
                           </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {request.scheduledDate
+                            ? new Date(request.scheduledDate).toLocaleDateString()
+                            : "N/A"}
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <IconButton
@@ -974,34 +985,7 @@ const SellDashboard = () => {
                             >
                               Accept
                             </MenuItem>
-                            <MenuItem
-                              onClick={() => {
-                                handleStatusUpdate(request._id, "declined");
-                                handleMenuClose();
-                              }}
-                              disabled={request.status === "declined"}
-                              sx={{
-                                color: "warning.main",
-                                fontWeight: 500,
-                                "&.Mui-disabled": { color: "warning.light" },
-                                "&:hover": { bgcolor: "warning.light", color: "white" },
-                              }}
-                            >
-                              Decline
-                            </MenuItem>
-                            <MenuItem
-                              onClick={() => {
-                                handleDelete(request._id);
-                                handleMenuClose();
-                              }}
-                              sx={{
-                                color: "error.main",
-                                fontWeight: 500,
-                                "&:hover": { bgcolor: "error.light", color: "white" },
-                              }}
-                            >
-                              Delete
-                            </MenuItem>
+
                             <MenuItem
                               onClick={() => {
                                 handleScheduleOcular(request._id);
@@ -1017,6 +1001,37 @@ const SellDashboard = () => {
                             >
                               Schedule Ocular Visit
                             </MenuItem>
+
+                            <MenuItem
+                              onClick={() => {
+                                handleStatusUpdate(request._id, "declined");
+                                handleMenuClose();
+                              }}
+                              disabled={request.status === "declined"}
+                              sx={{
+                                color: "warning.main",
+                                fontWeight: 500,
+                                "&.Mui-disabled": { color: "warning.light" },
+                                "&:hover": { bgcolor: "warning.light", color: "white" },
+                              }}
+                            >
+                              Decline
+                            </MenuItem>
+
+                            <MenuItem
+                              onClick={() => {
+                                handleDelete(request._id);
+                                handleMenuClose();
+                              }}
+                              sx={{
+                                color: "error.main",
+                                fontWeight: 500,
+                                "&:hover": { bgcolor: "error.light", color: "white" },
+                              }}
+                            >
+                              Delete
+                            </MenuItem>
+
                             <MenuItem
                               onClick={() => {
                                 handleDownloadPDF(request);
@@ -1036,7 +1051,7 @@ const SellDashboard = () => {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ color: "grey.500" }}>
+                      <TableCell colSpan={9} align="center" sx={{ color: "grey.500" }}>
                         No results found.
                       </TableCell>
                     </TableRow>
