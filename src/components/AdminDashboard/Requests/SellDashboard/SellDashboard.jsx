@@ -588,7 +588,6 @@ import {
   MenuItem,
   IconButton,
   Tooltip,
-  Avatar,
 } from "@mui/material";
 import Loader from "./Loader";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -596,28 +595,8 @@ import MapIcon from "@mui/icons-material/Map";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import ReqDetailModal from "./ReqDetailModal";
 import SellDashboardMap from "./SellDashboardMap";
-
-const markerIcon2x = require("leaflet/dist/images/marker-icon-2x.png");
-const markerIcon = require("leaflet/dist/images/marker-icon.png");
-const markerShadow = require("leaflet/dist/images/marker-shadow.png");
-
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
-
-const customIcon = new L.Icon({
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
+import ReqDetailModal from "./ReqDetailModal";
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -633,11 +612,11 @@ const SellDashboard = () => {
   const [activeRowId, setActiveRowId] = useState(null);
   const [showMap, setShowMap] = useState(false);
 
-  // Filter dropdown
   const [filterAnchor, setFilterAnchor] = useState(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [priceFilter, setPriceFilter] = useState("");
 
+  // Fetch all sell requests
   useEffect(() => {
     const fetchRequests = async () => {
       try {
@@ -654,6 +633,7 @@ const SellDashboard = () => {
     fetchRequests();
   }, []);
 
+  // Filter requests based on search, status, and price
   useEffect(() => {
     let filtered = requests.filter(
       (request) =>
@@ -671,9 +651,7 @@ const SellDashboard = () => {
     if (priceFilter === "low") {
       filtered = filtered.filter((req) => req.price < 5000);
     } else if (priceFilter === "mid") {
-      filtered = filtered.filter(
-        (req) => req.price >= 5000 && req.price <= 20000
-      );
+      filtered = filtered.filter((req) => req.price >= 5000 && req.price <= 20000);
     } else if (priceFilter === "high") {
       filtered = filtered.filter((req) => req.price > 20000);
     }
@@ -693,7 +671,7 @@ const SellDashboard = () => {
     if (!confirm.isConfirmed) return;
 
     try {
-      const res = await axios.patch(`${API_URL}/api/sell/${id}`, {
+      const res = await axios.put(`${API_URL}/api/sell/${id}/status`, {
         status: newStatus,
       });
       setRequests((prev) =>
@@ -737,7 +715,7 @@ const SellDashboard = () => {
     docPDF.text(`Name: ${request.name}`, 10, 50);
     docPDF.text(`Contact: ${request.contact}`, 10, 60);
     docPDF.text(
-      `Location: ${request.location?.lat}, ${request.location?.lng}`,
+      `Location: ${request.location?.lat || "N/A"}, ${request.location?.lng || "N/A"}`,
       10,
       70
     );
@@ -770,6 +748,45 @@ const SellDashboard = () => {
 
   const handleFilterOpen = (event) => setFilterAnchor(event.currentTarget);
   const handleFilterClose = () => setFilterAnchor(null);
+
+  // --- Schedule Ocular Visit ---
+  const handleScheduleOcular = async (id) => {
+    const { value: date } = await Swal.fire({
+      title: "Pick an ocular visit date",
+      input: "date",
+      inputAttributes: { min: new Date().toISOString().split("T")[0] },
+      showCancelButton: true,
+      confirmButtonText: "Schedule",
+    });
+    if (!date) return;
+
+    try {
+      const res = await axios.patch(`${API_URL}/api/sell/${id}/schedule-ocular`, {
+        date,
+      });
+
+      if (res.data) {
+        setRequests((prev) =>
+          prev.map((r) =>
+            r._id === id
+              ? {
+                  ...r,
+                  status: res.data.status || "ocular_scheduled",
+                  scheduledDate: res.data.scheduledDate || date,
+                }
+              : r
+          )
+        );
+
+        toast.success(
+          `Ocular visit scheduled on ${new Date(date).toLocaleDateString()}`
+        );
+      }
+    } catch (error) {
+      console.error("Error scheduling ocular visit:", error);
+      toast.error("Failed to schedule ocular visit");
+    }
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -984,6 +1001,21 @@ const SellDashboard = () => {
                               }}
                             >
                               Delete
+                            </MenuItem>
+                            <MenuItem
+                              onClick={() => {
+                                handleScheduleOcular(request._id);
+                                handleMenuClose();
+                              }}
+                              disabled={request.status === "ocular_scheduled"}
+                              sx={{
+                                color: "info.main",
+                                fontWeight: 500,
+                                "&.Mui-disabled": { color: "info.light" },
+                                "&:hover": { bgcolor: "info.light", color: "white" },
+                              }}
+                            >
+                              Schedule Ocular Visit
                             </MenuItem>
                             <MenuItem
                               onClick={() => {
