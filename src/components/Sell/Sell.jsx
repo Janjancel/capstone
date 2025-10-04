@@ -16,8 +16,6 @@
 // import markerIcon from "leaflet/dist/images/marker-icon.png";
 // import markerShadow from "leaflet/dist/images/marker-shadow.png";
 // import "leaflet/dist/leaflet.css";
-
-// // MUI imports
 // import {
 //   Box,
 //   Button,
@@ -41,6 +39,7 @@
 //   shadowUrl: markerShadow,
 // });
 
+// // LocationMarker Component
 // const LocationMarker = ({ formData, setFormData }) => {
 //   const map = useMap();
 
@@ -48,10 +47,7 @@
 //     click(e) {
 //       setFormData((prev) => ({
 //         ...prev,
-//         location: {
-//           lat: e.latlng.lat,
-//           lng: e.latlng.lng,
-//         },
+//         location: { lat: e.latlng.lat, lng: e.latlng.lng },
 //       }));
 //       map.flyTo([e.latlng.lat, e.latlng.lng], map.getZoom());
 //     },
@@ -75,14 +71,13 @@
 //     description: "",
 //     image: null,
 //   });
-
 //   const [searchAddress, setSearchAddress] = useState("");
 //   const [isSubmitting, setIsSubmitting] = useState(false);
 //   const [previewUrl, setPreviewUrl] = useState(null);
 
-//   const handleChange = (e) => {
+//   // Input handlers
+//   const handleChange = (e) =>
 //     setFormData({ ...formData, [e.target.name]: e.target.value });
-//   };
 
 //   const handleImageChange = (e) => {
 //     const file = e.target.files[0];
@@ -92,6 +87,7 @@
 //     }
 //   };
 
+//   // Geocode address search
 //   const geocodeAddress = async () => {
 //     if (!searchAddress.trim()) return;
 //     try {
@@ -109,7 +105,7 @@
 //         }));
 //         toast.success("Address pinned on map ✅");
 //       } else {
-//         toast.error("Address not found. Try again.");
+//         Swal.fire("Not Found", "Address not found. Try a different one.", "info");
 //       }
 //     } catch (error) {
 //       console.error("Geocode Error:", error);
@@ -117,6 +113,7 @@
 //     }
 //   };
 
+//   // Get user's current location
 //   const getLocation = () => {
 //     if (!navigator.geolocation) {
 //       Swal.fire(
@@ -164,7 +161,6 @@
 //               ...prev,
 //               location: { lat: data.latitude, lng: data.longitude },
 //             }));
-//             toast.success("Location detected via IP 📡");
 //           }
 //         } catch (err) {
 //           Swal.fire(
@@ -181,6 +177,7 @@
 //     getLocation();
 //   }, []);
 
+//   // Submit handler
 //   const handleSubmit = async (e) => {
 //     e.preventDefault();
 //     setIsSubmitting(true);
@@ -194,11 +191,7 @@
 
 //     try {
 //       const formDataToUpload = new FormData();
-
-//       if (formData.image) {
-//         formDataToUpload.append("image", formData.image);
-//       }
-
+//       if (formData.image) formDataToUpload.append("image", formData.image);
 //       formDataToUpload.append("userId", userId);
 //       formDataToUpload.append("name", formData.name);
 //       formDataToUpload.append("contact", formData.contact);
@@ -236,12 +229,9 @@
 
 //   return (
 //     <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
-//       <Toaster position="top-right" reverseOrder={false} />
-
+//       <Toaster position="top-right" />
 //       <Box textAlign="center" mb={4}>
-//         <Typography variant="h4" fontWeight="bold">
-//           Sell Request
-//         </Typography>
+//         <Typography variant="h4" fontWeight="bold">Sell Request</Typography>
 //         <Typography color="text.secondary">
 //           Click on the map or search to pin the selling location
 //         </Typography>
@@ -252,7 +242,7 @@
 //           <Card elevation={4}>
 //             <CardContent>
 //               <form onSubmit={handleSubmit}>
-//                 {/* Search Address */}
+//                 {/* Search */}
 //                 <Box display="flex" gap={2} mb={3}>
 //                   <TextField
 //                     fullWidth
@@ -260,11 +250,7 @@
 //                     value={searchAddress}
 //                     onChange={(e) => setSearchAddress(e.target.value)}
 //                   />
-//                   <Button
-//                     variant="contained"
-//                     color="primary"
-//                     onClick={geocodeAddress}
-//                   >
+//                   <Button variant="contained" color="primary" onClick={geocodeAddress}>
 //                     Search
 //                   </Button>
 //                 </Box>
@@ -291,22 +277,13 @@
 //                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 //                       attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
 //                     />
-//                     <LocationMarker
-//                       formData={formData}
-//                       setFormData={setFormData}
-//                     />
+//                     <LocationMarker formData={formData} setFormData={setFormData} />
 //                     {formData.location.lat && formData.location.lng && (
-//                       <Marker
-//                         position={[
-//                           formData.location.lat,
-//                           formData.location.lng,
-//                         ]}
-//                       />
+//                       <Marker position={[formData.location.lat, formData.location.lng]} />
 //                     )}
 //                   </MapContainer>
 //                 </Box>
 
-//                 {/* Retry Button */}
 //                 <Button
 //                   variant="outlined"
 //                   color="secondary"
@@ -358,54 +335,29 @@
 //                   margin="normal"
 //                 />
 
-//                 {/* Image Upload + Preview */}
+//                 {/* Image Upload */}
 //                 <Box mt={2}>
-//                   <Button
-//                     variant="outlined"
-//                     color="success"
-//                     component="label"
-//                     fullWidth
-//                   >
+//                   <Button variant="outlined" color="success" component="label" fullWidth>
 //                     Upload Image
-//                     <input
-//                       type="file"
-//                       accept="image/*"
-//                       hidden
-//                       onChange={handleImageChange}
-//                     />
+//                     <input type="file" accept="image/*" hidden onChange={handleImageChange} />
 //                   </Button>
-
 //                   {previewUrl && (
 //                     <Box
 //                       mt={2}
 //                       textAlign="center"
-//                       sx={{
-//                         border: "1px solid #ccc",
-//                         borderRadius: "8px",
-//                         p: 1,
-//                         bgcolor: "#fafafa",
-//                       }}
+//                       sx={{ border: "1px solid #ccc", borderRadius: "8px", p: 1, bgcolor: "#fafafa" }}
 //                     >
-//                       <Typography variant="body2" color="text.secondary">
-//                         Preview:
-//                       </Typography>
+//                       <Typography variant="body2" color="text.secondary">Preview:</Typography>
 //                       <Box
 //                         component="img"
 //                         src={previewUrl}
 //                         alt="Preview"
-//                         sx={{
-//                           mt: 1,
-//                           maxHeight: 200,
-//                           maxWidth: "100%",
-//                           borderRadius: "8px",
-//                           objectFit: "cover",
-//                         }}
+//                         sx={{ mt: 1, maxHeight: 200, maxWidth: "100%", borderRadius: "8px", objectFit: "cover" }}
 //                       />
 //                     </Box>
 //                   )}
 //                 </Box>
 
-//                 {/* Submit */}
 //                 <Box mt={3}>
 //                   <Button
 //                     type="submit"

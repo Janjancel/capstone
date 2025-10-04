@@ -588,6 +588,13 @@ import {
   MenuItem,
   IconButton,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Grid,
+  Card,
+  CardMedia,
 } from "@mui/material";
 import Loader from "./Loader";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -762,18 +769,38 @@ const SellDashboard = () => {
       180
     );
     docPDF.text(description, 10, 90);
-    if (request.image) docPDF.addImage(request.image, "JPEG", 120, 40, 70, 70);
+
+    let y = 110;
+    if (request.images) {
+      if (request.images.front) {
+        docPDF.text("Front View:", 10, y);
+        docPDF.addImage(request.images.front, "JPEG", 50, y - 5, 60, 60);
+        y += 70;
+      }
+      if (request.images.side) {
+        docPDF.text("Side View:", 10, y);
+        docPDF.addImage(request.images.side, "JPEG", 50, y - 5, 60, 60);
+        y += 70;
+      }
+      if (request.images.back) {
+        docPDF.text("Back View:", 10, y);
+        docPDF.addImage(request.images.back, "JPEG", 50, y - 5, 60, 60);
+        y += 70;
+      }
+    }
+
     if (request.ocularVisit)
       docPDF.text(
         `Ocular Visit: ${new Date(request.ocularVisit).toLocaleString()}`,
         10,
-        110
+        y + 10
       );
+
     docPDF.save(`Sell_Request_${request._id}.pdf`);
   };
 
   const handleDownloadExcel = () => {
-    const exportData = filteredRequests.map(({ image, ...rest }) => rest);
+    const exportData = filteredRequests.map(({ images, ...rest }) => rest);
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sell Requests");
@@ -796,6 +823,7 @@ const SellDashboard = () => {
         <Loader />
       ) : (
         <>
+          {/* Top Bar */}
           <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography variant="h5">Sell Requests</Typography>
@@ -806,6 +834,7 @@ const SellDashboard = () => {
               </Tooltip>
             </Box>
 
+            {/* Search + Filters */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <TextField
                 size="small"
@@ -869,6 +898,7 @@ const SellDashboard = () => {
             </Box>
           </Box>
 
+          {/* Map */}
           {showMap && (
             <Box sx={{ mb: 2 }}>
               <SellDashboardMap
@@ -878,6 +908,7 @@ const SellDashboard = () => {
             </Box>
           )}
 
+          {/* Table */}
           {error ? (
             <Typography color="error">{error}</Typography>
           ) : (
@@ -1079,6 +1110,7 @@ const SellDashboard = () => {
             </TableContainer>
           )}
 
+          {/* Download Excel */}
           <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
             <Button
               variant="contained"
@@ -1090,6 +1122,96 @@ const SellDashboard = () => {
           </Box>
         </>
       )}
+
+      {/* --- Request Detail Modal --- */}
+      <Dialog
+        open={Boolean(selectedRequest)}
+        onClose={() => setSelectedRequest(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Sell Request Details</DialogTitle>
+        <DialogContent dividers>
+          {selectedRequest && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <Typography><strong>ID:</strong> {selectedRequest._id}</Typography>
+              <Typography><strong>Name:</strong> {selectedRequest.name}</Typography>
+              <Typography><strong>Contact:</strong> {selectedRequest.contact}</Typography>
+              <Typography>
+                <strong>Location:</strong>{" "}
+                {selectedRequest.location?.lat && selectedRequest.location?.lng
+                  ? `${selectedRequest.location.lat}, ${selectedRequest.location.lng}`
+                  : "N/A"}
+              </Typography>
+              <Typography><strong>Price:</strong> ₱{selectedRequest.price}</Typography>
+              <Typography><strong>Description:</strong> {selectedRequest.description}</Typography>
+              <Typography><strong>Status:</strong> {selectedRequest.status || "pending"}</Typography>
+              <Typography>
+                <strong>Ocular Visit:</strong>{" "}
+                {selectedRequest.ocularVisit
+                  ? new Date(selectedRequest.ocularVisit).toLocaleString()
+                  : "Not scheduled"}
+              </Typography>
+
+              {/* Images */}
+              {selectedRequest.images && (
+                <Grid container spacing={2} sx={{ mt: 2 }}>
+                  {selectedRequest.images.front && (
+                    <Grid item xs={12} sm={4}>
+                      <Card>
+                        <CardMedia
+                          component="img"
+                          image={selectedRequest.images.front}
+                          alt="Front"
+                          sx={{ height: 180, objectFit: "cover" }}
+                        />
+                        <Typography align="center" sx={{ py: 1 }}>
+                          Front
+                        </Typography>
+                      </Card>
+                    </Grid>
+                  )}
+                  {selectedRequest.images.side && (
+                    <Grid item xs={12} sm={4}>
+                      <Card>
+                        <CardMedia
+                          component="img"
+                          image={selectedRequest.images.side}
+                          alt="Side"
+                          sx={{ height: 180, objectFit: "cover" }}
+                        />
+                        <Typography align="center" sx={{ py: 1 }}>
+                          Side
+                        </Typography>
+                      </Card>
+                    </Grid>
+                  )}
+                  {selectedRequest.images.back && (
+                    <Grid item xs={12} sm={4}>
+                      <Card>
+                        <CardMedia
+                          component="img"
+                          image={selectedRequest.images.back}
+                          alt="Back"
+                          sx={{ height: 180, objectFit: "cover" }}
+                        />
+                        <Typography align="center" sx={{ py: 1 }}>
+                          Back
+                        </Typography>
+                      </Card>
+                    </Grid>
+                  )}
+                </Grid>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedRequest(null)} color="primary">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
