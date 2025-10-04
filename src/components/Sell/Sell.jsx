@@ -498,25 +498,33 @@ const Sell = () => {
     contact: "",
     price: "",
     description: "",
-    image: null,
+    frontImage: null,
+    sideImage: null,
+    backImage: null,
   });
+
+  const [previewUrls, setPreviewUrls] = useState({
+    frontImage: null,
+    sideImage: null,
+    backImage: null,
+  });
+
   const [searchAddress, setSearchAddress] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState(null);
 
-  // Input handlers
+  // Handle inputs
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleImageChange = (e) => {
+  const handleImageChange = (e, type) => {
     const file = e.target.files[0];
     if (file) {
-      setFormData({ ...formData, image: file });
-      setPreviewUrl(URL.createObjectURL(file));
+      setFormData((prev) => ({ ...prev, [type]: file }));
+      setPreviewUrls((prev) => ({ ...prev, [type]: URL.createObjectURL(file) }));
     }
   };
 
-  // Geocode address search
+  // Geocode
   const geocodeAddress = async () => {
     if (!searchAddress.trim()) return;
     try {
@@ -542,7 +550,7 @@ const Sell = () => {
     }
   };
 
-  // Get user's current location
+  // Location detection
   const getLocation = () => {
     if (!navigator.geolocation) {
       Swal.fire(
@@ -564,24 +572,8 @@ const Sell = () => {
         }));
         toast.success("Location detected 📍");
       },
-      async (error) => {
-        let message = "";
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            message = "Permission denied. Trying IP-based location instead.";
-            break;
-          case error.POSITION_UNAVAILABLE:
-            message = "Location unavailable.";
-            break;
-          case error.TIMEOUT:
-            message = "Location request timed out.";
-            break;
-          default:
-            message = "An unknown error occurred.";
-        }
-
-        Swal.fire("Location Error", message, "warning");
-
+      async () => {
+        Swal.fire("Location Error", "Using IP-based location instead.", "warning");
         try {
           const res = await fetch("https://ipapi.co/json/");
           const data = await res.json();
@@ -592,11 +584,7 @@ const Sell = () => {
             }));
           }
         } catch (err) {
-          Swal.fire(
-            "Backup Location Error",
-            "Could not fetch location via IP either.",
-            "error"
-          );
+          Swal.fire("Backup Location Error", "Could not fetch location.", "error");
         }
       }
     );
@@ -620,7 +608,13 @@ const Sell = () => {
 
     try {
       const formDataToUpload = new FormData();
-      if (formData.image) formDataToUpload.append("image", formData.image);
+      if (formData.frontImage)
+        formDataToUpload.append("frontImage", formData.frontImage);
+      if (formData.sideImage)
+        formDataToUpload.append("sideImage", formData.sideImage);
+      if (formData.backImage)
+        formDataToUpload.append("backImage", formData.backImage);
+
       formDataToUpload.append("userId", userId);
       formDataToUpload.append("name", formData.name);
       formDataToUpload.append("contact", formData.contact);
@@ -640,14 +634,19 @@ const Sell = () => {
           contact: "",
           price: "",
           description: "",
-          image: null,
+          frontImage: null,
+          sideImage: null,
+          backImage: null,
         });
-        setPreviewUrl(null);
+        setPreviewUrls({ frontImage: null, sideImage: null, backImage: null });
       } else {
         toast.error(res.data.message || "Failed to submit request ❌");
       }
     } catch (error) {
-      console.error("Error submitting sell request:", error.response?.data || error.message);
+      console.error(
+        "Error submitting sell request:",
+        error.response?.data || error.message
+      );
       toast.error("Server error. Please try again later.");
     } finally {
       setIsSubmitting(false);
@@ -660,7 +659,9 @@ const Sell = () => {
     <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
       <Toaster position="top-right" />
       <Box textAlign="center" mb={4}>
-        <Typography variant="h4" fontWeight="bold">Sell Request</Typography>
+        <Typography variant="h4" fontWeight="bold">
+          Sell Request
+        </Typography>
         <Typography color="text.secondary">
           Click on the map or search to pin the selling location
         </Typography>
@@ -671,7 +672,7 @@ const Sell = () => {
           <Card elevation={4}>
             <CardContent>
               <form onSubmit={handleSubmit}>
-                {/* Search */}
+                {/* Address Search */}
                 <Box display="flex" gap={2} mb={3}>
                   <TextField
                     fullWidth
@@ -679,7 +680,11 @@ const Sell = () => {
                     value={searchAddress}
                     onChange={(e) => setSearchAddress(e.target.value)}
                   />
-                  <Button variant="contained" color="primary" onClick={geocodeAddress}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={geocodeAddress}
+                  >
                     Search
                   </Button>
                 </Box>
@@ -706,9 +711,17 @@ const Sell = () => {
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                       attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
                     />
-                    <LocationMarker formData={formData} setFormData={setFormData} />
+                    <LocationMarker
+                      formData={formData}
+                      setFormData={setFormData}
+                    />
                     {formData.location.lat && formData.location.lng && (
-                      <Marker position={[formData.location.lat, formData.location.lng]} />
+                      <Marker
+                        position={[
+                          formData.location.lat,
+                          formData.location.lng,
+                        ]}
+                      />
                     )}
                   </MapContainer>
                 </Box>
@@ -764,28 +777,64 @@ const Sell = () => {
                   margin="normal"
                 />
 
-                {/* Image Upload */}
-                <Box mt={2}>
-                  <Button variant="outlined" color="success" component="label" fullWidth>
-                    Upload Image
-                    <input type="file" accept="image/*" hidden onChange={handleImageChange} />
-                  </Button>
-                  {previewUrl && (
-                    <Box
-                      mt={2}
-                      textAlign="center"
-                      sx={{ border: "1px solid #ccc", borderRadius: "8px", p: 1, bgcolor: "#fafafa" }}
+                {/* Image Uploads */}
+                {["frontImage", "sideImage", "backImage"].map((type) => (
+                  <Box mt={2} key={type}>
+                    <Button
+                      variant="outlined"
+                      color="success"
+                      component="label"
+                      fullWidth
                     >
-                      <Typography variant="body2" color="text.secondary">Preview:</Typography>
-                      <Box
-                        component="img"
-                        src={previewUrl}
-                        alt="Preview"
-                        sx={{ mt: 1, maxHeight: 200, maxWidth: "100%", borderRadius: "8px", objectFit: "cover" }}
+                      Upload {type.replace("Image", "")} Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(e) => handleImageChange(e, type)}
                       />
-                    </Box>
-                  )}
-                </Box>
+                    </Button>
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      color="text.secondary"
+                      sx={{ mt: 0.5 }}
+                    >
+                      {`Please upload a clear ${type.replace(
+                        "Image",
+                        ""
+                      )} view of your item.`}
+                    </Typography>
+                    {previewUrls[type] && (
+                      <Box
+                        mt={2}
+                        textAlign="center"
+                        sx={{
+                          border: "1px solid #ccc",
+                          borderRadius: "8px",
+                          p: 1,
+                          bgcolor: "#fafafa",
+                        }}
+                      >
+                        <Typography variant="body2" color="text.secondary">
+                          Preview:
+                        </Typography>
+                        <Box
+                          component="img"
+                          src={previewUrls[type]}
+                          alt={`${type} preview`}
+                          sx={{
+                            mt: 1,
+                            maxHeight: 200,
+                            maxWidth: "100%",
+                            borderRadius: "8px",
+                            objectFit: "cover",
+                          }}
+                        />
+                      </Box>
+                    )}
+                  </Box>
+                ))}
 
                 <Box mt={3}>
                   <Button
