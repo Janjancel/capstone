@@ -595,28 +595,7 @@ import MapIcon from "@mui/icons-material/Map";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-import ReqDetailModal from "./ReqDetailModal";
 import SellDashboardMap from "./SellDashboardMap";
-
-const markerIcon2x = require("leaflet/dist/images/marker-icon-2x.png");
-const markerIcon = require("leaflet/dist/images/marker-icon.png");
-const markerShadow = require("leaflet/dist/images/marker-shadow.png");
-
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
-
-const customIcon = new L.Icon({
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -637,6 +616,7 @@ const SellDashboard = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [priceFilter, setPriceFilter] = useState("");
 
+  // --- Fetch Requests ---
   useEffect(() => {
     const fetchRequests = async () => {
       try {
@@ -653,12 +633,13 @@ const SellDashboard = () => {
     fetchRequests();
   }, []);
 
+  // --- Filter & Search ---
   useEffect(() => {
     let filtered = requests.filter(
       (request) =>
         request.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        request.contact.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        request.description.toLowerCase().includes(searchQuery.toLowerCase())
+        (request.contact || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (request.description || "").toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     if (statusFilter) {
@@ -757,6 +738,7 @@ const SellDashboard = () => {
     }
   };
 
+  // --- Download Handlers ---
   const handleDownloadPDF = (request) => {
     const docPDF = new jsPDF();
     docPDF.setFontSize(16);
@@ -766,7 +748,11 @@ const SellDashboard = () => {
     docPDF.text(`Name: ${request.name}`, 10, 50);
     docPDF.text(`Contact: ${request.contact}`, 10, 60);
     docPDF.text(
-      `Location: ${request.location?.lat}, ${request.location?.lng}`,
+      `Location: ${
+        request.location?.lat && request.location?.lng
+          ? `${request.location.lat}, ${request.location.lng}`
+          : "N/A"
+      }`,
       10,
       70
     );
@@ -777,6 +763,12 @@ const SellDashboard = () => {
     );
     docPDF.text(description, 10, 90);
     if (request.image) docPDF.addImage(request.image, "JPEG", 120, 40, 70, 70);
+    if (request.ocularVisit)
+      docPDF.text(
+        `Ocular Visit: ${new Date(request.ocularVisit).toLocaleString()}`,
+        10,
+        110
+      );
     docPDF.save(`Sell_Request_${request._id}.pdf`);
   };
 
@@ -796,9 +788,6 @@ const SellDashboard = () => {
     setAnchorEl(null);
     setActiveRowId(null);
   };
-
-  const handleFilterOpen = (event) => setFilterAnchor(event.currentTarget);
-  const handleFilterClose = () => setFilterAnchor(null);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -825,16 +814,15 @@ const SellDashboard = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               <Tooltip title="Filter">
-                <IconButton onClick={handleFilterOpen}>
+                <IconButton onClick={(e) => setFilterAnchor(e.currentTarget)}>
                   <FilterListIcon />
                 </IconButton>
               </Tooltip>
               <Menu
                 anchorEl={filterAnchor}
                 open={Boolean(filterAnchor)}
-                onClose={handleFilterClose}
+                onClose={() => setFilterAnchor(null)}
               >
-                {/* Status Filter */}
                 <MenuItem disabled>Filter by Status</MenuItem>
                 {["", "pending", "accepted", "declined", "ocular_scheduled"].map(
                   (status) => (
@@ -855,7 +843,6 @@ const SellDashboard = () => {
                   )
                 )}
                 <MenuItem divider />
-                {/* Price Filter */}
                 <MenuItem disabled>Filter by Price</MenuItem>
                 {[
                   { label: "All", value: "" },
@@ -922,7 +909,6 @@ const SellDashboard = () => {
                     ))}
                   </TableRow>
                 </TableHead>
-
                 <TableBody>
                   {filteredRequests.length > 0 ? (
                     filteredRequests.map((request) => (
@@ -1102,13 +1088,6 @@ const SellDashboard = () => {
               Download Excel
             </Button>
           </Box>
-
-          {selectedRequest && (
-            <ReqDetailModal
-              request={selectedRequest}
-              onClose={() => setSelectedRequest(null)}
-            />
-          )}
         </>
       )}
     </Box>

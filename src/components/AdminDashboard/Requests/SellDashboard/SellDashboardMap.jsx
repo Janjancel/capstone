@@ -1,9 +1,9 @@
 import React from "react";
-import { Box, Typography, IconButton } from "@mui/material";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import CloseIcon from "@mui/icons-material/Close";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { IconButton } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 
 const markerIcon2x = require("leaflet/dist/images/marker-icon-2x.png");
 const markerIcon = require("leaflet/dist/images/marker-icon.png");
@@ -17,6 +17,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
+// Custom marker icon
 const customIcon = new L.Icon({
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
@@ -25,6 +26,7 @@ const customIcon = new L.Icon({
 });
 
 const SellDashboardMap = ({ requests, onClose }) => {
+  // Filter only valid locations with numeric lat/lng
   const validLocations = requests.filter(
     (loc) =>
       loc.location &&
@@ -32,17 +34,13 @@ const SellDashboardMap = ({ requests, onClose }) => {
       typeof loc.location.lng === "number"
   );
 
-  const defaultPosition = [13.9311, 121.6176];
+  const defaultPosition = [13.9311, 121.6176]; // Default if no valid locations
   const mapCenter = validLocations.length
     ? [validLocations[0].location.lat, validLocations[0].location.lng]
     : defaultPosition;
 
   return (
     <div style={{ position: "relative", height: 400, marginBottom: "1rem" }}>
-      {/* <Typography variant="h4" mb={2}>
-        Sell Request Map
-      </Typography> */}
-
       {/* Close Button */}
       <IconButton
         onClick={onClose}
@@ -61,30 +59,29 @@ const SellDashboardMap = ({ requests, onClose }) => {
         <CloseIcon />
       </IconButton>
 
-      <Box sx={{ height: 400 }}>
-        <MapContainer center={mapCenter} zoom={6} style={{ height: "100%", width: "100%" }}>
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
-          />
-          {validLocations.map(({ _id, location, name, description, image }) => (
-            <Marker key={_id} position={[location.lat, location.lng]} icon={customIcon}>
-              <Popup>
-                <strong>📍 {name}</strong>
-                <br />
-                {description}
-                {image && (
-                  <img
-                    src={image}
-                    alt={name}
-                    style={{ width: "100%", maxHeight: 200, marginTop: 10 }}
-                  />
-                )}
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
-      </Box>
+      <MapContainer center={mapCenter} zoom={6} style={{ height: "100%", width: "100%" }}>
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
+        />
+
+        {validLocations.map(({ _id, location, name, description, image }) => (
+          <Marker key={_id} position={[location.lat, location.lng]} icon={customIcon}>
+            <Popup>
+              <strong>📍 {name}</strong>
+              <br />
+              {description}
+              {image && (
+                <img
+                  src={image}
+                  alt={name}
+                  style={{ width: "100%", maxHeight: 200, marginTop: 10 }}
+                />
+              )}
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
     </div>
   );
 };
