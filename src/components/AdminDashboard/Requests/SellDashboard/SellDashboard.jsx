@@ -692,7 +692,7 @@ const SellDashboard = () => {
     if (!confirm.isConfirmed) return;
 
     try {
-      const res = await axios.put(`${API_URL}/api/sell/${id}/status`, {
+      const res = await axios.patch(`${API_URL}/api/sell/${id}/status`, {
         status: newStatus,
       });
       setRequests((prev) =>
