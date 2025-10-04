@@ -722,7 +722,7 @@ const SellDashboard = () => {
     if (!date) return;
 
     try {
-      const res = await axios.put(`${API_URL}/api/sell/${id}/schedule-ocular`, {
+      const res = await axios.patch(`${API_URL}/api/sell/${id}/schedule-ocular`, {
         ocularVisit: date,
       });
       setRequests((prev) =>
