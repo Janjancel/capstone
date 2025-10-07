@@ -180,22 +180,27 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
                       <TableCell>
                         <Box
                           sx={{
-                            width: "60px",
-                            height: "50px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            overflow: "hidden",
+                            width: 60,
+                            height: 50,
+                            position: 'relative',
+                            overflow: 'hidden',
                             borderRadius: 1,
+                            bgcolor: 'background.paper',
+                            boxShadow: 1
                           }}
                         >
                           <img
                             src={item.image || "/placeholder.jpg"}
                             alt={item.name}
                             style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              display: 'block'
+                            }}
+                            onError={(e) => {
+                              e.target.src = "/placeholder.jpg";
+                              e.target.onerror = null;
                             }}
                           />
                         </Box>
