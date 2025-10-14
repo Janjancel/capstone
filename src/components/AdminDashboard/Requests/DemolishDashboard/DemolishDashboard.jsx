@@ -78,12 +78,18 @@ const DemolishDashboard = () => {
   }, []);
 
   useEffect(() => {
-    let filtered = requests.filter(
-      (request) =>
-        request.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (request.contact || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        request.description.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    let filtered = requests.filter((request) => {
+      const q = searchQuery.toLowerCase();
+      const idText = (request.demolishId || request._id || "")
+        .toString()
+        .toLowerCase();
+      return (
+        idText.includes(q) ||
+        (request.name || "").toLowerCase().includes(q) ||
+        (request.contact || "").toLowerCase().includes(q) ||
+        (request.description || "").toLowerCase().includes(q)
+      );
+    });
 
     if (statusFilter) {
       filtered = filtered.filter(
@@ -242,21 +248,22 @@ const DemolishDashboard = () => {
   };
 
   const handleDownloadPDF = (request) => {
+    const displayId = request.demolishId || request._id;
     const docPDF = new jsPDF();
     docPDF.setFontSize(16);
     docPDF.text("Demolish Request Details", 10, 20);
     docPDF.setFontSize(12);
-    docPDF.text(`ID: ${request._id}`, 10, 40);
-    docPDF.text(`Name: ${request.name}`, 10, 50);
-    docPDF.text(`Contact: ${request.contact}`, 10, 60);
+    docPDF.text(`ID: ${displayId}`, 10, 40);
+    docPDF.text(`Name: ${request.name || ""}`, 10, 50);
+    docPDF.text(`Contact: ${request.contact || ""}`, 10, 60);
     docPDF.text(
-      `Location: ${request.location?.lat}, ${request.location?.lng}`,
+      `Location: ${request.location?.lat ?? "N/A"}, ${request.location?.lng ?? "N/A"}`,
       10,
       70
     );
-    docPDF.text(`Price: ₱${request.price}`, 10, 80);
+    docPDF.text(`Price: ₱${request.price ?? ""}`, 10, 80);
     const description = docPDF.splitTextToSize(
-      `Description: ${request.description}`,
+      `Description: ${request.description || ""}`,
       180
     );
     docPDF.text(description, 10, 90);
@@ -287,7 +294,7 @@ const DemolishDashboard = () => {
         y + 10
       );
     }
-    docPDF.save(`Demolish_Request_${request._id}.pdf`);
+    docPDF.save(`Demolish_Request_${displayId}.pdf`);
   };
 
   const handleDownloadExcel = () => {
@@ -345,18 +352,20 @@ const DemolishDashboard = () => {
                 onClose={handleFilterClose}
               >
                 <MenuItem disabled>Filter by Status</MenuItem>
-                {["", "pending", "scheduled", "ocular_scheduled", "declined"].map((status) => (
-                  <MenuItem
-                    key={status || "all"}
-                    onClick={() => {
-                      setStatusFilter(status);
-                      handleFilterClose();
-                    }}
-                    selected={statusFilter === status}
-                  >
-                    {status || "All"}
-                  </MenuItem>
-                ))}
+                {["", "pending", "scheduled", "ocular_scheduled", "declined"].map(
+                  (status) => (
+                    <MenuItem
+                      key={status || "all"}
+                      onClick={() => {
+                        setStatusFilter(status);
+                        handleFilterClose();
+                      }}
+                      selected={statusFilter === status}
+                    >
+                      {status || "All"}
+                    </MenuItem>
+                  )
+                )}
                 <MenuItem divider />
                 <MenuItem disabled>Filter by Price</MenuItem>
                 {[
@@ -423,168 +432,165 @@ const DemolishDashboard = () => {
 
                 <TableBody>
                   {filteredRequests.length > 0 ? (
-                    filteredRequests.map((request) => (
-                      <TableRow
-                        key={request._id}
-                        hover
-                        sx={{ cursor: "pointer" }}
-                        onClick={() => setSelectedRequest(request)}
-                      >
-                        <TableCell>{request._id}</TableCell>
-                        <TableCell>{request.name}</TableCell>
-                        <TableCell>{request.contact}</TableCell>
-                        <TableCell>
-                          {request.location?.lat && request.location?.lng
-                            ? `${request.location.lat}, ${request.location.lng}`
-                            : "N/A"}
-                        </TableCell>
-                        <TableCell>₱{request.price}</TableCell>
-                        <TableCell>{request.description}</TableCell>
-                        <TableCell>
-                          <Typography
-                            sx={{
-                              borderColor:
-                                request.status === "scheduled" ||
-                                request.status === "ocular_scheduled"
-                                  ? "success.main"
-                                  : request.status === "declined"
-                                  ? "error.main"
-                                  : "warning.main",
-                              color:
-                                request.status === "scheduled" ||
-                                request.status === "ocular_scheduled"
-                                  ? "success.main"
-                                  : request.status === "declined"
-                                  ? "error.main"
-                                  : "warning.main",
-                              px: 1.5,
-                              py: 0.25,
-                              borderRadius: 1,
-                              display: "inline-block",
-                              fontWeight: 500,
-                              textTransform: "capitalize",
-                            }}
-                          >
-                            {request.status || "pending"}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {request.scheduledDate
-                            ? new Date(
-                                request.scheduledDate
-                              ).toLocaleDateString()
-                            : "N/A"}
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <IconButton
-                            onClick={(e) => handleMenuOpen(e, request._id)}
-                          >
-                            <MoreVertIcon />
-                          </IconButton>
-
-                          <Menu
-                            anchorEl={anchorEl}
-                            open={activeRowId === request._id}
-                            onClose={handleMenuClose}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MenuItem
-                              onClick={() => {
-                                handleScheduleDemolition(request._id);
-                                handleMenuClose();
-                              }}
+                    filteredRequests.map((request) => {
+                      const displayId = request.demolishId || request._id;
+                      return (
+                        <TableRow
+                          key={request._id}
+                          hover
+                          sx={{ cursor: "pointer" }}
+                          onClick={() => setSelectedRequest(request)}
+                        >
+                          <TableCell>{displayId}</TableCell>
+                          <TableCell>{request.name}</TableCell>
+                          <TableCell>{request.contact}</TableCell>
+                          <TableCell>
+                            {request.location?.lat && request.location?.lng
+                              ? `${request.location.lat}, ${request.location.lng}`
+                              : "N/A"}
+                          </TableCell>
+                          <TableCell>₱{request.price}</TableCell>
+                          <TableCell>{request.description}</TableCell>
+                          <TableCell>
+                            <Typography
                               sx={{
-                                color: "success.main",
+                                borderColor:
+                                  request.status === "scheduled" ||
+                                  request.status === "ocular_scheduled"
+                                    ? "success.main"
+                                    : request.status === "declined"
+                                    ? "error.main"
+                                    : "warning.main",
+                                color:
+                                  request.status === "scheduled" ||
+                                  request.status === "ocular_scheduled"
+                                    ? "success.main"
+                                    : request.status === "declined"
+                                    ? "error.main"
+                                    : "warning.main",
+                                px: 1.5,
+                                py: 0.25,
+                                borderRadius: 1,
+                                display: "inline-block",
                                 fontWeight: 500,
-                                "&:hover": {
-                                  bgcolor: "success.light",
-                                  color: "white",
-                                },
+                                textTransform: "capitalize",
                               }}
                             >
-                              Schedule Demolition
-                            </MenuItem>
-
-                            <MenuItem
-                              onClick={() => {
-                                handleScheduleOcular(request._id);
-                                handleMenuClose();
-                              }}
-                              sx={{
-                                color: "info.main",
-                                fontWeight: 500,
-                                "&:hover": {
-                                  bgcolor: "info.light",
-                                  color: "white",
-                                },
-                              }}
+                              {request.status || "pending"}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {request.scheduledDate
+                              ? new Date(request.scheduledDate).toLocaleDateString()
+                              : "N/A"}
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <IconButton
+                              onClick={(e) => handleMenuOpen(e, request._id)}
                             >
-                              Schedule Ocular Visit
-                            </MenuItem>
+                              <MoreVertIcon />
+                            </IconButton>
 
-                            <MenuItem
-                              onClick={() => {
-                                handleStatusUpdate(request._id, "declined");
-                                handleMenuClose();
-                              }}
-                              disabled={request.status === "declined"}
-                              sx={{
-                                color: "warning.main",
-                                fontWeight: 500,
-                                "&.Mui-disabled": { color: "warning.light" },
-                                "&:hover": {
-                                  bgcolor: "warning.light",
-                                  color: "white",
-                                },
-                              }}
+                            <Menu
+                              anchorEl={anchorEl}
+                              open={activeRowId === request._id}
+                              onClose={handleMenuClose}
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              Decline
-                            </MenuItem>
+                              <MenuItem
+                                onClick={() => {
+                                  handleScheduleDemolition(request._id);
+                                  handleMenuClose();
+                                }}
+                                sx={{
+                                  color: "success.main",
+                                  fontWeight: 500,
+                                  "&:hover": {
+                                    bgcolor: "success.light",
+                                    color: "white",
+                                  },
+                                }}
+                              >
+                                Schedule Demolition
+                              </MenuItem>
 
-                            <MenuItem
-                              onClick={() => {
-                                handleDelete(request._id);
-                                handleMenuClose();
-                              }}
-                              sx={{
-                                color: "error.main",
-                                fontWeight: 500,
-                                "&:hover": {
-                                  bgcolor: "error.light",
-                                  color: "white",
-                                },
-                              }}
-                            >
-                              Delete
-                            </MenuItem>
+                              <MenuItem
+                                onClick={() => {
+                                  handleScheduleOcular(request._id);
+                                  handleMenuClose();
+                                }}
+                                sx={{
+                                  color: "info.main",
+                                  fontWeight: 500,
+                                  "&:hover": {
+                                    bgcolor: "info.light",
+                                    color: "white",
+                                  },
+                                }}
+                              >
+                                Schedule Ocular Visit
+                              </MenuItem>
 
-                            <MenuItem
-                              onClick={() => {
-                                handleDownloadPDF(request);
-                                handleMenuClose();
-                              }}
-                              sx={{
-                                color: "primary.main",
-                                fontWeight: 500,
-                                "&:hover": {
-                                  bgcolor: "primary.light",
-                                  color: "white",
-                                },
-                              }}
-                            >
-                              Download PDF
-                            </MenuItem>
-                          </Menu>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                              <MenuItem
+                                onClick={() => {
+                                  handleStatusUpdate(request._id, "declined");
+                                  handleMenuClose();
+                                }}
+                                disabled={request.status === "declined"}
+                                sx={{
+                                  color: "warning.main",
+                                  fontWeight: 500,
+                                  "&.Mui-disabled": { color: "warning.light" },
+                                  "&:hover": {
+                                    bgcolor: "warning.light",
+                                    color: "white",
+                                  },
+                                }}
+                              >
+                                Decline
+                              </MenuItem>
+
+                              <MenuItem
+                                onClick={() => {
+                                  handleDelete(request._id);
+                                  handleMenuClose();
+                                }}
+                                sx={{
+                                  color: "error.main",
+                                  fontWeight: 500,
+                                  "&:hover": {
+                                    bgcolor: "error.light",
+                                    color: "white",
+                                  },
+                                }}
+                              >
+                                Delete
+                              </MenuItem>
+
+                              <MenuItem
+                                onClick={() => {
+                                  handleDownloadPDF(request);
+                                  handleMenuClose();
+                                }}
+                                sx={{
+                                  color: "primary.main",
+                                  fontWeight: 500,
+                                  "&:hover": {
+                                    bgcolor: "primary.light",
+                                    color: "white",
+                                  },
+                                }}
+                              >
+                                Download PDF
+                              </MenuItem>
+                            </Menu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   ) : (
                     <TableRow>
-                      <TableCell
-                        colSpan={9}
-                        align="center"
-                        sx={{ color: "grey.500" }}
-                      >
+                      <TableCell colSpan={9} align="center" sx={{ color: "grey.500" }}>
                         No results found.
                       </TableCell>
                     </TableRow>
@@ -595,11 +601,7 @@ const DemolishDashboard = () => {
           )}
 
           <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
-            <Button
-              variant="contained"
-              color="success"
-              onClick={handleDownloadExcel}
-            >
+            <Button variant="contained" color="success" onClick={handleDownloadExcel}>
               Download Excel
             </Button>
           </Box>
