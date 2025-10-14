@@ -99,15 +99,13 @@
 
 // export default EditItemModal;
 
-import React, { useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   Modal,
   Form,
   Button,
   Image,
   Spinner,
-  Row,
-  Col,
 } from "react-bootstrap";
 import Swal from "sweetalert2";
 import axios from "axios";
@@ -117,16 +115,51 @@ const EditItemModal = ({ show, onHide, item }) => {
   const [updatedItem, setUpdatedItem] = useState({
     name: item.name || "",
     description: item.description || "",
-    price: item.price || "",
+    price: item.price ?? "",
+    condition: item.condition ?? "",
     origin: item.origin || "",
     age: item.age || "",
-    category: item.category || "Table", // ✅ default to current or Table
-    images: [], // new uploads
+    category: item.category || "Table",
+    images: [], // newly added files (not existing URLs)
   });
 
+  // previews contains both existing URLs and new blob: URLs
+  const [preview, setPreview] = useState(item.images || []);
+  const [removedExisting, setRemovedExisting] = useState([]); // URLs removed by user
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState(item.images || []); // ✅ show existing images
+
+  // ===== file input (hidden) =====
+  const fileInputRef = useRef(null);
+
+  const resetFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""; // fully clear <input type="file">
+    }
+  };
+
+  // reset state on modal open/close or when item changes
+  useEffect(() => {
+    if (show) {
+      setUpdatedItem({
+        name: item.name || "",
+        description: item.description || "",
+        price: item.price ?? "",
+        condition: item.condition ?? "",
+        origin: item.origin || "",
+        age: item.age || "",
+        category: item.category || "Table",
+        images: [],
+      });
+      setPreview(item.images || []);
+      setRemovedExisting([]);
+      resetFileInput(); // ensure input is empty on open
+    } else {
+      // also clear when hidden
+      resetFileInput();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show, item]);
 
   const categories = [
     "Table",
@@ -140,27 +173,90 @@ const EditItemModal = ({ show, onHide, item }) => {
     "Bed",
   ];
 
-  const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
-    if (!files.length) return;
+  const handleOpenFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFiles = (files) => {
+    const incoming = Array.from(files || []);
+    if (!incoming.length) return;
 
     setUploading(true);
 
-    // Show previews
-    const newPreviews = files.map((file) => URL.createObjectURL(file));
-    setPreview((prev) => [...prev, ...newPreviews]);
+    // limit to 5 new images (matches backend upload.array("images", 5))
+    const firstFive = incoming.slice(0, 5).filter((f) => f.type.startsWith("image/"));
 
-    // Save files for upload
-    setUpdatedItem((prev) => ({
-      ...prev,
-      images: [...prev.images, ...files],
-    }));
+    // create blob previews
+    const newBlobPreviews = firstFive.map((file) => URL.createObjectURL(file));
+
+    // add to preview and to updatedItem.images
+    setPreview((prev) => [...prev, ...newBlobPreviews]);
+    setUpdatedItem((prev) => ({ ...prev, images: [...prev.images, ...firstFive] }));
 
     setUploading(false);
+    // do NOT reset input here — user may add more; we’ll clear on save/close
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleFiles(e.dataTransfer.files);
+  };
+
+  const onDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  // Remove a specific preview (either existing URL or blob)
+  const handleRemovePreview = (src) => {
+    // If it's a blob URL, remove the corresponding File object from updatedItem.images
+    if (src.startsWith("blob:")) {
+      setUpdatedItem((prev) => {
+        // Find the blob index by matching object URLs
+        // Since order is consistent with preview push, we remove by index of src among blob previews
+        let blobIndex = -1;
+        let count = -1;
+        // Build a map of current blob URLs to index in images
+        const currentBlobURLs = prev.images.map((f) => URL.createObjectURL(f));
+        // Find match
+        for (let i = 0; i < currentBlobURLs.length; i++) {
+          if (currentBlobURLs[i] === src) {
+            blobIndex = i;
+            break;
+          }
+        }
+        // Revoke created object URLs to avoid memory leaks (best-effort)
+        currentBlobURLs.forEach((u) => URL.revokeObjectURL(u));
+
+        if (blobIndex > -1) {
+          const newFiles = [...prev.images];
+          newFiles.splice(blobIndex, 1);
+          return { ...prev, images: newFiles };
+        }
+        return prev;
+      });
+    } else {
+      // Existing server URL — mark as removed so we don't keep it
+      setRemovedExisting((prev) => Array.from(new Set([...prev, src])));
+    }
+
+    // Remove from visual previews
+    setPreview((prev) => prev.filter((p) => p !== src));
   };
 
   const handleSave = async () => {
-    // ✅ SweetAlert confirmation before save
+    // validate condition
+    if (
+      updatedItem.condition !== "" &&
+      (Number.isNaN(Number(updatedItem.condition)) ||
+        Number(updatedItem.condition) < 1 ||
+        Number(updatedItem.condition) > 10)
+    ) {
+      toast.error("Condition must be a number between 1 and 10");
+      return;
+    }
+
     const confirm = await Swal.fire({
       title: "Are you sure?",
       text: "Do you want to save these changes?",
@@ -168,39 +264,47 @@ const EditItemModal = ({ show, onHide, item }) => {
       showCancelButton: true,
       confirmButtonText: "Yes, save it!",
     });
-
     if (!confirm.isConfirmed) return;
 
     setLoading(true);
     try {
+      // Compute which existing images to keep (item.images minus removedExisting)
+      const original = Array.isArray(item.images) ? item.images : [];
+      const keepExisting = original.filter((url) => !removedExisting.includes(url));
+
       const formData = new FormData();
       formData.append("name", updatedItem.name);
       formData.append("description", updatedItem.description);
       formData.append("price", updatedItem.price);
+      formData.append("condition", updatedItem.condition);
       formData.append("origin", updatedItem.origin);
       formData.append("age", updatedItem.age);
-      formData.append("category", updatedItem.category); // ✅ send category
+      formData.append("category", updatedItem.category);
 
-      // Append new images
+      // Provide keepImages so the backend can overwrite with these + new uploads
+      formData.append("keepImages", JSON.stringify(keepExisting));
+
+      // Append new images (files)
       if (updatedItem.images.length > 0) {
-        updatedItem.images.forEach((file) => {
-          formData.append("images", file);
-        });
+        updatedItem.images.forEach((file) => formData.append("images", file));
       }
 
       await axios.put(
         `${process.env.REACT_APP_API_URL}/api/items/${item._id}`,
         formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
+        { headers: { "Content-Type": "multipart/form-data" } }
       );
 
       toast.success("Item updated successfully!");
+
+      // Reset file input & local new images (as requested)
+      setUpdatedItem((prev) => ({ ...prev, images: [] }));
+      resetFileInput();
+
       onHide();
     } catch (error) {
       console.error("Update error:", error);
-      toast.error("Failed to update item.");
+      toast.error(error?.response?.data?.error || "Failed to update item.");
     } finally {
       setLoading(false);
     }
@@ -232,11 +336,40 @@ const EditItemModal = ({ show, onHide, item }) => {
                 onChange={(e) =>
                   setUpdatedItem({ ...updatedItem, [field]: e.target.value })
                 }
+                min={field === "price" ? 0 : undefined}
+                step={field === "price" ? "0.01" : undefined}
+                placeholder={
+                  field === "price" ? "e.g., 1500.00" :
+                  field === "age" ? "e.g., 80" : undefined
+                }
               />
+              {field === "price" && (
+                <Form.Text muted>Enter a valid number (no currency symbols).</Form.Text>
+              )}
             </Form.Group>
           ))}
 
-          {/* ✅ Category Dropdown with current category pre-selected */}
+          {/* Condition (1–10) */}
+          <Form.Group className="mb-3">
+            <Form.Label>Condition (1–10)</Form.Label>
+            <Form.Control
+              type="number"
+              value={updatedItem.condition}
+              onChange={(e) =>
+                setUpdatedItem({ ...updatedItem, condition: e.target.value })
+              }
+              min={1}
+              max={10}
+              step={1}
+              required
+              placeholder="Rate from 1 (poor) to 10 (excellent)"
+            />
+            <Form.Text muted>
+              Required. Whole number between 1 and 10. If unchanged, the current value will be kept.
+            </Form.Text>
+          </Form.Group>
+
+          {/* Category */}
           <Form.Group className="mb-3">
             <Form.Label>Category</Form.Label>
             <Form.Select
@@ -253,38 +386,126 @@ const EditItemModal = ({ show, onHide, item }) => {
             </Form.Select>
           </Form.Group>
 
+          {/* Enhanced dashed dropzone with removable thumbnails */}
           <Form.Group className="mb-3">
             <Form.Label>Item Images</Form.Label>
+
+            {/* Hidden input */}
             <Form.Control
-              id="file-input"
+              ref={fileInputRef}
               type="file"
               accept="image/*"
               multiple
-              onChange={handleImageChange}
+              onChange={(e) => handleFiles(e.target.files)}
+              style={{ display: "none" }}
             />
-            {uploading && (
-              <div className="mt-2">
-                <Spinner animation="border" size="sm" /> Preparing images...
-              </div>
-            )}
-            {preview.length > 0 && !uploading && (
-              <Row className="mt-3">
-                {preview.map((src, idx) => (
-                  <Col xs={4} key={idx} className="mb-2">
+
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={handleOpenFilePicker}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") handleOpenFilePicker();
+              }}
+              onDragOver={onDragOver}
+              onDrop={onDrop}
+              style={{
+                border: "2px dashed #6c757d",
+                borderRadius: 8,
+                minHeight: 140,
+                padding: 12,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: preview?.length ? "flex-start" : "center",
+                gap: 8,
+                flexWrap: "wrap",
+                cursor: "pointer",
+                background: "#fafafa",
+              }}
+              aria-label="Image upload area"
+              title="Click to select images or drag & drop here"
+            >
+              {uploading ? (
+                <div className="d-flex align-items-center gap-2">
+                  <Spinner animation="border" size="sm" /> Preparing images...
+                </div>
+              ) : preview?.length ? (
+                preview.map((src, idx) => (
+                  <div
+                    key={`${src}-${idx}`}
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: 6,
+                      overflow: "hidden",
+                      border: "1px solid #dee2e6",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "#fff",
+                      position: "relative",
+                    }}
+                  >
+                    {/* X (remove) button */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemovePreview(src);
+                      }}
+                      aria-label="Remove image"
+                      title="Remove image"
+                      style={{
+                        position: "absolute",
+                        top: 4,
+                        right: 4,
+                        width: 22,
+                        height: 22,
+                        borderRadius: "50%",
+                        border: "none",
+                        background: "rgba(0,0,0,0.6)",
+                        color: "#fff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        lineHeight: 1,
+                        fontSize: 14,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ×
+                    </button>
+
                     <Image
                       src={src}
-                      thumbnail
-                      style={{ maxHeight: "120px", objectFit: "contain" }}
+                      alt={`preview-${idx}`}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
-                  </Col>
-                ))}
-              </Row>
-            )}
+                  </div>
+                ))
+              ) : (
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                    Click to upload or drag & drop
+                  </div>
+                  <div style={{ fontSize: 12, color: "#6c757d" }}>
+                    Up to 5 new images • JPG/PNG • Clear, well-lit photos recommended
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Form.Text muted>
+              Remove any existing image with the “×” button. New images you add here will be appended.
+              <br />
+              <strong>Note:</strong> The form sends <code>keepImages</code> so the server can overwrite the image list
+              (existing kept + newly uploaded). Make sure your API uses it accordingly.
+            </Form.Text>
           </Form.Group>
         </Form>
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onHide}>
+        <Button variant="secondary" onClick={() => { onHide(); resetFileInput(); }}>
           Cancel
         </Button>
         <Button
