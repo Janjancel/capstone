@@ -1,5 +1,3 @@
-
-
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
@@ -26,7 +24,6 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import MapIcon from "@mui/icons-material/Map";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import ReqDetailModal from "./ReqDetailModal";
@@ -61,6 +58,60 @@ const DemolishDashboard = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [priceFilter, setPriceFilter] = useState("");
 
+  // ===== Reverse Geocoding State & Helpers =====
+  const [addressMap, setAddressMap] = useState({}); // { "lat,lng": "Pretty address" }
+
+  const fmtKey = (lat, lng) => `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`;
+
+  const getCachedAddress = (key) => {
+    try {
+      const raw = localStorage.getItem("geo_address_cache");
+      if (!raw) return null;
+      const json = JSON.parse(raw);
+      return json[key] || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const setCachedAddress = (key, val) => {
+    try {
+      const raw = localStorage.getItem("geo_address_cache");
+      const json = raw ? JSON.parse(raw) : {};
+      json[key] = val;
+      localStorage.setItem("geo_address_cache", JSON.stringify(json));
+    } catch {}
+  };
+
+  const reverseGeocode = async (lat, lng) => {
+    const key = fmtKey(lat, lng);
+    const cached = getCachedAddress(key);
+    if (cached) return cached;
+
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fil,en`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error("Reverse geocode failed");
+
+    const data = await res.json();
+    const a = data.address || {};
+    const pretty =
+      data.display_name ||
+      [a.road, a.suburb || a.village || a.barangay, a.town || a.city || a.municipality, a.state, a.country]
+        .filter(Boolean)
+        .join(", ");
+    const value = pretty || key;
+
+    setCachedAddress(key, value);
+    return value;
+  };
+
+  const renderLocation = (loc) => {
+    if (!(loc?.lat && loc?.lng)) return "N/A";
+    const key = fmtKey(loc.lat, loc.lng);
+    return addressMap[key] || `${loc.lat}, ${loc.lng} (looking up...)`;
+  };
+  // =============================================
+
   useEffect(() => {
     const fetchRequests = async () => {
       try {
@@ -77,38 +128,80 @@ const DemolishDashboard = () => {
     fetchRequests();
   }, []);
 
+  // Kick off reverse geocoding when requests change
+  useEffect(() => {
+    const run = async () => {
+      const coords = requests
+        .filter((r) => r?.location?.lat && r?.location?.lng)
+        .map((r) => fmtKey(r.location.lat, r.location.lng));
+      const unique = Array.from(new Set(coords));
+      if (!unique.length) return;
+
+      // Seed from localStorage
+      const seed = {};
+      unique.forEach((k) => {
+        const cached = getCachedAddress(k);
+        if (cached) seed[k] = cached;
+      });
+      if (Object.keys(seed).length) setAddressMap((prev) => ({ ...seed, ...prev }));
+
+      const missing = unique.filter((k) => !seed[k]);
+      if (!missing.length) return;
+
+      const results = {};
+      for (const k of missing) {
+        const [lat, lng] = k.split(",").map(Number);
+        try {
+          // be polite to the API
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((r) => setTimeout(r, 150));
+          // eslint-disable-next-line no-await-in-loop
+          const addr = await reverseGeocode(lat, lng);
+          results[k] = addr;
+        } catch {
+          results[k] = k; // fallback to coords if error
+        }
+      }
+      setAddressMap((prev) => ({ ...prev, ...results }));
+    };
+    run();
+  }, [requests]);
+
   useEffect(() => {
     let filtered = requests.filter((request) => {
       const q = searchQuery.toLowerCase();
-      const idText = (request.demolishId || request._id || "")
-        .toString()
-        .toLowerCase();
+      const idText = (request.demolishId || request._id || "").toString().toLowerCase();
+
+      // Also allow searching by human-readable address
+      let addressText = "";
+      if (request?.location?.lat && request?.location?.lng) {
+        const key = fmtKey(request.location.lat, request.location.lng);
+        addressText = (addressMap[key] || "").toLowerCase();
+      }
+
       return (
         idText.includes(q) ||
         (request.name || "").toLowerCase().includes(q) ||
         (request.contact || "").toLowerCase().includes(q) ||
-        (request.description || "").toLowerCase().includes(q)
+        (request.description || "").toLowerCase().includes(q) ||
+        addressText.includes(q)
       );
     });
 
     if (statusFilter) {
-      filtered = filtered.filter(
-        (req) => (req.status || "pending") === statusFilter
-      );
+      filtered = filtered.filter((req) => (req.status || "pending") === statusFilter);
     }
 
     if (priceFilter === "low") {
       filtered = filtered.filter((req) => req.price < 5000);
     } else if (priceFilter === "mid") {
-      filtered = filtered.filter(
-        (req) => req.price >= 5000 && req.price <= 20000
-      );
+      filtered = filtered.filter((req) => req.price >= 5000 && req.price <= 20000);
     } else if (priceFilter === "high") {
       filtered = filtered.filter((req) => req.price > 20000);
     }
 
     setFilteredRequests(filtered);
-  }, [searchQuery, statusFilter, priceFilter, requests]);
+  }, [searchQuery, statusFilter, priceFilter, requests, addressMap]);
 
   // SCHEDULE DEMOLITION
   const handleScheduleDemolition = async (id) => {
@@ -130,26 +223,19 @@ const DemolishDashboard = () => {
         scheduledDate: date,
       });
 
-      setRequests((prev) =>
-        prev.map((r) => (r._id === id ? { ...r, ...res.data } : r))
-      );
+      setRequests((prev) => prev.map((r) => (r._id === id ? { ...r, ...res.data } : r)));
 
-      // notification
       try {
         await axios.post(`${API_URL}/api/notifications`, {
           userId: res.data.userId,
           orderId: res.data._id,
-          message: `Your demolition request has been scheduled on ${new Date(
-            date
-          ).toLocaleDateString()}`,
+          message: `Your demolition request has been scheduled on ${new Date(date).toLocaleDateString()}`,
         });
       } catch (notifErr) {
         console.error("Failed to create notification:", notifErr);
       }
 
-      toast.success(
-        `Demolition scheduled on ${new Date(date).toLocaleDateString()}`
-      );
+      toast.success(`Demolition scheduled on ${new Date(date).toLocaleDateString()}`);
     } catch (error) {
       console.error("Error scheduling:", error);
       toast.error("Failed to schedule demolition");
@@ -176,26 +262,19 @@ const DemolishDashboard = () => {
         scheduledDate: date,
       });
 
-      setRequests((prev) =>
-        prev.map((r) => (r._id === id ? { ...r, ...res.data } : r))
-      );
+      setRequests((prev) => prev.map((r) => (r._id === id ? { ...r, ...res.data } : r)));
 
-      // notification
       try {
         await axios.post(`${API_URL}/api/notifications`, {
           userId: res.data.userId,
           orderId: res.data._id,
-          message: `Your ocular visit has been scheduled on ${new Date(
-            date
-          ).toLocaleDateString()}`,
+          message: `Your ocular visit has been scheduled on ${new Date(date).toLocaleDateString()}`,
         });
       } catch (notifErr) {
         console.error("Failed to create notification:", notifErr);
       }
 
-      toast.success(
-        `Ocular visit scheduled on ${new Date(date).toLocaleDateString()}`
-      );
+      toast.success(`Ocular visit scheduled on ${new Date(date).toLocaleDateString()}`);
     } catch (error) {
       console.error("Error scheduling ocular visit:", error);
       toast.error("Failed to schedule ocular visit");
@@ -216,11 +295,7 @@ const DemolishDashboard = () => {
       const res = await axios.patch(`${API_URL}/api/demolish/${id}`, {
         status: newStatus,
       });
-      setRequests((prev) =>
-        prev.map((req) =>
-          req._id === id ? { ...req, status: res.data.status } : req
-        )
-      );
+      setRequests((prev) => prev.map((req) => (req._id === id ? { ...req, status: res.data.status } : req)));
       toast.success(`Request ${newStatus}`);
     } catch (error) {
       console.error("Error updating status:", error);
@@ -247,58 +322,16 @@ const DemolishDashboard = () => {
     }
   };
 
-  const handleDownloadPDF = (request) => {
-    const displayId = request.demolishId || request._id;
-    const docPDF = new jsPDF();
-    docPDF.setFontSize(16);
-    docPDF.text("Demolish Request Details", 10, 20);
-    docPDF.setFontSize(12);
-    docPDF.text(`ID: ${displayId}`, 10, 40);
-    docPDF.text(`Name: ${request.name || ""}`, 10, 50);
-    docPDF.text(`Contact: ${request.contact || ""}`, 10, 60);
-    docPDF.text(
-      `Location: ${request.location?.lat ?? "N/A"}, ${request.location?.lng ?? "N/A"}`,
-      10,
-      70
-    );
-    docPDF.text(`Price: ₱${request.price ?? ""}`, 10, 80);
-    const description = docPDF.splitTextToSize(
-      `Description: ${request.description || ""}`,
-      180
-    );
-    docPDF.text(description, 10, 90);
-
-    let y = 110;
-    if (request.images) {
-      if (request.images.front) {
-        docPDF.text("Front View:", 10, y);
-        docPDF.addImage(request.images.front, "JPEG", 50, y - 5, 60, 60);
-        y += 70;
-      }
-      if (request.images.side) {
-        docPDF.text("Side View:", 10, y);
-        docPDF.addImage(request.images.side, "JPEG", 50, y - 5, 60, 60);
-        y += 70;
-      }
-      if (request.images.back) {
-        docPDF.text("Back View:", 10, y);
-        docPDF.addImage(request.images.back, "JPEG", 50, y - 5, 60, 60);
-        y += 70;
-      }
-    }
-
-    if (request.scheduledDate) {
-      docPDF.text(
-        `Scheduled Date: ${new Date(request.scheduledDate).toLocaleDateString()}`,
-        10,
-        y + 10
-      );
-    }
-    docPDF.save(`Demolish_Request_${displayId}.pdf`);
-  };
-
   const handleDownloadExcel = () => {
-    const exportData = filteredRequests.map(({ images, ...rest }) => rest);
+    // Export with a human-readable location
+    const exportData = filteredRequests.map(({ images, location, ...rest }) => {
+      let address = "N/A";
+      if (location?.lat && location?.lng) {
+        const key = fmtKey(location.lat, location.lng);
+        address = addressMap[key] || `${location.lat}, ${location.lng}`;
+      }
+      return { ...rest, location: address };
+    });
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Demolish Requests");
@@ -346,26 +379,20 @@ const DemolishDashboard = () => {
                   <FilterListIcon />
                 </IconButton>
               </Tooltip>
-              <Menu
-                anchorEl={filterAnchor}
-                open={Boolean(filterAnchor)}
-                onClose={handleFilterClose}
-              >
+              <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={handleFilterClose}>
                 <MenuItem disabled>Filter by Status</MenuItem>
-                {["", "pending", "scheduled", "ocular_scheduled", "declined"].map(
-                  (status) => (
-                    <MenuItem
-                      key={status || "all"}
-                      onClick={() => {
-                        setStatusFilter(status);
-                        handleFilterClose();
-                      }}
-                      selected={statusFilter === status}
-                    >
-                      {status || "All"}
-                    </MenuItem>
-                  )
-                )}
+                {["", "pending", "scheduled", "ocular_scheduled", "declined"].map((status) => (
+                  <MenuItem
+                    key={status || "all"}
+                    onClick={() => {
+                      setStatusFilter(status);
+                      handleFilterClose();
+                    }}
+                    selected={statusFilter === status}
+                  >
+                    {status || "All"}
+                  </MenuItem>
+                ))}
                 <MenuItem divider />
                 <MenuItem disabled>Filter by Price</MenuItem>
                 {[
@@ -391,10 +418,7 @@ const DemolishDashboard = () => {
 
           {showMap && (
             <Box sx={{ mb: 2 }}>
-              <DemolishDashboardMap
-                requests={filteredRequests}
-                onClose={() => setShowMap(false)}
-              />
+              <DemolishDashboardMap requests={filteredRequests} onClose={() => setShowMap(false)} />
             </Box>
           )}
 
@@ -411,7 +435,7 @@ const DemolishDashboard = () => {
                       "Contact",
                       "Location",
                       "Price",
-                      "Description",
+                      // "Description", // REMOVED from table as requested
                       "Status",
                       "Scheduled Date",
                       "Actions",
@@ -444,26 +468,20 @@ const DemolishDashboard = () => {
                           <TableCell>{displayId}</TableCell>
                           <TableCell>{request.name}</TableCell>
                           <TableCell>{request.contact}</TableCell>
-                          <TableCell>
-                            {request.location?.lat && request.location?.lng
-                              ? `${request.location.lat}, ${request.location.lng}`
-                              : "N/A"}
-                          </TableCell>
+                          <TableCell>{renderLocation(request.location)}</TableCell>
                           <TableCell>₱{request.price}</TableCell>
-                          <TableCell>{request.description}</TableCell>
+                          {/* Description column removed */}
                           <TableCell>
                             <Typography
                               sx={{
                                 borderColor:
-                                  request.status === "scheduled" ||
-                                  request.status === "ocular_scheduled"
+                                  request.status === "scheduled" || request.status === "ocular_scheduled"
                                     ? "success.main"
                                     : request.status === "declined"
                                     ? "error.main"
                                     : "warning.main",
                                 color:
-                                  request.status === "scheduled" ||
-                                  request.status === "ocular_scheduled"
+                                  request.status === "scheduled" || request.status === "ocular_scheduled"
                                     ? "success.main"
                                     : request.status === "declined"
                                     ? "error.main"
@@ -480,14 +498,10 @@ const DemolishDashboard = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {request.scheduledDate
-                              ? new Date(request.scheduledDate).toLocaleDateString()
-                              : "N/A"}
+                            {request.scheduledDate ? new Date(request.scheduledDate).toLocaleDateString() : "N/A"}
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
-                            <IconButton
-                              onClick={(e) => handleMenuOpen(e, request._id)}
-                            >
+                            <IconButton onClick={(e) => handleMenuOpen(e, request._id)}>
                               <MoreVertIcon />
                             </IconButton>
 
@@ -505,10 +519,7 @@ const DemolishDashboard = () => {
                                 sx={{
                                   color: "success.main",
                                   fontWeight: 500,
-                                  "&:hover": {
-                                    bgcolor: "success.light",
-                                    color: "white",
-                                  },
+                                  "&:hover": { bgcolor: "success.light", color: "white" },
                                 }}
                               >
                                 Schedule Demolition
@@ -522,10 +533,7 @@ const DemolishDashboard = () => {
                                 sx={{
                                   color: "info.main",
                                   fontWeight: 500,
-                                  "&:hover": {
-                                    bgcolor: "info.light",
-                                    color: "white",
-                                  },
+                                  "&:hover": { bgcolor: "info.light", color: "white" },
                                 }}
                               >
                                 Schedule Ocular Visit
@@ -541,10 +549,7 @@ const DemolishDashboard = () => {
                                   color: "warning.main",
                                   fontWeight: 500,
                                   "&.Mui-disabled": { color: "warning.light" },
-                                  "&:hover": {
-                                    bgcolor: "warning.light",
-                                    color: "white",
-                                  },
+                                  "&:hover": { bgcolor: "warning.light", color: "white" },
                                 }}
                               >
                                 Decline
@@ -558,10 +563,7 @@ const DemolishDashboard = () => {
                                 sx={{
                                   color: "error.main",
                                   fontWeight: 500,
-                                  "&:hover": {
-                                    bgcolor: "error.light",
-                                    color: "white",
-                                  },
+                                  "&:hover": { bgcolor: "error.light", color: "white" },
                                 }}
                               >
                                 Delete
@@ -569,16 +571,14 @@ const DemolishDashboard = () => {
 
                               <MenuItem
                                 onClick={() => {
-                                  handleDownloadPDF(request);
+                                  // Open the modal; the modal owns the PDF download now
+                                  setSelectedRequest(request);
                                   handleMenuClose();
                                 }}
                                 sx={{
                                   color: "primary.main",
                                   fontWeight: 500,
-                                  "&:hover": {
-                                    bgcolor: "primary.light",
-                                    color: "white",
-                                  },
+                                  "&:hover": { bgcolor: "primary.light", color: "white" },
                                 }}
                               >
                                 Download PDF
@@ -590,7 +590,8 @@ const DemolishDashboard = () => {
                     })
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={9} align="center" sx={{ color: "grey.500" }}>
+                      {/* One less column now (removed Description) => total columns = 8 */}
+                      <TableCell colSpan={8} align="center" sx={{ color: "grey.500" }}>
                         No results found.
                       </TableCell>
                     </TableRow>
@@ -607,10 +608,7 @@ const DemolishDashboard = () => {
           </Box>
 
           {selectedRequest && (
-            <ReqDetailModal
-              request={selectedRequest}
-              onClose={() => setSelectedRequest(null)}
-            />
+            <ReqDetailModal request={selectedRequest} onClose={() => setSelectedRequest(null)} />
           )}
         </>
       )}
