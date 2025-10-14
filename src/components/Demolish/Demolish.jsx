@@ -1,6 +1,4 @@
-
-
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Swal from "sweetalert2";
 import toast, { Toaster } from "react-hot-toast";
 import axios from "axios";
@@ -81,17 +79,46 @@ const Demolition = () => {
     backImage: null,
   });
 
+  // ---- hidden file inputs (one per slot) ----
+  const fileInputRefs = {
+    frontImage: useRef(null),
+    sideImage: useRef(null),
+    backImage: useRef(null),
+  };
+
+  const openPicker = (type) => fileInputRefs[type]?.current?.click();
+  const resetPicker = (type) => {
+    const ref = fileInputRefs[type]?.current;
+    if (ref) ref.value = "";
+  };
+
   // Handle input change
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  // Handle image selection
-  const handleImageChange = (e, type) => {
-    const file = e.target.files[0];
-    if (file) {
-      setFormData(prev => ({ ...prev, [type]: file }));
-      setPreviewUrls(prev => ({ ...prev, [type]: URL.createObjectURL(file) }));
+  // Handle image selection (single file per slot)
+  const handleImageChange = (file, type) => {
+    if (!file) return;
+    // Revoke old objectURL to avoid memory leaks
+    if (previewUrls[type]?.startsWith("blob:")) {
+      URL.revokeObjectURL(previewUrls[type]);
     }
+    setFormData((prev) => ({ ...prev, [type]: file }));
+    setPreviewUrls((prev) => ({ ...prev, [type]: URL.createObjectURL(file) }));
+  };
+
+  // Drag & drop handlers per slot
+  const onDrop = (e, type) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer?.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      handleImageChange(file, type);
+    }
+  };
+  const onDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   // Geocode address search
@@ -110,11 +137,13 @@ const Demolition = () => {
           ...prev,
           location: { lat: parseFloat(lat), lng: parseFloat(lon) },
         }));
+        toast.success("Address pinned on map ✅");
       } else {
         Swal.fire("Not Found", "Address not found. Try a different one.", "info");
       }
     } catch (error) {
       console.error("Geocode Error:", error);
+      toast.error("Error searching address.");
     }
   };
 
@@ -138,6 +167,7 @@ const Demolition = () => {
             lng: position.coords.longitude,
           },
         }));
+        toast.success("Location detected 📍");
       },
       async (error) => {
         let message = "";
@@ -179,6 +209,13 @@ const Demolition = () => {
 
   useEffect(() => {
     getLocation();
+    return () => {
+      // cleanup object URLs on unmount
+      Object.values(previewUrls).forEach((u) => {
+        if (u?.startsWith("blob:")) URL.revokeObjectURL(u);
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Handle form submission
@@ -210,7 +247,7 @@ const Demolition = () => {
         formDataToUpload.append("backImage", formData.backImage);
 
       // Save demolition request
-      const demolishRes = await axios.post(`${API_URL}/api/demolish`, formDataToUpload, {
+      await axios.post(`${API_URL}/api/demolish`, formDataToUpload, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -225,6 +262,7 @@ const Demolition = () => {
 
       toast.success("Your demolition request has been submitted.");
 
+      // Reset form
       setFormData({
         location: { lat: null, lng: null },
         name: "",
@@ -235,11 +273,21 @@ const Demolition = () => {
         sideImage: null,
         backImage: null,
       });
+
+      // Revoke and reset previews
+      Object.values(previewUrls).forEach((u) => {
+        if (u?.startsWith("blob:")) URL.revokeObjectURL(u);
+      });
       setPreviewUrls({
         frontImage: null,
         sideImage: null,
         backImage: null,
       });
+
+      // Clear the file inputs
+      resetPicker("frontImage");
+      resetPicker("sideImage");
+      resetPicker("backImage");
     } catch (error) {
       console.error(
         "Error submitting demolition request:",
@@ -252,6 +300,99 @@ const Demolition = () => {
   };
 
   const defaultPosition = [13.5, 122];
+
+  // Reusable dashed dropzone per slot
+  const renderDropzone = (type, label) => (
+    <Box mt={2}>
+      {/* Hidden native input to keep upload behavior intact */}
+      <input
+        ref={fileInputRefs[type]}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          handleImageChange(file, type);
+          // keep input value until submit; we clear on success/reset
+        }}
+      />
+
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        {label}
+      </Typography>
+
+      <Box
+        role="button"
+        tabIndex={0}
+        onClick={() => openPicker(type)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") openPicker(type);
+        }}
+        onDragOver={onDragOver}
+        onDrop={(e) => onDrop(e, type)}
+        sx={{
+          border: "2px dashed #6c757d",
+          borderRadius: "8px",
+          minHeight: 160,
+          p: 1.5,
+          display: "flex",
+          alignItems: "center",
+          // ⬇️ Keep preview centered (whether or not an image exists)
+          justifyContent: "center",
+          gap: 1,
+          flexWrap: "wrap",
+          cursor: "pointer",
+          bgcolor: "#fafafa",
+          textAlign: "center",
+        }}
+        aria-label={`${label} upload area`}
+        title="Click to select an image or drag & drop here"
+      >
+        {previewUrls[type] ? (
+          <Box
+            sx={{
+              width: 180,
+              height: 130,
+              borderRadius: 1,
+              overflow: "hidden",
+              border: "1px solid #dee2e6",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              bgcolor: "#fff",
+              // extra safety if parent layout changes:
+              mx: "auto",
+            }}
+          >
+            <Box
+              component="img"
+              src={previewUrls[type]}
+              alt={`${type} preview`}
+              sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          </Box>
+        ) : (
+          <Box sx={{ textAlign: "center" }}>
+            <Box sx={{ fontWeight: 600, mb: 0.5 }}>
+              Click to upload or drag & drop
+            </Box>
+            <Typography variant="caption" color="text.secondary">
+              JPG/PNG • Clear, well-lit photo recommended
+            </Typography>
+          </Box>
+        )}
+      </Box>
+
+      <Typography
+        variant="caption"
+        display="block"
+        color="text.secondary"
+        sx={{ mt: 0.5 }}
+      >
+        {`Please upload a clear ${label.toLowerCase()} of the site/structure.`}
+      </Typography>
+    </Box>
+  );
 
   return (
     <Container maxWidth="md" sx={{ mt: 5, mb: 5 }}>
@@ -350,6 +491,7 @@ const Demolition = () => {
                   onChange={handleChange}
                   required
                   margin="normal"
+                  inputProps={{ min: 0, step: "0.01" }}
                 />
                 <TextField
                   fullWidth
@@ -363,62 +505,10 @@ const Demolition = () => {
                   margin="normal"
                 />
 
-                {/* Image Uploads */}
-                {/* Image Uploads */}
-                {["frontImage", "sideImage", "backImage"].map((type) => (
-                  <Box mt={2} key={type}>
-                    <Button
-                      variant="outlined"
-                      color="success"
-                      component="label"
-                      fullWidth
-                    >
-                      Upload {type.replace("Image", "")} Image
-                      <input
-                        type="file"
-                        accept="image/*"
-                        hidden
-                        onChange={(e) => handleImageChange(e, type)}
-                      />
-                    </Button>
-                    <Typography
-                      variant="caption"
-                      display="block"
-                      color="text.secondary"
-                      sx={{ mt: 0.5 }}
-                    >
-                      {`Please upload a clear ${type.replace("Image", "")} view.`}
-                    </Typography>
-                    {previewUrls[type] && (
-                      <Box
-                        mt={2}
-                        textAlign="center"
-                        sx={{
-                          border: "1px solid #ccc",
-                          borderRadius: "8px",
-                          p: 1,
-                          bgcolor: "#fafafa",
-                        }}
-                      >
-                        <Typography variant="body2" color="text.secondary">
-                          Preview:
-                        </Typography>
-                        <Box
-                          component="img"
-                          src={previewUrls[type]}
-                          alt={`${type} preview`}
-                          sx={{
-                            mt: 1,
-                            maxHeight: 200,
-                            maxWidth: "100%",
-                            borderRadius: "8px",
-                            objectFit: "cover",
-                          }}
-                        />
-                      </Box>
-                    )}
-                  </Box>
-                ))}
+                {/* Image Dropzones */}
+                {renderDropzone("frontImage", "Front view image")}
+                {renderDropzone("sideImage", "Side view image")}
+                {renderDropzone("backImage", "Back view image")}
 
                 {/* Submit */}
                 <Box mt={3}>
@@ -432,6 +522,14 @@ const Demolition = () => {
                   >
                     {isSubmitting ? "Submitting..." : "Submit Request"}
                   </Button>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    display="block"
+                    sx={{ mt: 1 }}
+                  >
+                    Tip: Clear, well-lit photos help our team review your request faster.
+                  </Typography>
                 </Box>
               </form>
             </CardContent>
