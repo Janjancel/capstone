@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, Row, Col, Table, Button, Form, Badge } from "react-bootstrap";
 import html2pdf from "html2pdf.js";
@@ -124,7 +123,7 @@ const ReportDashboard = () => {
         ) || 0;
       return {
         bucket: toBucketKey(order.createdAt, filter),
-        orderId: order._id || "",
+        orderId: order.orderId || order._id || "", // <-- human-readable first
         email: order.userEmail || "",
         status: order.status || "Pending",
         items: totalItems,
@@ -349,7 +348,8 @@ const ReportDashboard = () => {
                       style={{ cursor: 'pointer' }}
                       className="hover-highlight"
                     >
-                      <td>{order._id}</td>
+                      {/* human-readable orderId first */}
+                      <td>{order.orderId || order._id}</td>
                       <td>{order.userEmail}</td>
                       <td>{order.status || "Pending"} </td>
                       <td>{items}</td>
@@ -430,10 +430,14 @@ const ReportDashboard = () => {
                     req.fullName ||
                     req.name ||
                     "—";
+
+                  // Prefer selId / demolishId, fallback to _id
+                  const requestId = req.selId || req.demolishId || req._id;
+
                   return (
                     <tr key={req._id}>
                       <td>{req.__type}</td>
-                      <td>{req._id}</td>
+                      <td>{requestId}</td>
                       <td>{customer}</td>
                       <td>{req.status || "Pending"}</td>
                       <td>{req.createdAt ? new Date(req.createdAt).toLocaleString() : "—"}</td>
