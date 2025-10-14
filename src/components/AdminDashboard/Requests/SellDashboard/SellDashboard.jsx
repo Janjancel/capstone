@@ -670,21 +670,14 @@ import {
   MenuItem,
   IconButton,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
-  Card,
-  CardMedia,
 } from "@mui/material";
 import Loader from "./Loader";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import MapIcon from "@mui/icons-material/Map";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
 import SellDashboardMap from "./SellDashboardMap";
+import ReqDetailModal from "./ReqDetailModal"; // <— external modal handles PDF + details
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -704,35 +697,60 @@ const SellDashboard = () => {
   const [filterAnchor, setFilterAnchor] = useState(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [priceFilter, setPriceFilter] = useState("");
-  const [addressCache, setAddressCache] = useState({});
 
-  // Function to get address from coordinates
-  const getAddressFromCoordinates = async (lat, lng) => {
-    // Check cache first
-    const cacheKey = `${lat},${lng}`;
-    if (addressCache[cacheKey]) {
-      return addressCache[cacheKey];
-    }
+  // ===== Reverse Geocoding State & Helpers (for table/export) =====
+  const [addressMap, setAddressMap] = useState({}); // { "lat,lng": "Pretty address" }
 
+  const fmtKey = (lat, lng) => `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`;
+
+  const getCachedAddress = (key) => {
     try {
-      const response = await axios.get(`${API_URL}/api/geocode`, {
-        params: { lat, lng }
-      });
-      
-      if (response.data && response.data.address) {
-        // Cache the result
-        setAddressCache(prev => ({
-          ...prev,
-          [cacheKey]: response.data.address
-        }));
-        return response.data.address;
-      }
-      return `${lat}, ${lng}`;
-    } catch (error) {
-      console.error('Error geocoding coordinates:', error);
-      return `${lat}, ${lng}`;
+      const raw = localStorage.getItem("geo_address_cache");
+      if (!raw) return null;
+      const json = JSON.parse(raw);
+      return json[key] || null;
+    } catch {
+      return null;
     }
   };
+
+  const setCachedAddress = (key, val) => {
+    try {
+      const raw = localStorage.getItem("geo_address_cache");
+      const json = raw ? JSON.parse(raw) : {};
+      json[key] = val;
+      localStorage.setItem("geo_address_cache", JSON.stringify(json));
+    } catch {}
+  };
+
+  const reverseGeocode = async (lat, lng) => {
+    const key = fmtKey(lat, lng);
+    const cached = getCachedAddress(key);
+    if (cached) return cached;
+
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fil,en`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error("Reverse geocode failed");
+
+    const data = await res.json();
+    const a = data.address || {};
+    const pretty =
+      data.display_name ||
+      [a.road, a.suburb || a.village || a.barangay, a.town || a.city || a.municipality, a.state, a.country]
+        .filter(Boolean)
+        .join(", ");
+    const value = pretty || key;
+
+    setCachedAddress(key, value);
+    return value;
+  };
+
+  const renderLocation = (loc) => {
+    if (!(loc?.lat && loc?.lng)) return "N/A";
+    const key = fmtKey(loc.lat, loc.lng);
+    return addressMap[key] || `${loc.lat}, ${loc.lng} (looking up...)`;
+  };
+  // ===============================================================
 
   // --- Fetch Requests ---
   useEffect(() => {
@@ -741,13 +759,6 @@ const SellDashboard = () => {
         const res = await axios.get(`${API_URL}/api/sell`);
         setRequests(res.data);
         setFilteredRequests(res.data);
-        
-        // Preload addresses for all requests
-        const addressPromises = res.data
-          .filter(req => req.location?.lat && req.location?.lng)
-          .map(req => getAddressFromCoordinates(req.location.lat, req.location.lng));
-        
-        await Promise.all(addressPromises);
       } catch (err) {
         console.error("Error fetching sell requests:", err);
         setError("Failed to fetch sell requests.");
@@ -758,17 +769,65 @@ const SellDashboard = () => {
     fetchRequests();
   }, []);
 
+  // --- Kick off reverse-geocoding when requests change ---
+  useEffect(() => {
+    const run = async () => {
+      const coords = requests
+        .filter((r) => r?.location?.lat && r?.location?.lng)
+        .map((r) => fmtKey(r.location.lat, r.location.lng));
+      const unique = Array.from(new Set(coords));
+      if (!unique.length) return;
+
+      // Seed from localStorage
+      const seed = {};
+      unique.forEach((k) => {
+        const cached = getCachedAddress(k);
+        if (cached) seed[k] = cached;
+      });
+      if (Object.keys(seed).length) setAddressMap((prev) => ({ ...seed, ...prev }));
+
+      const missing = unique.filter((k) => !seed[k]);
+      if (!missing.length) return;
+
+      const results = {};
+      for (const k of missing) {
+        const [lat, lng] = k.split(",").map(Number);
+        try {
+          // be polite to the API
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((r) => setTimeout(r, 150));
+          // eslint-disable-next-line no-await-in-loop
+          const addr = await reverseGeocode(lat, lng);
+          results[k] = addr;
+        } catch {
+          results[k] = k; // fallback to coords if error
+        }
+      }
+      setAddressMap((prev) => ({ ...prev, ...results }));
+    };
+    run();
+  }, [requests]);
+
   // --- Filter & Search ---
   useEffect(() => {
     let filtered = requests.filter((request) => {
       const q = searchQuery.toLowerCase();
       // Include selId in search as well (fallback to _id)
       const idText = (request.selId || request._id || "").toString().toLowerCase();
+
+      // Also search by human-readable address when available
+      let addressText = "";
+      if (request?.location?.lat && request?.location?.lng) {
+        const key = fmtKey(request.location.lat, request.location.lng);
+        addressText = (addressMap[key] || "").toLowerCase();
+      }
+
       return (
         idText.includes(q) ||
         (request.name || "").toLowerCase().includes(q) ||
         (request.contact || "").toLowerCase().includes(q) ||
-        (request.description || "").toLowerCase().includes(q)
+        (request.description || "").toLowerCase().includes(q) ||
+        addressText.includes(q)
       );
     });
 
@@ -785,7 +844,7 @@ const SellDashboard = () => {
     }
 
     setFilteredRequests(filtered);
-  }, [searchQuery, statusFilter, priceFilter, requests]);
+  }, [searchQuery, statusFilter, priceFilter, requests, addressMap]);
 
   // --- Action Handlers ---
   const handleStatusUpdate = async (id, newStatus) => {
@@ -858,56 +917,17 @@ const SellDashboard = () => {
     }
   };
 
-  // --- Download Handlers ---
-  const handleDownloadPDF = (request) => {
-    const displayId = request.selId || request._id;
-    const docPDF = new jsPDF();
-    docPDF.setFontSize(16);
-    docPDF.text("Sell Request Details", 10, 20);
-    docPDF.setFontSize(12);
-    docPDF.text(`ID: ${displayId}`, 10, 40);
-    docPDF.text(`Name: ${request.name || ""}`, 10, 50);
-    docPDF.text(`Contact: ${request.contact || ""}`, 10, 60);
-    docPDF.text(
-      `Location: ${
-        request.location?.lat && request.location?.lng
-          ? `${request.location.lat}, ${request.location.lng}`
-          : "N/A"
-      }`,
-      10,
-      70
-    );
-    docPDF.text(`Price: ₱${request.price ?? ""}`, 10, 80);
-    const description = docPDF.splitTextToSize(`Description: ${request.description || ""}`, 180);
-    docPDF.text(description, 10, 90);
-
-    let y = 110;
-    if (request.images) {
-      if (request.images.front) {
-        docPDF.text("Front View:", 10, y);
-        docPDF.addImage(request.images.front, "JPEG", 50, y - 5, 60, 60);
-        y += 70;
-      }
-      if (request.images.side) {
-        docPDF.text("Side View:", 10, y);
-        docPDF.addImage(request.images.side, "JPEG", 50, y - 5, 60, 60);
-        y += 70;
-      }
-      if (request.images.back) {
-        docPDF.text("Back View:", 10, y);
-        docPDF.addImage(request.images.back, "JPEG", 50, y - 5, 60, 60);
-        y += 70;
-      }
-    }
-
-    if (request.ocularVisit)
-      docPDF.text(`Ocular Visit: ${new Date(request.ocularVisit).toLocaleString()}`, 10, y + 10);
-
-    docPDF.save(`Sell_Request_${displayId}.pdf`);
-  };
-
+  // --- Download Excel (kept) ---
   const handleDownloadExcel = () => {
-    const exportData = filteredRequests.map(({ images, ...rest }) => rest);
+    // Include a human-readable address column in export
+    const exportData = filteredRequests.map(({ images, location, ...rest }) => {
+      let address = "N/A";
+      if (location?.lat && location?.lng) {
+        const key = fmtKey(location.lat, location.lng);
+        address = addressMap[key] || `${location.lat}, ${location.lng}`;
+      }
+      return { ...rest, location: address };
+    });
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sell Requests");
@@ -923,6 +943,10 @@ const SellDashboard = () => {
     setActiveRowId(null);
   };
 
+  const handleFilterOpen = (event) => setFilterAnchor(event.currentTarget);
+  const handleFilterClose = () => setFilterAnchor(null);
+
+  // ====== UI ======
   return (
     <Box sx={{ p: 3 }}>
       <Toaster position="top-right" />
@@ -950,21 +974,20 @@ const SellDashboard = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               <Tooltip title="Filter">
-                <IconButton onClick={(e) => setFilterAnchor(e.currentTarget)}>
+                <IconButton onClick={handleFilterOpen}>
                   <FilterListIcon />
                 </IconButton>
               </Tooltip>
-              <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={() => setFilterAnchor(null)}>
+              <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={handleFilterClose}>
                 <MenuItem disabled>Filter by Status</MenuItem>
                 {["", "pending", "accepted", "declined", "ocular_scheduled"].map((status) => (
                   <MenuItem
                     key={status || "all"}
-                    onClick={() => setStatusFilter(status)}
-                    sx={{
-                      fontWeight: statusFilter === status ? "bold" : "normal",
-                      bgcolor: statusFilter === status ? "grey.700" : "inherit",
-                      color: statusFilter === status ? "primary.contrastText" : "inherit",
+                    onClick={() => {
+                      setStatusFilter(status);
+                      handleFilterClose();
                     }}
+                    selected={statusFilter === status}
                   >
                     {status || "All"}
                   </MenuItem>
@@ -979,12 +1002,11 @@ const SellDashboard = () => {
                 ].map((price) => (
                   <MenuItem
                     key={price.value}
-                    onClick={() => setPriceFilter(price.value)}
-                    sx={{
-                      fontWeight: priceFilter === price.value ? "bold" : "normal",
-                      bgcolor: priceFilter === price.value ? "grey.700" : "inherit",
-                      color: priceFilter === price.value ? "primary.contrastText" : "inherit",
+                    onClick={() => {
+                      setPriceFilter(price.value);
+                      handleFilterClose();
                     }}
+                    selected={priceFilter === price.value}
                   >
                     {price.label}
                   </MenuItem>
@@ -1004,35 +1026,18 @@ const SellDashboard = () => {
           {error ? (
             <Typography color="error">{error}</Typography>
           ) : (
-            <TableContainer 
-              component={Paper} 
-              sx={{ 
-                maxHeight: "60vh",
-                boxShadow: 'none',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                '& .MuiTable-root': {
-                  borderCollapse: 'separate',
-                  borderSpacing: '0 4px'
-                }
-              }}
-            >
-              <Table stickyHeader size="small">
+            <TableContainer component={Paper} sx={{ maxHeight: "60vh" }}>
+              <Table stickyHeader>
                 <TableHead>
-                  <TableRow>
+                  <TableRow sx={{ bgcolor: "grey.900" }}>
                     {["ID", "Name", "Contact", "Location", "Price", "Status", "Ocular Visit", "Actions"].map(
                       (head) => (
                         <TableCell
                           key={head}
                           sx={{
-                            color: 'text.primary',
-                            fontWeight: 600,
-                            fontSize: '0.875rem',
-                            backgroundColor: 'background.paper',
-                            borderBottom: '2px solid',
-                            borderColor: 'divider',
-                            py: 1.5
+                            color: "#202020ff",
+                            fontWeight: "bold",
+                            background: "#d3d3d3ff",
                           }}
                         >
                           {head}
@@ -1049,37 +1054,13 @@ const SellDashboard = () => {
                         <TableRow
                           key={request._id}
                           hover
-                          sx={{ 
-                            cursor: "pointer",
-                            '&:hover': {
-                              backgroundColor: 'action.hover',
-                            },
-                            '& td': {
-                              fontSize: '0.875rem',
-                              py: 1,
-                              borderBottom: '1px solid',
-                              borderColor: 'divider'
-                            }
-                          }}
-                          onClick={() => setSelectedRequest(request)}
+                          sx={{ cursor: "pointer" }}
+                          onClick={() => setSelectedRequest(request)} // open modal on row click
                         >
                           <TableCell>{displayId}</TableCell>
                           <TableCell>{request.name}</TableCell>
                           <TableCell>{request.contact}</TableCell>
-                          <TableCell>
-                            {request.location?.lat && request.location?.lng ? (
-                              addressCache[`${request.location.lat},${request.location.lng}`] || (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                    Loading address...
-                                  </Typography>
-                                  {getAddressFromCoordinates(request.location.lat, request.location.lng)}
-                                </Box>
-                              )
-                            ) : (
-                              "N/A"
-                            )}
-                          </TableCell>
+                          <TableCell>{renderLocation(request.location)}</TableCell>
                           <TableCell>₱{request.price}</TableCell>
                           <TableCell>
                             <Typography
@@ -1134,10 +1115,7 @@ const SellDashboard = () => {
                                   color: "success.main",
                                   fontWeight: 500,
                                   "&.Mui-disabled": { color: "success.light" },
-                                  "&:hover": {
-                                    bgcolor: "success.light",
-                                    color: "white",
-                                  },
+                                  "&:hover": { bgcolor: "success.light", color: "white" },
                                 }}
                               >
                                 Accept
@@ -1152,10 +1130,7 @@ const SellDashboard = () => {
                                   color: "warning.main",
                                   fontWeight: 500,
                                   "&.Mui-disabled": { color: "warning.light" },
-                                  "&:hover": {
-                                    bgcolor: "warning.light",
-                                    color: "white",
-                                  },
+                                  "&:hover": { bgcolor: "warning.light", color: "white" },
                                 }}
                               >
                                 Decline
@@ -1168,10 +1143,7 @@ const SellDashboard = () => {
                                 sx={{
                                   color: "info.main",
                                   fontWeight: 500,
-                                  "&:hover": {
-                                    bgcolor: "info.light",
-                                    color: "white",
-                                  },
+                                  "&:hover": { bgcolor: "info.light", color: "white" },
                                 }}
                               >
                                 Schedule Ocular Visit
@@ -1184,26 +1156,21 @@ const SellDashboard = () => {
                                 sx={{
                                   color: "error.main",
                                   fontWeight: 500,
-                                  "&:hover": {
-                                    bgcolor: "error.light",
-                                    color: "white",
-                                  },
+                                  "&:hover": { bgcolor: "error.light", color: "white" },
                                 }}
                               >
                                 Delete
                               </MenuItem>
                               <MenuItem
                                 onClick={() => {
-                                  handleDownloadPDF(request);
+                                  // Open modal where the PDF download lives now
+                                  setSelectedRequest(request);
                                   handleMenuClose();
                                 }}
                                 sx={{
                                   color: "primary.main",
                                   fontWeight: 500,
-                                  "&:hover": {
-                                    bgcolor: "primary.light",
-                                    color: "white",
-                                  },
+                                  "&:hover": { bgcolor: "primary.light", color: "white" },
                                 }}
                               >
                                 Download PDF
@@ -1234,100 +1201,13 @@ const SellDashboard = () => {
         </>
       )}
 
-      {/* --- Request Detail Modal --- */}
-      <Dialog open={Boolean(selectedRequest)} onClose={() => setSelectedRequest(null)} fullWidth maxWidth="sm">
-        <DialogTitle>Sell Request Details</DialogTitle>
-        <DialogContent dividers>
-          {selectedRequest && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              <Typography>
-                <strong>ID:</strong> {selectedRequest.selId || selectedRequest._id}
-              </Typography>
-              <Typography>
-                <strong>Name:</strong> {selectedRequest.name}
-              </Typography>
-              <Typography>
-                <strong>Contact:</strong> {selectedRequest.contact}
-              </Typography>
-              <Typography>
-                <strong>Location:</strong>{" "}
-                {selectedRequest.location?.lat && selectedRequest.location?.lng
-                  ? `${selectedRequest.location.lat}, ${selectedRequest.location.lng}`
-                  : "N/A"}
-              </Typography>
-              <Typography>
-                <strong>Price:</strong> ₱{selectedRequest.price}
-              </Typography>
-              <Typography>
-                <strong>Description:</strong> {selectedRequest.description}
-              </Typography>
-              <Typography>
-                <strong>Status:</strong> {selectedRequest.status || "pending"}
-              </Typography>
-              <Typography>
-                <strong>Ocular Visit:</strong>{" "}
-                {selectedRequest.ocularVisit ? new Date(selectedRequest.ocularVisit).toLocaleString() : "Not scheduled"}
-              </Typography>
-
-              {/* Images */}
-              {selectedRequest.images && (
-                <Grid container spacing={2} sx={{ mt: 2 }}>
-                  {selectedRequest.images.front && (
-                    <Grid item xs={12} sm={4}>
-                      <Card>
-                        <CardMedia
-                          component="img"
-                          image={selectedRequest.images.front}
-                          alt="Front"
-                          sx={{ height: 180, objectFit: "cover" }}
-                        />
-                        <Typography align="center" sx={{ py: 1 }}>
-                          Front
-                        </Typography>
-                      </Card>
-                    </Grid>
-                  )}
-                  {selectedRequest.images.side && (
-                    <Grid item xs={12} sm={4}>
-                      <Card>
-                        <CardMedia
-                          component="img"
-                          image={selectedRequest.images.side}
-                          alt="Side"
-                          sx={{ height: 180, objectFit: "cover" }}
-                        />
-                        <Typography align="center" sx={{ py: 1 }}>
-                          Side
-                        </Typography>
-                      </Card>
-                    </Grid>
-                  )}
-                  {selectedRequest.images.back && (
-                    <Grid item xs={12} sm={4}>
-                      <Card>
-                        <CardMedia
-                          component="img"
-                          image={selectedRequest.images.back}
-                          alt="Back"
-                          sx={{ height: 180, objectFit: "cover" }}
-                        />
-                        <Typography align="center" sx={{ py: 1 }}>
-                          Back
-                        </Typography>
-                      </Card>
-                    </Grid>
-                  )}
-                </Grid>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelectedRequest(null)} color="primary">
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* --- Request Detail Modal (external component now owns the PDF button) --- */}
+      {selectedRequest && (
+        <ReqDetailModal
+          request={selectedRequest}
+          onClose={() => setSelectedRequest(null)}
+        />
+      )}
     </Box>
   );
 };
