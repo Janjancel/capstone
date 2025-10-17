@@ -11,6 +11,7 @@ import SellRequests from "../Requests/SellDashboard/SellDashboard";
 import DemolitionRequests from "../Requests/DemolishDashboard/DemolishDashboard";
 import OrderDashboard from "../OrderDashboard";
 import ReportDashboard from "../ReportDashboard";
+import HeritageDashboard from "../HeritageDashboard/HeritageDashboard";
 
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../../../App.css";
@@ -108,6 +109,7 @@ const Admin = () => {
               <Route path="items" element={<Items />} />
               <Route path="orders" element={<OrderDashboard />} />
               <Route path="report" element={<ReportDashboard />} />
+              <Route path="heritage" element={<HeritageDashboard />} />
               <Route path="*" element={<Navigate to="dashboard" />} />
             </Routes>
           </div>
