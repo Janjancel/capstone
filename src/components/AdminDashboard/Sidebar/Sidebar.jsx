@@ -8,6 +8,7 @@ import {
   ExpandLess,
   ExpandMore,
   Assessment as ReportIcon,
+  AccountBalance as HeritageIcon,
 } from "@mui/icons-material";
 import {
   Box,
@@ -156,6 +157,19 @@ const Sidebar = () => {
             </List>
           </Collapse>
         </Box>
+
+        {/* Heritage */}
+        <ListItem
+          button
+          component={NavLink}
+          to="/admin/heritage"
+          sx={activeStyle}
+        >
+          <ListItemIcon>
+            <HeritageIcon />
+          </ListItemIcon>
+          <ListItemText primary="Heritage" />
+        </ListItem>
 
         {/* Reports */}
         <ListItem
