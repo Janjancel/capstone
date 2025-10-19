@@ -166,7 +166,7 @@ const SellDashboard = () => {
     // Convert Date -> "YYYY-MM-DD" in local time
     const tzOffset = d.getTimezoneOffset() * 60000;
     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
-    };
+  };
 
   const applyQuickRange = (range) => {
     const now = new Date();
@@ -264,10 +264,35 @@ const SellDashboard = () => {
       const res = await axios.patch(`${API_URL}/api/sell/${id}/status`, {
         status: newStatus,
       });
+
+      // Update local state
       setRequests((prev) =>
         prev.map((req) => (req._id === id ? { ...req, status: res.data.status } : req))
       );
       toast.success(`Request ${newStatus}`);
+
+      // === Minimal notification (FOR: "sell") ===
+      const reqObj = requests.find((r) => r._id === id);
+      const targetUserId = res?.data?.userId || reqObj?.userId;
+      if (targetUserId) {
+        try {
+          await axios.post(`${API_URL}/api/notifications`, {
+            userId: targetUserId,
+            orderId: id,          // reuse field to store the request id
+            for: "sell",
+            role: "client",
+            status: newStatus,
+            message:
+              newStatus === "accepted"
+                ? "Your sell request has been accepted."
+                : newStatus === "declined"
+                ? "Your sell request has been declined."
+                : `Your sell request status was updated to "${newStatus.replace(/_/g, " ")}".`,
+          });
+        } catch (e) {
+          console.error("Failed to create sell notification:", e);
+        }
+      }
     } catch (error) {
       console.error("Error updating status:", error);
       toast.error("Failed to update status");
@@ -292,8 +317,28 @@ const SellDashboard = () => {
       const res = await axios.patch(`${API_URL}/api/sell/${id}/schedule-ocular`, {
         ocularVisit: date,
       });
+
+      // Update UI
       setRequests((prev) => prev.map((req) => (req._id === id ? { ...req, ...res.data } : req)));
       toast.success("Ocular visit scheduled successfully");
+
+      // === Minimal notification (FOR: "sell") ===
+      const reqObj = requests.find((r) => r._id === id);
+      const targetUserId = res?.data?.userId || reqObj?.userId;
+      if (targetUserId) {
+        try {
+          await axios.post(`${API_URL}/api/notifications`, {
+            userId: targetUserId,
+            orderId: id,        // reuse field to store the request id
+            for: "sell",
+            role: "client",
+            status: "ocular_scheduled",
+            message: `Your ocular visit has been scheduled on ${new Date(date).toLocaleString()}.`,
+          });
+        } catch (e) {
+          console.error("Failed to create sell notification:", e);
+        }
+      }
     } catch (error) {
       console.error("Error scheduling ocular visit:", error);
       toast.error("Failed to schedule ocular visit");
@@ -314,6 +359,22 @@ const SellDashboard = () => {
       await axios.delete(`${API_URL}/api/sell/${id}`);
       setRequests((prev) => prev.filter((req) => req._id !== id));
       toast.success("Request deleted");
+      // Optional: send a deletion notification (kept disabled)
+      // const reqObj = requests.find((r) => r._id === id);
+      // if (reqObj?.userId) {
+      //   try {
+      //     await axios.post(`${API_URL}/api/notifications`, {
+      //       userId: reqObj.userId,
+      //       orderId: id,
+      //       for: "sell",
+      //       role: "client",
+      //       status: "deleted",
+      //       message: "Your sell request has been removed by the administrator.",
+      //     });
+      //   } catch (e) {
+      //     console.error("Failed to create sell notification:", e);
+      //   }
+      // }
     } catch (error) {
       console.error("Error deleting request:", error);
       toast.error("Failed to delete request");

@@ -1,3 +1,4 @@
+// src/components/AdminDashboard/Requests/DemolishDashboard/DemolishDashboard.jsx
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
@@ -18,6 +19,7 @@ import {
   MenuItem,
   IconButton,
   Tooltip,
+  Divider, // ← added
 } from "@mui/material";
 import Loader from "./Loader";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -232,11 +234,14 @@ const DemolishDashboard = () => {
     }
 
     if (priceFilter === "low") {
-      filtered = filtered.filter((req) => req.price < 5000);
+      filtered = filtered.filter((req) => (req.proposedPrice ?? req.price) < 5000);
     } else if (priceFilter === "mid") {
-      filtered = filtered.filter((req) => req.price >= 5000 && req.price <= 20000);
+      filtered = filtered.filter((req) => {
+        const p = req.proposedPrice ?? req.price;
+        return p >= 5000 && p <= 20000;
+      });
     } else if (priceFilter === "high") {
-      filtered = filtered.filter((req) => req.price > 20000);
+      filtered = filtered.filter((req) => (req.proposedPrice ?? req.price) > 20000);
     }
 
     // NEW: Date range filter (by createdAt)
@@ -255,6 +260,24 @@ const DemolishDashboard = () => {
 
     setFilteredRequests(filtered);
   }, [searchQuery, statusFilter, priceFilter, requests, addressMap, dateFrom, dateTo]);
+
+  // ===== Minimal notification helper (FOR: "demolish") =====
+  const createDemolishNotification = async ({ userId, requestId, status, message }) => {
+    if (!userId || !requestId) return;
+    try {
+      await axios.post(`${API_URL}/api/notifications`, {
+        userId,
+        orderId: requestId, // storing the demolish request id here (same pattern as Sell)
+        for: "demolish",     // ← important
+        role: "client",
+        status,
+        message,
+      });
+    } catch (err) {
+      console.error("Failed to create demolish notification:", err);
+    }
+  };
+  // ========================================================
 
   // SCHEDULE DEMOLITION
   const handleScheduleDemolition = async (id) => {
@@ -278,17 +301,17 @@ const DemolishDashboard = () => {
 
       setRequests((prev) => prev.map((r) => (r._id === id ? { ...r, ...res.data } : r)));
 
-      try {
-        await axios.post(`${API_URL}/api/notifications`, {
-          userId: res.data.userId,
-          orderId: res.data._id,
-          message: `Your demolition request has been scheduled on ${new Date(date).toLocaleDateString()}`,
-        });
-      } catch (notifErr) {
-        console.error("Failed to create notification:", notifErr);
-      }
+      // Notify client
+      const targetUserId = res?.data?.userId || requests.find((r) => r._id === id)?.userId;
+      const niceDate = new Date(date).toLocaleDateString();
+      await createDemolishNotification({
+        userId: targetUserId,
+        requestId: res?.data?._id || id,
+        status: "scheduled",
+        message: `Your demolition request has been scheduled on ${niceDate}.`,
+      });
 
-      toast.success(`Demolition scheduled on ${new Date(date).toLocaleDateString()}`);
+      toast.success(`Demolition scheduled on ${niceDate}`);
     } catch (error) {
       console.error("Error scheduling:", error);
       toast.error("Failed to schedule demolition");
@@ -317,20 +340,75 @@ const DemolishDashboard = () => {
 
       setRequests((prev) => prev.map((r) => (r._id === id ? { ...r, ...res.data } : r)));
 
-      try {
-        await axios.post(`${API_URL}/api/notifications`, {
-          userId: res.data.userId,
-          orderId: res.data._id,
-          message: `Your ocular visit has been scheduled on ${new Date(date).toLocaleDateString()}`,
-        });
-      } catch (notifErr) {
-        console.error("Failed to create notification:", notifErr);
-      }
+      // Notify client
+      const targetUserId = res?.data?.userId || requests.find((r) => r._id === id)?.userId;
+      const niceDate = new Date(date).toLocaleDateString();
+      await createDemolishNotification({
+        userId: targetUserId,
+        requestId: res?.data?._id || id,
+        status: "ocular_scheduled",
+        message: `Your ocular visit has been scheduled on ${niceDate}.`,
+      });
 
-      toast.success(`Ocular visit scheduled on ${new Date(date).toLocaleDateString()}`);
+      toast.success(`Ocular visit scheduled on ${niceDate}`);
     } catch (error) {
       console.error("Error scheduling ocular visit:", error);
       toast.error("Failed to schedule ocular visit");
+    }
+  };
+
+  // NEW: PROPOSE PRICE (after ocular) -> notifies client to accept/decline
+  const handleProposePrice = async (req) => {
+    const { _id: id } = req || {};
+    if (!id) return;
+
+    const { value: raw } = await Swal.fire({
+      title: "Propose Price (₱)",
+      input: "number",
+      inputAttributes: { min: "1", step: "1" },
+      inputValue: req.proposedPrice || req.price || "",
+      showCancelButton: true,
+      confirmButtonText: "Send to Client",
+      preConfirm: (v) => {
+        const n = Number(v);
+        if (!n || n <= 0) {
+          Swal.showValidationMessage("Please enter a valid price greater than 0.");
+          return false;
+        }
+        return n;
+      },
+    });
+
+    if (!raw) return;
+    const proposed = Number(raw);
+
+    try {
+      // Save proposal on the request and set status awaiting approval.
+      const res = await axios.patch(`${API_URL}/api/demolish/${id}`, {
+        proposedPrice: proposed,
+        status: "awaiting_price_approval",
+      });
+
+      // Update local state (fallback if backend only returns partial)
+      setRequests((prev) =>
+        prev.map((r) =>
+          r._id === id ? { ...r, ...res.data, proposedPrice: proposed, status: "awaiting_price_approval" } : r
+        )
+      );
+
+      // Notify client to review price
+      const targetUserId = res?.data?.userId || req.userId;
+      await createDemolishNotification({
+        userId: targetUserId,
+        requestId: res?.data?._id || id,
+        status: "awaiting_price_approval",
+        message: `Proposed demolition price: ₱${proposed.toLocaleString()}. Please accept or decline.`,
+      });
+
+      toast.success(`Proposed price sent: ₱${proposed.toLocaleString()}`);
+    } catch (error) {
+      console.error("Error proposing price:", error);
+      toast.error("Failed to propose price");
     }
   };
 
@@ -350,6 +428,23 @@ const DemolishDashboard = () => {
       });
       setRequests((prev) => prev.map((req) => (req._id === id ? { ...req, status: res.data.status } : req)));
       toast.success(`Request ${newStatus}`);
+
+      // Notify client on key status changes
+      const targetUserId = res?.data?.userId || requests.find((r) => r._id === id)?.userId;
+      if (targetUserId) {
+        let msg = "Your demolition request has been updated.";
+        if (newStatus === "declined") msg = "Your demolition request was declined.";
+        if (newStatus === "price_accepted") msg = "Price accepted. We will proceed with next steps.";
+        if (newStatus === "price_declined") msg = "Price declined. Please contact support if needed.";
+        if (newStatus === "completed") msg = "Your demolition request has been completed.";
+
+        await createDemolishNotification({
+          userId: targetUserId,
+          requestId: res?.data?._id || id,
+          status: newStatus,
+          message: msg,
+        });
+      }
     } catch (error) {
       console.error("Error updating status:", error);
       toast.error("Failed to update status");
@@ -402,6 +497,23 @@ const DemolishDashboard = () => {
 
   const handleFilterOpen = (event) => setFilterAnchor(event.currentTarget);
   const handleFilterClose = () => setFilterAnchor(null);
+
+  const statusColor = (status) => {
+    switch (status) {
+      case "scheduled":
+      case "ocular_scheduled":
+        return { border: "success.main", color: "success.main" };
+      case "awaiting_price_approval":
+        return { border: "info.main", color: "info.main" };
+      case "price_accepted":
+        return { border: "success.dark", color: "success.dark" };
+      case "price_declined":
+      case "declined":
+        return { border: "error.main", color: "error.main" };
+      default:
+        return { border: "warning.main", color: "warning.main" };
+    }
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -466,7 +578,16 @@ const DemolishDashboard = () => {
               </Tooltip>
               <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={handleFilterClose}>
                 <MenuItem disabled>Filter by Status</MenuItem>
-                {["", "pending", "scheduled", "ocular_scheduled", "declined"].map((status) => (
+                {[
+                  "",
+                  "pending",
+                  "scheduled",
+                  "ocular_scheduled",
+                  "awaiting_price_approval",
+                  "price_accepted",
+                  "price_declined",
+                  "declined",
+                ].map((status) => (
                   <MenuItem
                     key={status || "all"}
                     onClick={() => {
@@ -478,7 +599,9 @@ const DemolishDashboard = () => {
                     {status || "All"}
                   </MenuItem>
                 ))}
-                <MenuItem divider />
+
+                <Divider />
+
                 <MenuItem disabled>Filter by Price</MenuItem>
                 {[
                   { label: "All", value: "" },
@@ -497,7 +620,9 @@ const DemolishDashboard = () => {
                     {price.label}
                   </MenuItem>
                 ))}
-                <MenuItem divider />
+
+                <Divider />
+
                 {/* NEW: Quick Date Ranges */}
                 <MenuItem disabled>Quick Date Range</MenuItem>
                 <MenuItem
@@ -577,6 +702,14 @@ const DemolishDashboard = () => {
                   {filteredRequests.length > 0 ? (
                     filteredRequests.map((request) => {
                       const displayId = request.demolishId || request._id;
+                      const { border, color } = statusColor(request.status);
+
+                      // Price display:
+                      const priceNow = Number(request.price || 0);
+                      const hasProposal = typeof request.proposedPrice === "number";
+                      const proposed = Number(request.proposedPrice || 0);
+                      const waiting = request.status === "awaiting_price_approval";
+
                       return (
                         <TableRow
                           key={request._id}
@@ -588,28 +721,29 @@ const DemolishDashboard = () => {
                           <TableCell>{request.name}</TableCell>
                           <TableCell>{request.contact}</TableCell>
                           <TableCell>{renderLocation(request.location)}</TableCell>
-                          <TableCell>₱{request.price}</TableCell>
+                          <TableCell>
+                            <div>
+                              <strong>₱{priceNow.toLocaleString()}</strong>
+                            </div>
+                            {hasProposal && (
+                              <div style={{ fontSize: 12, opacity: 0.8 }}>
+                                Proposed: ₱{proposed.toLocaleString()} {waiting ? "(pending)" : ""}
+                              </div>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Typography
                               sx={{
-                                borderColor:
-                                  request.status === "scheduled" || request.status === "ocular_scheduled"
-                                    ? "success.main"
-                                    : request.status === "declined"
-                                    ? "error.main"
-                                    : "warning.main",
-                                color:
-                                  request.status === "scheduled" || request.status === "ocular_scheduled"
-                                    ? "success.main"
-                                    : request.status === "declined"
-                                    ? "error.main"
-                                    : "warning.main",
+                                borderColor: border,
+                                color,
                                 px: 1.5,
                                 py: 0.25,
                                 borderRadius: 1,
                                 display: "inline-block",
                                 fontWeight: 500,
                                 textTransform: "capitalize",
+                                borderStyle: "solid",
+                                borderWidth: 1,
                               }}
                             >
                               {request.status || "pending"}
@@ -657,6 +791,27 @@ const DemolishDashboard = () => {
                                 Schedule Ocular Visit
                               </MenuItem>
 
+                              {/* NEW: Propose Price (after ocular) */}
+                              <MenuItem
+                                onClick={() => {
+                                  handleProposePrice(request);
+                                  handleMenuClose();
+                                }}
+                                disabled={
+                                  request.status === "declined" ||
+                                  request.status === "awaiting_price_approval" ||
+                                  request.status === "price_accepted"
+                                }
+                                sx={{
+                                  color: "primary.main",
+                                  fontWeight: 500,
+                                  "&.Mui-disabled": { color: "primary.light" },
+                                  "&:hover": { bgcolor: "primary.light", color: "white" },
+                                }}
+                              >
+                                Propose Price
+                              </MenuItem>
+
                               <MenuItem
                                 onClick={() => {
                                   handleStatusUpdate(request._id, "declined");
@@ -694,9 +849,9 @@ const DemolishDashboard = () => {
                                   handleMenuClose();
                                 }}
                                 sx={{
-                                  color: "primary.main",
+                                  color: "secondary.main",
                                   fontWeight: 500,
-                                  "&:hover": { bgcolor: "primary.light", color: "white" },
+                                  "&:hover": { bgcolor: "secondary.light", color: "white" },
                                 }}
                               >
                                 Download PDF
