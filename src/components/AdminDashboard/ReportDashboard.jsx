@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Card, Row, Col, Table, Button, Form, Badge } from "react-bootstrap";
+import { Card, Row, Col, Table, Button, Form, Badge, ProgressBar } from "react-bootstrap";
 import html2pdf from "html2pdf.js";
 import axios from "axios";
 import InVoice from "./InVoice";
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
+import { Pie, Bar } from 'react-chartjs-2';
 
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
 
 // Add custom style for table row hover
 const styles = `
@@ -43,12 +46,24 @@ const numberToPHP = (n) =>
   (n ?? 0).toLocaleString("en-PH", { style: "currency", currency: "PHP" });
 
 const ReportDashboard = () => {
+  // --- Current signed-in user (display email)
+  const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
+  const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+
   // --- Orders for export (no analytics rendering)
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState("day");
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [showInvoice, setShowInvoice] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
+
+  const [items, setItems] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(true);
+
+  // --- Recent requests (sell + demolition)
+  const [sellRequests, setSellRequests] = useState([]);
+  const [demoRequests, setDemoRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
 
   // Invoice Modal Handlers
   const handleShowInvoice = (order) => {
@@ -61,10 +76,79 @@ const ReportDashboard = () => {
     setSelectedOrder(null);
   };
 
-  // --- Recent requests (sell + demolition)
-  const [sellRequests, setSellRequests] = useState([]);
-  const [demoRequests, setDemoRequests] = useState([]);
-  const [loadingRequests, setLoadingRequests] = useState(true);
+  // Fetch current user for email display
+  useEffect(() => {
+    if (!userId) return;
+    const token = localStorage.getItem("token");
+    (async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/users/${userId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const data = res.data || {};
+        setCurrentUser({
+          username: data.username || "N/A",
+          email: data.email || "N/A",
+        });
+      } catch (err) {
+        console.error("Error fetching current user:", err);
+        setCurrentUser((u) => ({ ...u, email: "N/A" }));
+      }
+    })();
+  }, [userId]);
+
+  // Helper to hydrate arrays with emails via userId
+  const hydrateEmailsByUserId = async (arr, idField = "userId", emailField = "userEmail") => {
+    if (!Array.isArray(arr) || arr.length === 0) return arr;
+    const token = localStorage.getItem("token");
+
+    const missingIds = Array.from(
+      new Set(arr.filter((x) => !x[emailField] && x[idField]).map((x) => x[idField]))
+    );
+
+    if (missingIds.length === 0) return arr;
+
+    const results = await Promise.all(
+      missingIds.map((id) =>
+        axios
+          .get(`${API_URL}/api/users/${id}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
+          .then((r) => ({ id, email: (r.data && r.data.email) || "—" }))
+          .catch(() => ({ id, email: "—" }))
+      )
+    );
+
+    const map = results.reduce((acc, { id, email }) => {
+      acc[id] = email;
+      return acc;
+    }, {});
+
+    return arr.map((x) => ({
+      ...x,
+      [emailField]: x[emailField] || map[x[idField]] || x[emailField] || x.email || "—",
+    }));
+  };
+
+  // Fetch items data for inventory reports
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoadingItems(true);
+      try {
+        const res = await axios.get(`${API_URL}/api/items`);
+        if (!mounted) return;
+        setItems(Array.isArray(res.data) ? res.data : []);
+      } catch (err) {
+        console.error("Error fetching items:", err);
+        if (!mounted) return;
+        setItems([]);
+      } finally {
+        if (mounted) setLoadingItems(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   // Fetch orders (used only for document generation/export and the table)
   useEffect(() => {
@@ -74,7 +158,11 @@ const ReportDashboard = () => {
       try {
         const res = await axios.get(`${API_URL}/api/orders`);
         if (!mounted) return;
-        setOrders(Array.isArray(res.data) ? res.data : []);
+        const baseOrders = Array.isArray(res.data) ? res.data : [];
+        // hydrate with emails if missing
+        const hydrated = await hydrateEmailsByUserId(baseOrders, "userId", "userEmail");
+        if (!mounted) return;
+        setOrders(hydrated);
       } catch (err) {
         console.error("Error fetching orders for export:", err);
         if (!mounted) return;
@@ -86,7 +174,7 @@ const ReportDashboard = () => {
     return () => { mounted = false; };
   }, []);
 
-  // Fetch sell + demolition requests for the “Recent Requests” table
+  // Fetch sell + demolition requests for the “Recent Requests” table (hydrate emails, too)
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -96,9 +184,17 @@ const ReportDashboard = () => {
           axios.get(`${API_URL}/api/sell`),
           axios.get(`${API_URL}/api/demolish`),
         ]);
+
+        let sells = Array.isArray(sellRes.data) ? sellRes.data : [];
+        let demos = Array.isArray(demoRes.data) ? demoRes.data : [];
+
+        // hydrate both arrays with user emails if missing
+        sells = await hydrateEmailsByUserId(sells, "userId", "userEmail");
+        demos = await hydrateEmailsByUserId(demos, "userId", "userEmail");
+
         if (!mounted) return;
-        setSellRequests(Array.isArray(sellRes.data) ? sellRes.data : []);
-        setDemoRequests(Array.isArray(demoRes.data) ? demoRes.data : []);
+        setSellRequests(sells);
+        setDemoRequests(demos);
       } catch (err) {
         console.error("Error fetching requests:", err);
         if (!mounted) return;
@@ -124,7 +220,7 @@ const ReportDashboard = () => {
       return {
         bucket: toBucketKey(order.createdAt, filter),
         orderId: order.orderId || order._id || "", // <-- human-readable first
-        email: order.userEmail || "",
+        email: order.userEmail || order.email || "—",
         status: order.status || "Pending",
         items: totalItems,
         amount: totalAmount,
@@ -170,6 +266,96 @@ const ReportDashboard = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const exportInventoryPDF = () => {
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 16px;">
+        <h2 style="margin: 0 0 24px 0;">Inventory Report</h2>
+        
+        <h3 style="margin: 0 0 12px 0;">Category Summary</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 24px;">
+          <thead>
+            <tr>
+              <th style="border:1px solid #ccc; padding:6px; text-align:left;">Category</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">Count</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">Total Value</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">Avg Condition</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.entries(inventoryStats)
+              .map(
+                ([category, stats]) => `
+              <tr>
+                <td style="border:1px solid #eee; padding:6px;">${category}</td>
+                <td style="border:1px solid #eee; padding:6px; text-align:right;">${stats.count}</td>
+                <td style="border:1px solid #eee; padding:6px; text-align:right;">${numberToPHP(stats.totalValue)}</td>
+                <td style="border:1px solid #eee; padding:6px; text-align:right;">${(stats.avgCondition / stats.count).toFixed(1)}</td>
+              </tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+
+        <h3 style="margin: 0 0 12px 0;">Condition Analysis</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr>
+              <th style="border:1px solid #ccc; padding:6px; text-align:left;">Condition Range</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">Count</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">% of Inventory</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              [
+                { range: 'Poor (1-3)', min: 1, max: 3 },
+                { range: 'Fair (4-6)', min: 4, max: 6 },
+                { range: 'Good (7-8)', min: 7, max: 8 },
+                { range: 'Excellent (9-10)', min: 9, max: 10 }
+              ].map(({ range, min, max }) => {
+                const count = Object.entries(conditionAnalysis.distribution)
+                  .filter(([condition]) => {
+                    const c = Number(condition);
+                    return c >= min && c <= max;
+                  })
+                  .reduce((sum, [, c]) => sum + c, 0);
+                
+                return `
+                <tr>
+                  <td style="border:1px solid #eee; padding:6px;">${range}</td>
+                  <td style="border:1px solid #eee; padding:6px; text-align:right;">${count}</td>
+                  <td style="border:1px solid #eee; padding:6px; text-align:right;">${((count / items.length) * 100).toFixed(1)}%</td>
+                </tr>`;
+              }).join("")
+            }
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const container = document.createElement("div");
+    container.setAttribute("id", "inventory-pdf");
+    container.style.position = "fixed";
+    container.style.left = "-9999px";
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    const options = {
+      margin: 0.5,
+      filename: 'inventory-report.pdf',
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+    };
+
+    html2pdf()
+      .set(options)
+      .from(container)
+      .save()
+      .then(() => document.body.removeChild(container))
+      .catch(() => document.body.removeChild(container));
   };
 
   const exportOrdersPDF = () => {
@@ -236,6 +422,103 @@ const ReportDashboard = () => {
       .catch(() => document.body.removeChild(container));
   };
 
+  // Compute inventory stats by category
+  const inventoryStats = useMemo(() => {
+    if (!items.length) return {};
+    
+    return items.reduce((acc, item) => {
+      if (!acc[item.category]) {
+        acc[item.category] = {
+          count: 0,
+          totalValue: 0,
+          avgCondition: 0,
+          items: []
+        };
+      }
+      
+      acc[item.category].count += 1;
+      acc[item.category].totalValue += item.price;
+      acc[item.category].avgCondition += item.condition;
+      acc[item.category].items.push(item);
+      
+      return acc;
+    }, {});
+  }, [items]);
+
+  // Compute revenue by category
+  const categoryRevenue = useMemo(() => {
+    if (!orders.length) return {};
+    
+    const revenue = {};
+    orders.forEach(order => {
+      if (!order.items) return;
+      
+      order.items.forEach(item => {
+        if (!revenue[item.category]) {
+          revenue[item.category] = 0;
+        }
+        revenue[item.category] += (item.price * item.quantity);
+      });
+    });
+    
+    return revenue;
+  }, [orders]);
+
+  // Compute condition analysis data
+  const conditionAnalysis = useMemo(() => {
+    if (!items.length) return { average: 0, distribution: {} };
+    
+    const distribution = {};
+    let totalCondition = 0;
+    
+    items.forEach(item => {
+      if (!distribution[item.condition]) {
+        distribution[item.condition] = 0;
+      }
+      distribution[item.condition]++;
+      totalCondition += item.condition;
+    });
+    
+    return {
+      average: totalCondition / items.length,
+      distribution
+    };
+  }, [items]);
+
+  // Chart data for category inventory
+  const categoryChartData = useMemo(() => {
+    const categories = Object.keys(inventoryStats);
+    const counts = categories.map(cat => inventoryStats[cat]?.count || 0);
+    
+    return {
+      labels: categories,
+      datasets: [{
+        data: counts,
+        backgroundColor: [
+          '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+          '#FF9F40', '#FF6384', '#4BC0C0', '#FFCE56', '#36A2EB'
+        ]
+      }]
+    };
+  }, [inventoryStats]);
+
+  // Chart data for revenue by category
+  const revenueChartData = useMemo(() => {
+    const categories = Object.keys(categoryRevenue);
+    const revenues = categories.map(cat => categoryRevenue[cat] || 0);
+    
+    return {
+      labels: categories,
+      datasets: [{
+        label: 'Revenue (PHP)',
+        data: revenues,
+        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+        borderColor: 'rgb(54, 162, 235)',
+        borderWidth: 1
+      }]
+    };
+  }, [categoryRevenue]);
+
   // Merge & sort sell + demo requests for display
   const recentRequests = useMemo(() => {
     const taggedSell =
@@ -257,6 +540,11 @@ const ReportDashboard = () => {
             <h5 className="mb-1">Generate Reports</h5>
             <div className="text-muted" style={{ fontSize: 14 }}>
               Export orders as CSV or PDF. These are downloadable documents (no analytics/charts).
+            </div>
+            <div className="mt-2">
+              <small className="text-muted">
+                Signed in as: <strong>{currentUser.email || "—"}</strong>
+              </small>
             </div>
           </div>
 
@@ -292,7 +580,141 @@ const ReportDashboard = () => {
             >
               Download Orders PDF
             </Button>
+            <Button
+              variant="outline-success"
+              size="sm"
+              onClick={exportInventoryPDF}
+              disabled={loadingItems || items.length === 0}
+            >
+              Download Inventory Report
+            </Button>
           </div>
+        </Card.Body>
+      </Card>
+
+      {/* ===== Inventory by Category ===== */}
+      <Card className="shadow-sm mb-4">
+        <Card.Body>
+          <h5 className="mb-3">Inventory by Category</h5>
+          <Row>
+            <Col md={6}>
+              <div style={{ height: '300px' }}>
+                {!loadingItems && items.length > 0 && (
+                  <Pie data={categoryChartData} options={{ maintainAspectRatio: false }} />
+                )}
+              </div>
+            </Col>
+            <Col md={6}>
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Count</th>
+                    <th>Total Value</th>
+                    <th>Avg Condition</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(inventoryStats).map(([category, stats]) => (
+                    <tr key={category}>
+                      <td>{category}</td>
+                      <td>{stats.count}</td>
+                      <td>{numberToPHP(stats.totalValue)}</td>
+                      <td>{(stats.avgCondition / stats.count).toFixed(1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
+
+      {/* ===== Revenue by Category ===== */}
+      <Card className="shadow-sm mb-4">
+        <Card.Body>
+          <h5 className="mb-3">Revenue by Category</h5>
+          <div style={{ height: '300px' }}>
+            {!loadingOrders && orders.length > 0 && (
+              <Bar 
+                data={revenueChartData} 
+                options={{
+                  maintainAspectRatio: false,
+                  scales: {
+                    y: {
+                      beginAtZero: true
+                    }
+                  }
+                }}
+              />
+            )}
+          </div>
+        </Card.Body>
+      </Card>
+
+      {/* ===== Condition Analysis ===== */}
+      <Card className="shadow-sm mb-4">
+        <Card.Body>
+          <h5 className="mb-3">Item Condition Analysis</h5>
+          <Row>
+            <Col md={6}>
+              <div className="mb-3">
+                <strong>Average Condition Score: </strong> 
+                {conditionAnalysis.average.toFixed(1)} / 10
+              </div>
+              <div>
+                {Object.entries(conditionAnalysis.distribution)
+                  .sort(([a], [b]) => Number(a) - Number(b))
+                  .map(([condition, count]) => (
+                    <div key={condition} className="mb-2">
+                      <div className="d-flex justify-content-between mb-1">
+                        <span>Condition {condition}/10</span>
+                        <span>{count} items</span>
+                      </div>
+                      <ProgressBar 
+                        now={(count / items.length) * 100} 
+                        variant={condition >= 7 ? 'success' : condition >= 4 ? 'warning' : 'danger'}
+                      />
+                    </div>
+                  ))
+                }
+              </div>
+            </Col>
+            <Col md={6}>
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Condition Range</th>
+                    <th>Count</th>
+                    <th>% of Inventory</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { range: 'Poor (1-3)', min: 1, max: 3 },
+                    { range: 'Fair (4-6)', min: 4, max: 6 },
+                    { range: 'Good (7-8)', min: 7, max: 8 },
+                    { range: 'Excellent (9-10)', min: 9, max: 10 }
+                  ].map(({ range, min, max }) => {
+                    const count = Object.entries(conditionAnalysis.distribution)
+                      .filter(([condition]) => {
+                        const c = Number(condition);
+                        return c >= min && c <= max;
+                      })
+                      .reduce((sum, [, c]) => sum + c, 0);
+                    
+                    return (
+                      <tr key={range}>
+                        <td>{range}</td>
+                        <td>{count}</td>
+                        <td>{((count / items.length) * 100).toFixed(1)}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </Col>
+          </Row>
         </Card.Body>
       </Card>
 
@@ -350,7 +772,7 @@ const ReportDashboard = () => {
                     >
                       {/* human-readable orderId first */}
                       <td>{order.orderId || order._id}</td>
-                      <td>{order.userEmail}</td>
+                      <td>{order.userEmail || order.email || "—"}</td>
                       <td>{order.status || "Pending"} </td>
                       <td>{items}</td>
                       <td>{numberToPHP(amount)}</td>
@@ -400,7 +822,7 @@ const ReportDashboard = () => {
               <tr>
                 <th>Type</th>
                 <th>Request ID</th>
-                <th>Customer</th>
+                <th>Customer (Email/Name)</th>
                 <th>Status</th>
                 <th>Created At</th>
               </tr>
@@ -420,7 +842,7 @@ const ReportDashboard = () => {
                 </tr>
               ) : (
                 recentRequests.slice(0, 10).map((req) => {
-                  // Try to surface a reasonable customer label
+                  // Prefer email; fallback to name-like fields
                   const customer =
                     req.userEmail ||
                     req.email ||

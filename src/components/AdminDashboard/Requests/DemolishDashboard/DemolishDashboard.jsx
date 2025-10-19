@@ -58,6 +58,10 @@ const DemolishDashboard = () => {
   const [statusFilter, setStatusFilter] = useState("");
   const [priceFilter, setPriceFilter] = useState("");
 
+  // NEW: Date range filter (by createdAt)
+  const [dateFrom, setDateFrom] = useState(""); // "YYYY-MM-DD"
+  const [dateTo, setDateTo] = useState("");     // "YYYY-MM-DD"
+
   // ===== Reverse Geocoding State & Helpers =====
   const [addressMap, setAddressMap] = useState({}); // { "lat,lng": "Pretty address" }
 
@@ -167,6 +171,41 @@ const DemolishDashboard = () => {
     run();
   }, [requests]);
 
+  // Helpers for date inputs / quick ranges
+  const toInputDate = (d) => {
+    const tzOffset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
+  };
+
+  const applyQuickRange = (range) => {
+    const now = new Date();
+    const today = toInputDate(now);
+
+    if (range === "today") {
+      setDateFrom(today);
+      setDateTo(today);
+      return;
+    }
+    if (range === "last7") {
+      const from = new Date(now);
+      from.setDate(from.getDate() - 6);
+      setDateFrom(toInputDate(from));
+      setDateTo(today);
+      return;
+    }
+    if (range === "last30") {
+      const from = new Date(now);
+      from.setDate(from.getDate() - 29);
+      setDateFrom(toInputDate(from));
+      setDateTo(today);
+      return;
+    }
+    if (range === "clear") {
+      setDateFrom("");
+      setDateTo("");
+    }
+  };
+
   useEffect(() => {
     let filtered = requests.filter((request) => {
       const q = searchQuery.toLowerCase();
@@ -200,8 +239,22 @@ const DemolishDashboard = () => {
       filtered = filtered.filter((req) => req.price > 20000);
     }
 
+    // NEW: Date range filter (by createdAt)
+    if (dateFrom || dateTo) {
+      const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+      const toDate = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
+
+      filtered = filtered.filter((req) => {
+        if (!req?.createdAt) return false; // exclude when filtering if no timestamp
+        const created = new Date(req.createdAt);
+        if (fromDate && created < fromDate) return false;
+        if (toDate && created > toDate) return false;
+        return true;
+      });
+    }
+
     setFilteredRequests(filtered);
-  }, [searchQuery, statusFilter, priceFilter, requests, addressMap]);
+  }, [searchQuery, statusFilter, priceFilter, requests, addressMap, dateFrom, dateTo]);
 
   // SCHEDULE DEMOLITION
   const handleScheduleDemolition = async (id) => {
@@ -357,7 +410,7 @@ const DemolishDashboard = () => {
         <Loader />
       ) : (
         <>
-          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2, gap: 2, flexWrap: "wrap" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography variant="h5">Demolish Requests</Typography>
               <Tooltip title={showMap ? "Hide Map" : "Show Map"}>
@@ -367,13 +420,45 @@ const DemolishDashboard = () => {
               </Tooltip>
             </Box>
 
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
               <TextField
                 size="small"
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+
+              {/* NEW: Date range inputs */}
+              <TextField
+                size="small"
+                type="date"
+                label="From"
+                InputLabelProps={{ shrink: true }}
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+              <TextField
+                size="small"
+                type="date"
+                label="To"
+                InputLabelProps={{ shrink: true }}
+                value={dateTo}
+                inputProps={{ min: dateFrom || undefined }}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+              {(dateFrom || dateTo) && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                >
+                  Reset Dates
+                </Button>
+              )}
+
               <Tooltip title="Filter">
                 <IconButton onClick={handleFilterOpen}>
                   <FilterListIcon />
@@ -412,6 +497,41 @@ const DemolishDashboard = () => {
                     {price.label}
                   </MenuItem>
                 ))}
+                <MenuItem divider />
+                {/* NEW: Quick Date Ranges */}
+                <MenuItem disabled>Quick Date Range</MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    applyQuickRange("today");
+                    handleFilterClose();
+                  }}
+                >
+                  Today
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    applyQuickRange("last7");
+                    handleFilterClose();
+                  }}
+                >
+                  Last 7 days
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    applyQuickRange("last30");
+                    handleFilterClose();
+                  }}
+                >
+                  Last 30 days
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    applyQuickRange("clear");
+                    handleFilterClose();
+                  }}
+                >
+                  Clear date range
+                </MenuItem>
               </Menu>
             </Box>
           </Box>
@@ -435,7 +555,6 @@ const DemolishDashboard = () => {
                       "Contact",
                       "Location",
                       "Price",
-                      // "Description", // REMOVED from table as requested
                       "Status",
                       "Scheduled Date",
                       "Actions",
@@ -470,7 +589,6 @@ const DemolishDashboard = () => {
                           <TableCell>{request.contact}</TableCell>
                           <TableCell>{renderLocation(request.location)}</TableCell>
                           <TableCell>₱{request.price}</TableCell>
-                          {/* Description column removed */}
                           <TableCell>
                             <Typography
                               sx={{
@@ -590,7 +708,6 @@ const DemolishDashboard = () => {
                     })
                   ) : (
                     <TableRow>
-                      {/* One less column now (removed Description) => total columns = 8 */}
                       <TableCell colSpan={8} align="center" sx={{ color: "grey.500" }}>
                         No results found.
                       </TableCell>
