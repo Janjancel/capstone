@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Swal from "sweetalert2";
+import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
 import {
   Container,
@@ -165,6 +166,7 @@ export default function MyRequest() {
       );
     } catch (e) {
       setError(e?.message || "Failed to load requests.");
+      toast.error(e?.message || "Failed to load requests.");
     } finally {
       setLoading(false);
     }
@@ -232,6 +234,7 @@ export default function MyRequest() {
     const proposed = Number(req?.proposedPrice || 0);
     if (!id || !proposed) return;
 
+    // SweetAlert ONLY for confirmation
     const confirm = await Swal.fire({
       title: accept
         ? `Accept proposed price ₱${proposed.toLocaleString()}?`
@@ -256,19 +259,25 @@ export default function MyRequest() {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
 
-      // Notify admin about client response
+      // Notify admin about client response (react-hot-toast is for user-facing notice)
       try {
         await axios.post(`${API_URL}/api/notifications`, {
           role: "admin",
-          type: "client_price_response",
-          orderId: id,
           for: "demolish",
+          type: "client_price_response",
+          status: accept ? "price_accepted" : "price_declined",
+          userId,                  // who responded
+          orderId: id,             // demolish request id
+          read: false,
           message: accept
             ? `Client accepted demolition price: ₱${proposed.toLocaleString()}`
             : `Client declined the proposed demolition price: ₱${proposed.toLocaleString()}`,
-          data: accept ? { agreementPrice: proposed } : { proposedPrice: proposed },
+          data: accept
+            ? { agreementPrice: proposed }
+            : { proposedPrice: proposed },
         });
       } catch (e) {
+        // Non-blocking; still show result toast to user
         console.error("Failed to notify admin of client price response:", e);
       }
 
@@ -291,14 +300,14 @@ export default function MyRequest() {
         });
       }
 
-      Swal.fire(
-        "Done",
-        accept ? "You accepted the proposed price." : "You declined the proposed price.",
-        "success"
+      // react-hot-toast for general notifications
+      toast.success(
+        accept ? "You accepted the proposed price." : "You declined the proposed price."
       );
     } catch (err) {
       console.error("Error responding to price:", err);
-      Swal.fire("Error", "Failed to submit your response.", "error");
+      // react-hot-toast for errors
+      toast.error("Failed to submit your response.");
     } finally {
       setActingId(null);
     }
@@ -307,6 +316,7 @@ export default function MyRequest() {
   if (!userId) {
     return (
       <Container sx={{ pt: 14, pb: 6 }}>
+        <Toaster position="top-right" />
         <Box sx={{ textAlign: "center", py: 8 }}>
           <Typography variant="h6" gutterBottom>Please sign in to view your requests.</Typography>
           <Button variant="contained" onClick={() => navigate("/")}>Go Home</Button>
@@ -317,6 +327,7 @@ export default function MyRequest() {
 
   return (
     <Container sx={{ pt: 14, pb: 6, maxWidth: "lg" }}>
+      <Toaster position="top-right" />
       <Box sx={{ mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>My Requests</Typography>
         <Typography variant="body2" color="text.secondary">
