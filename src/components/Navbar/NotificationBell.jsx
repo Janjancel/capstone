@@ -300,6 +300,10 @@
 // src/components/Notifications/NotificationBell.jsx
 // src/components/Notifications/NotificationBell.jsx
 // src/components/Navbar/NotificationBell.jsx
+// src/components/Navbar/NotificationBell.jsx
+// src/components/Notification/NotificationBell.jsx
+// src/components/Notification/NotificationBell.jsx
+// src/components/Notification/NotificationBell.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import { FaBell } from "react-icons/fa";
 import {
@@ -325,11 +329,9 @@ import Swal from "sweetalert2";
 import "animate.css";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-
-// Order details modal (existing)
 import OrderDetailModal from "../MyOrder/OrderDetailModal";
 
-// Request detail modals (same components used in MyRequest.jsx)
+// Detail modals used in MyRequest.jsx
 import SellReqDetailModal from "../AdminDashboard/Requests/SellDashboard/ReqDetailModal";
 import DemolishReqDetailModal from "../AdminDashboard/Requests/DemolishDashboard/ReqDetailModal";
 
@@ -346,7 +348,7 @@ export default function NotificationBell() {
   const [orderLoading, setOrderLoading] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
-  // Sell/Demolish detail modals (same pattern as MyRequest.jsx)
+  // Sell/Demolish detail modals (same components as MyRequest.jsx)
   const [showSellModal, setShowSellModal] = useState(false);
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [selectedSell, setSelectedSell] = useState(null);
@@ -355,13 +357,13 @@ export default function NotificationBell() {
   const [loadingNotifs, setLoadingNotifs] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // Filter by `for`
+  // filter by `for`
   const [forFilter, setForFilter] = useState(""); // "", "order", "sell", "demolish"
 
   const navigate = useNavigate();
   const API_URL = useMemo(() => process.env.REACT_APP_API_URL, []);
 
-  // -------- Helpers --------
+  // ------- Helpers -------
   const formatWhen = (dt) => {
     try {
       const d = new Date(dt);
@@ -372,7 +374,7 @@ export default function NotificationBell() {
     }
   };
 
-  // Determine canonical kind
+  // Determine canonical kind of notification robustly
   const getKind = (n) => {
     const f = (n.for || "").toLowerCase();
     if (f === "order" || f === "sell" || f === "demolish") return f;
@@ -380,6 +382,7 @@ export default function NotificationBell() {
     const t = (n.type || "").toLowerCase();
     if (t.includes("sell")) return "sell";
     if (t.includes("demolish")) return "demolish";
+    if (t.includes("order")) return "order";
 
     if (n.sellRequestId) return "sell";
     if (n.demolishRequestId) return "demolish";
@@ -400,9 +403,153 @@ export default function NotificationBell() {
     if (kind === "demolish") return "Demolition";
     return "General";
   };
-  // -------------------------
 
-  // Load userId (from localStorage or /api/users/me)
+  // Prefer potential IDs in a stable order
+  const candidateIds = (n) => {
+    const bag = [
+      n.sellRequestId,
+      n.demolishRequestId,
+      n.requestId,
+      n.itemId,
+      n.orderId,
+      n?.data?.requestId,
+      n?.data?.id,
+      n?.data?.sellRequestId,
+      n?.data?.demolishRequestId,
+      n?._id, // last resort
+    ].filter(Boolean);
+    return [...new Set(bag.map(String))];
+  };
+
+  const authHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : undefined;
+  };
+
+  // Normalize any array-like API response shape used in your app
+  const normalizeToArray = (raw) => {
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw?.data)) return raw.data;
+    if (Array.isArray(raw?.requests)) return raw.requests;
+    if (Array.isArray(raw?.sellRequest)) return raw.sellRequest;
+    if (Array.isArray(raw?.items)) return raw.items;
+    return [];
+  };
+
+  // Match by any common id fields
+  const isMatchByAnyId = (rec, id) => {
+    const target = String(id);
+    const keys = [
+      rec?._id,
+      rec?.id,
+      rec?.requestId,
+      rec?.sellRequestId,
+      rec?.demolishRequestId,
+      rec?.itemId,
+    ]
+      .filter(Boolean)
+      .map(String);
+    return keys.includes(target);
+  };
+
+  // Try first endpoint that returns a usable object (detail)
+  const tryFirstOkObject = async (paths) => {
+    for (const p of paths) {
+      try {
+        const { data } = await axios.get(`${API_URL}${p}`, { headers: authHeaders() });
+        if (data && typeof data === "object" && !Array.isArray(data)) {
+          // unwrap common shapes if needed
+          if (data.data && typeof data.data === "object" && !Array.isArray(data.data)) {
+            return data.data;
+          }
+          return data;
+        }
+      } catch {
+        // try next
+      }
+    }
+    return null;
+  };
+
+  // Try list endpoints then find record by id
+  const tryListsAndFind = async (listPaths, id) => {
+    for (const p of listPaths) {
+      try {
+        const { data } = await axios.get(`${API_URL}${p}`, { headers: authHeaders() });
+        const arr = normalizeToArray(data);
+        if (arr?.length) {
+          const found = arr.find((r) => isMatchByAnyId(r, id));
+          if (found) return found;
+        }
+      } catch {
+        // continue
+      }
+    }
+    return null;
+  };
+
+  // SELL fetch with fallback to list endpoints
+  const fetchSellById = async (id) => {
+    const detail = await tryFirstOkObject([
+      `/api/sell/${id}`,
+      `/api/sell-requests/${id}`,
+      `/api/sellrequest/${id}`,
+      `/api/sell/requests/${id}`,
+    ]);
+    if (detail) return detail;
+
+    const fromList = await tryListsAndFind(
+      [
+        "/api/sell-requests",
+        "/api/sell",
+        "/api/sellrequest",
+        "/api/sell/requests",
+      ],
+      id
+    );
+    if (fromList) return fromList;
+
+    // last-ditch query param attempts (harmless if unsupported)
+    const queryHit = await tryFirstOkObject([
+      `/api/sell?id=${encodeURIComponent(id)}`,
+      `/api/sell-requests?id=${encodeURIComponent(id)}`,
+      `/api/sellrequest?id=${encodeURIComponent(id)}`,
+      `/api/sell/requests?id=${encodeURIComponent(id)}`,
+      `/api/sell?requestId=${encodeURIComponent(id)}`,
+    ]);
+    if (queryHit) return queryHit;
+
+    throw new Error("Sell request not found.");
+  };
+
+  // DEMOLISH fetch with fallback to list endpoints
+  const fetchDemolishById = async (id) => {
+    const detail = await tryFirstOkObject([
+      `/api/demolish/${id}`,
+      `/api/demolition/${id}`,
+      `/api/demolitions/${id}`,
+    ]);
+    if (detail) return detail;
+
+    const fromList = await tryListsAndFind(
+      ["/api/demolition", "/api/demolitions", "/api/demolish"],
+      id
+    );
+    if (fromList) return fromList;
+
+    const queryHit = await tryFirstOkObject([
+      `/api/demolish?id=${encodeURIComponent(id)}`,
+      `/api/demolition?id=${encodeURIComponent(id)}`,
+      `/api/demolitions?id=${encodeURIComponent(id)}`,
+      `/api/demolish?requestId=${encodeURIComponent(id)}`,
+    ]);
+    if (queryHit) return queryHit;
+
+    throw new Error("Demolition request not found.");
+  };
+  // -----------------------
+
+  // Load userId
   useEffect(() => {
     const loadUserId = async () => {
       const storedId = localStorage.getItem("userId");
@@ -433,7 +580,7 @@ export default function NotificationBell() {
     loadUserId();
   }, [API_URL]);
 
-  // Initial notifications
+  // Fetch initial notifications
   useEffect(() => {
     if (!userId) return;
 
@@ -458,7 +605,7 @@ export default function NotificationBell() {
     fetchInitial();
   }, [userId, API_URL]);
 
-  // Poll when there are unread
+  // Poll for notifications if unread exists
   useEffect(() => {
     if (!userId || !startPolling) return;
 
@@ -491,7 +638,9 @@ export default function NotificationBell() {
       );
 
       setNotifications((prev) =>
-        prev.map((n) => (n._id === notifId ? { ...n, read: true, readAt: new Date().toISOString() } : n))
+        prev.map((n) =>
+          n._id === notifId ? { ...n, read: true, readAt: new Date().toISOString() } : n
+        )
       );
 
       setUnreadCount((prev) => {
@@ -513,7 +662,9 @@ export default function NotificationBell() {
         { read: true },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true, readAt: new Date().toISOString() })));
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, read: true, readAt: new Date().toISOString() }))
+      );
       setUnreadCount(0);
       setStartPolling(false);
     } catch (err) {
@@ -527,7 +678,9 @@ export default function NotificationBell() {
       const token = localStorage.getItem("token");
       await axios.delete(
         `${API_URL}/api/notifications/users/${userId}/notifications`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
       setNotifications([]);
       setUnreadCount(0);
@@ -537,7 +690,7 @@ export default function NotificationBell() {
     }
   };
 
-  // ----- Order detail flow -----
+  // Keep existing order-detail flow, but only for orders
   const handleViewOrder = async (orderId, notifId) => {
     setShowNotifModal(false);
     setOrderLoading(true);
@@ -555,39 +708,7 @@ export default function NotificationBell() {
     }
   };
 
-  // ----- Fetch specific requests (sell/demolish) -----
-  const authHeaders = () => {
-    const token = localStorage.getItem("token");
-    return token ? { Authorization: `Bearer ${token}` } : undefined;
-  };
-
-  const tryFetch = async (paths) => {
-    for (const p of paths) {
-      try {
-        const { data } = await axios.get(`${API_URL}${p}`, { headers: authHeaders() });
-        if (data && typeof data === "object") return data;
-      } catch {
-        // try next
-      }
-    }
-    throw new Error("No matching endpoint responded.");
-  };
-
-  const fetchSellById = async (id) =>
-    tryFetch([
-      `/api/sell/${id}`,
-      `/api/sell-requests/${id}`,
-      `/api/sellrequest/${id}`,
-      `/api/sell/requests/${id}`,
-    ]);
-
-  const fetchDemolishById = async (id) =>
-    tryFetch([
-      `/api/demolish/${id}`,
-      `/api/demolition/${id}`,
-      `/api/demolitions/${id}`,
-    ]);
-
+  // Open Sell request modal by ID (same modal used in MyRequest.jsx)
   const openSellDetail = async (sellId, notifId) => {
     if (!sellId) return;
     setShowNotifModal(false);
@@ -605,6 +726,7 @@ export default function NotificationBell() {
     }
   };
 
+  // Open Demolish request modal by ID (same modal used in MyRequest.jsx)
   const openDemolishDetail = async (demoId, notifId) => {
     if (!demoId) return;
     setShowNotifModal(false);
@@ -622,42 +744,39 @@ export default function NotificationBell() {
     }
   };
 
-  // Buttons
+  // "View Request" and "Open" both route to the same modal logic
   const handleViewRequest = async (n) => {
     if (!n) return;
     const kind = getKind(n);
+    const ids = candidateIds(n);
 
-    if (kind === "sell") {
-      const sellId = n.sellRequestId || n.requestId || n.itemId || n.orderId; // legacy fallback
-      await openSellDetail(sellId, n._id);
+    if (kind === "sell" && ids.length) {
+      await openSellDetail(ids[0], n._id);
       return;
     }
-    if (kind === "demolish") {
-      const demoId = n.demolishRequestId || n.requestId || n.itemId || n.orderId; // legacy fallback
-      await openDemolishDetail(demoId, n._id);
+    if (kind === "demolish" && ids.length) {
+      await openDemolishDetail(ids[0], n._id);
       return;
-    }
-    if (kind === "order" && n.orderId) {
-      await handleViewOrder(n.orderId, n._id);
     }
   };
 
+  // Unified "Open" action per notification
   const handleOpenNotification = async (n) => {
     const kind = getKind(n);
+    const ids = candidateIds(n);
     const markPromise = !n.read ? handleMarkAsRead(n._id) : Promise.resolve();
 
-    if (kind === "sell") {
-      const sellId = n.sellRequestId || n.requestId || n.itemId || n.orderId;
-      await openSellDetail(sellId, n._id);
+    if (kind === "sell" && ids.length) {
+      await openSellDetail(ids[0], n._id);
       return;
     }
 
-    if (kind === "demolish") {
-      const demoId = n.demolishRequestId || n.requestId || n.itemId || n.orderId;
-      await openDemolishDetail(demoId, n._id);
+    if (kind === "demolish" && ids.length) {
+      await openDemolishDetail(ids[0], n._id);
       return;
     }
 
+    // Prefer deep link for other kinds
     if (n.link) {
       await markPromise;
       setShowNotifModal(false);
@@ -674,7 +793,7 @@ export default function NotificationBell() {
     setShowNotifModal(false);
   };
 
-  // Derived counts + filtered list
+  // === Derived counts & filtered list for the "for" filter ===
   const counts = useMemo(() => {
     const c = { order: 0, sell: 0, demolish: 0 };
     for (const n of notifications) {
@@ -727,7 +846,7 @@ export default function NotificationBell() {
           </Stack>
         </DialogTitle>
 
-        {/* Filter chips */}
+        {/* for-filter chips */}
         <Box sx={{ px: 2, pt: 1 }}>
           <Stack direction="row" spacing={1} flexWrap="wrap">
             <Chip
@@ -770,7 +889,12 @@ export default function NotificationBell() {
               <CircularProgress size={28} />
             </Box>
           ) : filteredNotifications.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 2 }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              align="center"
+              sx={{ mt: 2 }}
+            >
               No notifications
             </Typography>
           ) : (
@@ -884,7 +1008,7 @@ export default function NotificationBell() {
         />
       )}
 
-      {/* Sell / Demolish Detail Modals */}
+      {/* Sell / Demolish Detail Modals (exactly like MyRequest.jsx) */}
       {showSellModal && selectedSell && (
         <SellReqDetailModal
           request={selectedSell}
