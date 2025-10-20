@@ -36,6 +36,21 @@ const OrderDashboard = () => {
   const intervalRef = useRef(null);
   const API_URL = process.env.REACT_APP_API_URL;
 
+  // --- Helpers: status normalization ---
+  const STATUS_API_MAP = {
+    pending: "pending",
+    processing: "processing",
+    shipped: "shipped",
+    delivered: "delivered",
+    "cancellation requested": "cancellation_requested",
+    "cancel requested": "cancellation_requested",
+    cancelled: "cancelled",
+  };
+  const toApiStatus = (label) => {
+    const key = String(label || "").trim().toLowerCase();
+    return STATUS_API_MAP[key] || key;
+  };
+
   // Fetch orders
   const fetchOrders = async () => {
     try {
@@ -106,9 +121,12 @@ const OrderDashboard = () => {
     setSelectedOrder(null);
   };
 
-  const handleStatusChange = async (order, newStatus) => {
+  const handleStatusChange = async (order, newStatusLabel) => {
+    const uiLabel = String(newStatusLabel || "").trim();
+    const apiStatus = toApiStatus(uiLabel);
+
     const confirm = await Swal.fire({
-      title: `Update status to "${newStatus}"?`,
+      title: `Update status to "${uiLabel}"?`,
       text: "This action cannot be undone.",
       icon: "warning",
       showCancelButton: true,
@@ -118,19 +136,23 @@ const OrderDashboard = () => {
     if (!confirm.isConfirmed) return;
 
     try {
+      // 1) Update order status (authoritative)
       await axios.put(`${API_URL}/api/orders/${order._id}/status`, {
-        status: newStatus,
+        status: apiStatus,
       });
 
+      // 2) Create a notification (with for:"order")
       await axios.post(`${API_URL}/api/notifications`, {
         orderId: order._id,
         userId: order.userId,
-        status: newStatus,
+        for: "order", // ★ required
+        status: apiStatus,
         role: "client",
-        message: `Your order (${order._id}) status is now "${newStatus}".`,
+        message: `Your order (${order.orderId || order._id}) status is now "${uiLabel}".`,
       });
 
-      if (newStatus === "Delivered") {
+      // 3) Sales record when delivered
+      if (apiStatus === "delivered") {
         await axios.post(`${API_URL}/api/sales`, {
           orderId: order._id,
           userId: order.userId,
@@ -140,7 +162,7 @@ const OrderDashboard = () => {
         });
       }
 
-      toast.success(`Order marked as ${newStatus}.`);
+      toast.success(`Order marked as ${uiLabel}.`);
       fetchOrders();
     } catch (err) {
       console.error("Status update failed:", err);
@@ -177,7 +199,8 @@ const OrderDashboard = () => {
       .toLowerCase()
       .includes(searchEmail.toLowerCase());
     const statusMatch =
-      statusTab === "All" || (o.status || "Pending") === statusTab;
+      statusTab === "All" ||
+      String(o.status || "Pending").toLowerCase() === statusTab.toLowerCase();
     return emailMatch && statusMatch;
   });
 

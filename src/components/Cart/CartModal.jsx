@@ -640,6 +640,7 @@ const CartModal = ({
         await axios.post(`${API_URL}/api/notifications`, {
           userId: user._id,
           orderId,
+          for: "order",
           role: "admin",
           status: "new",
           message: `New order placed by ${user.displayName || user.email}`,

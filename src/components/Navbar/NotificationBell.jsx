@@ -299,6 +299,7 @@
 // src/components/Notifications/NotificationBell.jsx
 // src/components/Notifications/NotificationBell.jsx
 // src/components/Notifications/NotificationBell.jsx
+// src/components/Navbar/NotificationBell.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import { FaBell } from "react-icons/fa";
 import {
@@ -324,8 +325,11 @@ import Swal from "sweetalert2";
 import "animate.css";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+
+// Order details modal (existing)
 import OrderDetailModal from "../MyOrder/OrderDetailModal";
-// Detail modals used in MyRequest.jsx (adjust paths if your structure differs)
+
+// Request detail modals (same components used in MyRequest.jsx)
 import SellReqDetailModal from "../AdminDashboard/Requests/SellDashboard/ReqDetailModal";
 import DemolishReqDetailModal from "../AdminDashboard/Requests/DemolishDashboard/ReqDetailModal";
 
@@ -336,13 +340,13 @@ export default function NotificationBell() {
   const [startPolling, setStartPolling] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
 
-  // Order detail modal (kept intact)
+  // Order detail modal
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orderLoading, setOrderLoading] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
-  // Detail modals for sell/demolish like in MyRequest.jsx
+  // Sell/Demolish detail modals (same pattern as MyRequest.jsx)
   const [showSellModal, setShowSellModal] = useState(false);
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [selectedSell, setSelectedSell] = useState(null);
@@ -351,13 +355,13 @@ export default function NotificationBell() {
   const [loadingNotifs, setLoadingNotifs] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // NEW: filter by `for`
+  // Filter by `for`
   const [forFilter, setForFilter] = useState(""); // "", "order", "sell", "demolish"
 
   const navigate = useNavigate();
   const API_URL = useMemo(() => process.env.REACT_APP_API_URL, []);
 
-  // ------- Helpers -------
+  // -------- Helpers --------
   const formatWhen = (dt) => {
     try {
       const d = new Date(dt);
@@ -368,7 +372,7 @@ export default function NotificationBell() {
     }
   };
 
-  // Determine canonical kind of notification robustly
+  // Determine canonical kind
   const getKind = (n) => {
     const f = (n.for || "").toLowerCase();
     if (f === "order" || f === "sell" || f === "demolish") return f;
@@ -396,9 +400,9 @@ export default function NotificationBell() {
     if (kind === "demolish") return "Demolition";
     return "General";
   };
-  // -----------------------
+  // -------------------------
 
-  // Load userId
+  // Load userId (from localStorage or /api/users/me)
   useEffect(() => {
     const loadUserId = async () => {
       const storedId = localStorage.getItem("userId");
@@ -429,7 +433,7 @@ export default function NotificationBell() {
     loadUserId();
   }, [API_URL]);
 
-  // Fetch initial notifications
+  // Initial notifications
   useEffect(() => {
     if (!userId) return;
 
@@ -454,7 +458,7 @@ export default function NotificationBell() {
     fetchInitial();
   }, [userId, API_URL]);
 
-  // Poll for notifications if unread exists
+  // Poll when there are unread
   useEffect(() => {
     if (!userId || !startPolling) return;
 
@@ -523,9 +527,7 @@ export default function NotificationBell() {
       const token = localStorage.getItem("token");
       await axios.delete(
         `${API_URL}/api/notifications/users/${userId}/notifications`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       setNotifications([]);
       setUnreadCount(0);
@@ -535,7 +537,7 @@ export default function NotificationBell() {
     }
   };
 
-  // Keep existing order-detail flow, but only for orders
+  // ----- Order detail flow -----
   const handleViewOrder = async (orderId, notifId) => {
     setShowNotifModal(false);
     setOrderLoading(true);
@@ -553,7 +555,7 @@ export default function NotificationBell() {
     }
   };
 
-  // ===== Helpers to fetch a specific request by ID (sell/demolish) =====
+  // ----- Fetch specific requests (sell/demolish) -----
   const authHeaders = () => {
     const token = localStorage.getItem("token");
     return token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -562,12 +564,10 @@ export default function NotificationBell() {
   const tryFetch = async (paths) => {
     for (const p of paths) {
       try {
-        const { data } = await axios.get(`${API_URL}${p}`, {
-          headers: authHeaders(),
-        });
+        const { data } = await axios.get(`${API_URL}${p}`, { headers: authHeaders() });
         if (data && typeof data === "object") return data;
       } catch {
-        // try next path
+        // try next
       }
     }
     throw new Error("No matching endpoint responded.");
@@ -588,7 +588,6 @@ export default function NotificationBell() {
       `/api/demolitions/${id}`,
     ]);
 
-  // Open Sell request modal by ID
   const openSellDetail = async (sellId, notifId) => {
     if (!sellId) return;
     setShowNotifModal(false);
@@ -606,7 +605,6 @@ export default function NotificationBell() {
     }
   };
 
-  // Open Demolish request modal by ID
   const openDemolishDetail = async (demoId, notifId) => {
     if (!demoId) return;
     setShowNotifModal(false);
@@ -623,9 +621,8 @@ export default function NotificationBell() {
       setDetailLoading(false);
     }
   };
-  // ====================================================================
 
-  // Explicit "View Request" function
+  // Buttons
   const handleViewRequest = async (n) => {
     if (!n) return;
     const kind = getKind(n);
@@ -645,7 +642,6 @@ export default function NotificationBell() {
     }
   };
 
-  // Unified "Open" action per notification (no SweetAlert notice)
   const handleOpenNotification = async (n) => {
     const kind = getKind(n);
     const markPromise = !n.read ? handleMarkAsRead(n._id) : Promise.resolve();
@@ -662,7 +658,6 @@ export default function NotificationBell() {
       return;
     }
 
-    // Prefer deep link for other kinds
     if (n.link) {
       await markPromise;
       setShowNotifModal(false);
@@ -679,7 +674,7 @@ export default function NotificationBell() {
     setShowNotifModal(false);
   };
 
-  // === Derived counts & filtered list for the "for" filter ===
+  // Derived counts + filtered list
   const counts = useMemo(() => {
     const c = { order: 0, sell: 0, demolish: 0 };
     for (const n of notifications) {
@@ -732,7 +727,7 @@ export default function NotificationBell() {
           </Stack>
         </DialogTitle>
 
-        {/* NEW: for-filter chips */}
+        {/* Filter chips */}
         <Box sx={{ px: 2, pt: 1 }}>
           <Stack direction="row" spacing={1} flexWrap="wrap">
             <Chip
@@ -775,12 +770,7 @@ export default function NotificationBell() {
               <CircularProgress size={28} />
             </Box>
           ) : filteredNotifications.length === 0 ? (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              align="center"
-              sx={{ mt: 2 }}
-            >
+            <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 2 }}>
               No notifications
             </Typography>
           ) : (
@@ -809,7 +799,7 @@ export default function NotificationBell() {
                     {n.status && (
                       <Chip
                         size="small"
-                        label={n.status.replace(/_/g, " ")}
+                        label={String(n.status).replace(/_/g, " ")}
                         variant="outlined"
                       />
                     )}
@@ -833,7 +823,6 @@ export default function NotificationBell() {
                         Open
                       </Button>
 
-                      {/* "View Request" for Sell/Demolish */}
                       {(kind === "sell" || kind === "demolish") && (
                         <Button
                           size="small"
@@ -845,7 +834,6 @@ export default function NotificationBell() {
                         </Button>
                       )}
 
-                      {/* "View Order" strictly for orders */}
                       {kind === "order" && n.orderId && (
                         <Button
                           size="small"
@@ -882,7 +870,7 @@ export default function NotificationBell() {
         </DialogActions>
       </Dialog>
 
-      {/* Order Detail Modal (kept intact) */}
+      {/* Order Detail Modal */}
       {selectedOrder && (
         <OrderDetailModal
           show={showOrderModal}
@@ -896,7 +884,7 @@ export default function NotificationBell() {
         />
       )}
 
-      {/* Sell / Demolish Detail Modals (from MyRequest.jsx) */}
+      {/* Sell / Demolish Detail Modals */}
       {showSellModal && selectedSell && (
         <SellReqDetailModal
           request={selectedSell}
