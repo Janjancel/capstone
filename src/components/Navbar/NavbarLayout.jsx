@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import Swal from "sweetalert2";
 import AuthModal from "../Auth/Auth";
-import MyOrders from "../MyOrder/MyOrders";
 import NotificationBell from "./NotificationBell";
 import CustomLink from "./CustomLink";
 import toast from "react-hot-toast";
@@ -38,6 +37,8 @@ export default function NavbarLayout() {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState("signin");
   const [profilePic, setProfilePic] = useState(null);
+
+  // NOTE: kept these two to preserve MobileView props shape; they are no longer used for desktop.
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 
   const API_URL = process.env.REACT_APP_API_URL;
@@ -204,14 +205,14 @@ export default function NavbarLayout() {
 
                       <MenuItem
                         onClick={() => {
-                          setShowPurchaseModal(true);
+                          navigate("/orders"); // ✅ Route instead of modal
                           setProfileAnchor(null);
                         }}
                       >
                         My Orders
                       </MenuItem>
 
-                      {/* ✅ New: My Requests (Sell & Demolition) */}
+                      {/* ✅ My Requests (Sell & Demolition) */}
                       <MenuItem
                         onClick={() => {
                           navigate("/requests");
@@ -261,9 +262,9 @@ export default function NavbarLayout() {
         </AppBar>
       )}
 
-      {/* Modals */}
+      {/* Auth Modal remains */}
       <AuthModal show={showModal} onHide={() => setShowModal(false)} modalType={modalType} />
-      <MyOrders show={showPurchaseModal} onClose={() => setShowPurchaseModal(false)} />
+      {/* ❌ Removed the MyOrders modal mount here */}
     </>
   );
 }

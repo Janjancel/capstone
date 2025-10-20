@@ -89,8 +89,11 @@ import Profile from "./components/Profile/Profile";
 import Sell from "./components/Sell/Sell";
 import Demolish from "./components/Demolish/Demolish";
 
-// NEW: user “My Requests” page (create this component)
+// NEW: user “My Requests” page (already created)
 import MyRequests from "./components/Requests/MyRequest";
+
+// NEW: My Orders as a PAGE route
+import MyOrders from "./components/MyOrder/MyOrders";
 
 import { Toaster } from "react-hot-toast";
 import { useAuth } from "./context/AuthContext";
@@ -127,6 +130,8 @@ function App() {
             <Route path="/demolish" element={<Demolish />} />
             {/* NEW: “My Requests” combines Sell & Demolition created by the signed-in user */}
             <Route path="/requests" element={<MyRequests />} />
+            {/* NEW: My Orders as dedicated page */}
+            <Route path="/orders" element={<MyOrders />} />
           </Route>
 
           {/* Admin */}
@@ -146,3 +151,4 @@ function App() {
 }
 
 export default App;
+
