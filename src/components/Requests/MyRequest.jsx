@@ -210,7 +210,7 @@ export default function MyRequest() {
       if (typeof serverPrice === "number") {
         next.price = serverPrice;
       }
-      // Clear proposal once accepted
+      // Clear proposal once accepted (for UI clarity)
       next.proposedPrice = null;
       // Ensure status reflects acceptance
       next.status = patchFromServer?.status || "price_accepted";
@@ -219,7 +219,7 @@ export default function MyRequest() {
         next.agreementPrice = serverPrice;
       }
     } else {
-      // If declined, keep old price, retain proposedPrice (or server's version)
+      // If declined, keep old price, keep server's proposedPrice if it returns (or leave as-is)
       next.status = patchFromServer?.status || "price_declined";
     }
 
@@ -246,10 +246,9 @@ export default function MyRequest() {
     try {
       setActingId(id);
 
-      // If your API supports it, you can also include agreementPrice or price in the accept payload.
-      // We keep acceptPrice to let the server lock in the proposed amount.
+      // Backend only requires status; it will lock price from proposedPrice when accepted
       const payload = accept
-        ? { status: "price_accepted", acceptPrice: true, agreementPrice: proposed, price: proposed }
+        ? { status: "price_accepted" }
         : { status: "price_declined" };
 
       const token = localStorage.getItem("token");
@@ -263,6 +262,7 @@ export default function MyRequest() {
           role: "admin",
           type: "client_price_response",
           orderId: id,
+          for: "demolish",
           message: accept
             ? `Client accepted demolition price: ₱${proposed.toLocaleString()}`
             : `Client declined the proposed demolition price: ₱${proposed.toLocaleString()}`,
@@ -452,6 +452,9 @@ export default function MyRequest() {
                 ? r.price
                 : undefined;
 
+            const priceDisplay =
+              r.price == null ? "—" : `₱${Number(r.price).toLocaleString()}`;
+
             return (
               <Grid key={idKey} item xs={12} md={6}>
                 <Card
@@ -484,15 +487,15 @@ export default function MyRequest() {
                       </Typography>
                       <Divider orientation="vertical" flexItem />
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        ₱{Number(r.price || 0).toLocaleString()}
+                        {priceDisplay}
                       </Typography>
                     </Stack>
 
-                    {/* Proposed price + actions */}
-                    {hasProposal && (
+                    {/* Proposed price + actions (only while awaiting approval) */}
+                    {hasProposal && waitingForApproval && (
                       <Typography variant="body2" sx={{ mt: 1 }}>
                         Proposed Price: <strong>₱{Number(r.proposedPrice).toLocaleString()}</strong>{" "}
-                        {waitingForApproval ? "(pending your approval)" : ""}
+                        (pending your approval)
                       </Typography>
                     )}
 
