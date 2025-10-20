@@ -65,7 +65,6 @@ const Demolition = () => {
     location: { lat: null, lng: null },
     name: "",
     contact: "",
-    price: "",
     description: "",
     frontImage: null,
     sideImage: null,
@@ -230,12 +229,23 @@ const Demolition = () => {
       return;
     }
 
+    // client-side guard
+    if (!formData.name.trim() || !formData.contact.trim() || !formData.description.trim()) {
+      Swal.fire("Missing Details", "Name, contact, and description are required.", "warning");
+      setIsSubmitting(false);
+      return;
+    }
+    if (!formData.location?.lat || !formData.location?.lng) {
+      Swal.fire("Missing Location", "Please pin the location on the map.", "warning");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const formDataToUpload = new FormData();
       formDataToUpload.append("userId", userId);
       formDataToUpload.append("name", formData.name);
       formDataToUpload.append("contact", formData.contact);
-      formDataToUpload.append("price", formData.price);
       formDataToUpload.append("description", formData.description);
       formDataToUpload.append("location", JSON.stringify(formData.location));
 
@@ -246,10 +256,8 @@ const Demolition = () => {
       if (formData.backImage)
         formDataToUpload.append("backImage", formData.backImage);
 
-      // Save demolition request
-      await axios.post(`${API_URL}/api/demolish`, formDataToUpload, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // Save demolition request (IMPORTANT: don't set Content-Type manually)
+      await axios.post(`${API_URL}/api/demolish`, formDataToUpload);
 
       // Create a notification for admin
       await axios.post(`${API_URL}/api/notifications`, {
@@ -257,6 +265,7 @@ const Demolition = () => {
         status: "pending",
         message: `New demolition request from ${formData.name}`,
         role: "admin",
+        for: "demolish",
         read: false,
       });
 
@@ -267,7 +276,6 @@ const Demolition = () => {
         location: { lat: null, lng: null },
         name: "",
         contact: "",
-        price: "",
         description: "",
         frontImage: null,
         sideImage: null,
@@ -289,11 +297,9 @@ const Demolition = () => {
       resetPicker("sideImage");
       resetPicker("backImage");
     } catch (error) {
-      console.error(
-        "Error submitting demolition request:",
-        error.response?.data || error.message
-      );
-      toast.error("Failed to submit the request. Please try again.");
+      const msg = error?.response?.data?.error || error.message || "Failed to submit the request.";
+      console.error("Error submitting demolition request:", error?.response?.data || error.message);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -481,17 +487,6 @@ const Demolition = () => {
                   onChange={handleChange}
                   required
                   margin="normal"
-                />
-                <TextField
-                  fullWidth
-                  type="number"
-                  label="Price"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleChange}
-                  required
-                  margin="normal"
-                  inputProps={{ min: 0, step: "0.01" }}
                 />
                 <TextField
                   fullWidth
