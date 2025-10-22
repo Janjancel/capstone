@@ -30,7 +30,7 @@ const Buy = () => {
   const [filteredItems, setFilteredItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [priceFilter, setPriceFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState(""); // ✅ new state for categories
+  const [categoryFilter, setCategoryFilter] = useState(""); // keeps same single-select design
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -51,7 +51,23 @@ const Buy = () => {
     "Stones",
     "Windows",
     "Bed",
+    // You can add "Uncategorized" if you want a visible option in the UI
   ];
+
+  // ---- Helpers to support legacy + new category models ----
+  const getItemCategories = (item) => {
+    if (Array.isArray(item?.categories)) return item.categories;
+    if (item?.category) return [item.category];
+    return [];
+  };
+
+  const itemMatchesCategory = (item, selected) => {
+    if (!selected) return true; // "All"
+    const cats = getItemCategories(item);
+    return cats.some(
+      (c) => c && c.toLowerCase() === selected.toLowerCase()
+    );
+  };
 
   // Fetch user address
   useEffect(() => {
@@ -65,7 +81,7 @@ const Buy = () => {
       }
     };
     fetchUserAddress();
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch items
   useEffect(() => {
@@ -85,9 +101,9 @@ const Buy = () => {
       }
     };
     fetchItems();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filter items
+  // Filter items (search + price + category) — design intact
   useEffect(() => {
     let filtered = items.filter(
       (item) =>
@@ -95,7 +111,7 @@ const Buy = () => {
         item.description?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    // ✅ price filter
+    // price filter
     if (priceFilter === "low") {
       filtered = filtered.filter((item) => item.price < 5000);
     } else if (priceFilter === "mid") {
@@ -106,16 +122,13 @@ const Buy = () => {
       filtered = filtered.filter((item) => item.price > 20000);
     }
 
-    // ✅ category filter
+    // category filter (now supports both string + array)
     if (categoryFilter) {
-      filtered = filtered.filter(
-        (item) =>
-          item.category?.toLowerCase() === categoryFilter.toLowerCase()
-      );
+      filtered = filtered.filter((item) => itemMatchesCategory(item, categoryFilter));
     }
 
     setFilteredItems(filtered);
-  }, [searchQuery, priceFilter, categoryFilter, items]);
+  }, [searchQuery, priceFilter, categoryFilter, items]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const truncateText = (text, length) =>
     text?.length > length ? text.substring(0, length) + "..." : text;
@@ -171,6 +184,13 @@ const Buy = () => {
     setFilterAnchor(null);
   };
 
+  // Render label for category on the card (supports multiple)
+  const renderCategoryLabel = (item) => {
+    const cats = getItemCategories(item);
+    if (cats.length) return cats.join(", ");
+    return item?.category || "Uncategorized";
+  };
+
   return (
     <Container maxWidth={false} disableGutters sx={{ minHeight: "100vh", p: 3 }}>
       {/* Header */}
@@ -219,8 +239,7 @@ const Buy = () => {
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
                 sx={{
-                  fontWeight:
-                    categoryFilter === cat ? "bold" : "normal",
+                  fontWeight: categoryFilter === cat ? "bold" : "normal",
                   bgcolor: categoryFilter === cat ? "grey.700" : "inherit",
                   color:
                     categoryFilter === cat ? "primary.contrastText" : "inherit",
@@ -299,7 +318,7 @@ const Buy = () => {
                     ₱{item.price}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {item.category || "Uncategorized"}
+                    {renderCategoryLabel(item)}
                   </Typography>
                 </CardContent>
                 <CardActions>
