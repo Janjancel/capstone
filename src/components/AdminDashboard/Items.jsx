@@ -35,7 +35,7 @@ const Items = () => {
     name: "",
     description: "",
     price: "",
-    condition: "", // ✅ new: condition (1-10)
+    condition: "", // 1-10
     origin: "",
     age: "",
     category: "",
@@ -57,10 +57,13 @@ const Items = () => {
     "Stones",
     "Windows",
     "Bed",
-    // (Uncategorized exists server-side as default; you can add it here if you want to filter it explicitly)
+    // (Uncategorized exists server-side as default; add here if you want to filter it explicitly)
   ];
 
+  // UI filters (design unchanged: single dropdown)
   const [categoryFilter, setCategoryFilter] = useState("");
+  // Track search term so search + category filter combine cleanly
+  const [searchTerm, setSearchTerm] = useState("");
 
   const fetchItems = async () => {
     setFetching(true);
@@ -68,8 +71,8 @@ const Items = () => {
       const response = await axios.get(
         `${process.env.REACT_APP_API_URL}/api/items`
       );
-      setItems(response.data);
-      setAllItems(response.data);
+      setAllItems(response.data || []);
+      setItems(response.data || []);
     } catch (error) {
       toast.error("Failed to fetch items");
     } finally {
@@ -80,6 +83,33 @@ const Items = () => {
   useEffect(() => {
     fetchItems();
   }, []);
+
+  // ----- Helpers for mixed category model (string vs array) -----
+  const itemCategories = (it) => {
+    if (Array.isArray(it?.categories)) return it.categories;
+    if (it?.category) return [it.category];
+    return []; // treat as uncategorized
+  };
+
+  const matchesCategory = (it, selected) => {
+    if (!selected) return true; // "All"
+    const cats = itemCategories(it);
+    return cats.includes(selected);
+  };
+
+  const matchesSearch = (it, term) => {
+    if (!term) return true;
+    const name = (it?.name || "").toLowerCase();
+    return name.includes(term.toLowerCase());
+  };
+
+  // Recompute visible items whenever data or filters change
+  useEffect(() => {
+    const filtered = (allItems || []).filter(
+      (it) => matchesSearch(it, searchTerm) && matchesCategory(it, categoryFilter)
+    );
+    setItems(filtered);
+  }, [allItems, searchTerm, categoryFilter]);
 
   const handleDeleteItem = (itemId) => {
     Swal.fire({
@@ -117,11 +147,7 @@ const Items = () => {
 
     // Local validation for condition range (1-10)
     const conditionNum = Number(newItem.condition);
-    if (
-      Number.isNaN(conditionNum) ||
-      conditionNum < 1 ||
-      conditionNum > 10
-    ) {
+    if (Number.isNaN(conditionNum) || conditionNum < 1 || conditionNum > 10) {
       toast.error("Condition must be a number between 1 and 10");
       return;
     }
@@ -132,9 +158,10 @@ const Items = () => {
       formData.append("name", newItem.name);
       formData.append("description", newItem.description);
       formData.append("price", newItem.price);
-      formData.append("condition", String(conditionNum)); // ✅ include condition
+      formData.append("condition", String(conditionNum));
       formData.append("origin", newItem.origin);
       formData.append("age", newItem.age);
+      // Keep single-field category (server will also map to categories array)
       formData.append("category", newItem.category);
 
       if (newItem.images.length > 0) {
@@ -143,13 +170,9 @@ const Items = () => {
         });
       }
 
-      await axios.post(
-        `${process.env.REACT_APP_API_URL}/api/items`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
+      await axios.post(`${process.env.REACT_APP_API_URL}/api/items`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
 
       toast.success("Item added successfully");
       setNewItem({
@@ -165,7 +188,9 @@ const Items = () => {
       setShowAddModal(false);
       fetchItems();
     } catch (error) {
-      toast.error(error?.response?.data?.error || "There was an issue adding the item");
+      toast.error(
+        error?.response?.data?.error || "There was an issue adding the item"
+      );
     } finally {
       setLoading(false);
     }
@@ -192,10 +217,19 @@ const Items = () => {
     handleMenuClose();
   };
 
+  // Render helper: readable category cell (keeps same column; shows comma list when array)
+  const renderCategoryCell = (it) => {
+    const cats = itemCategories(it);
+    if (cats.length) return cats.join(", ");
+    // fallback for truly empty/uncategorized
+    return it?.category || "Uncategorized";
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Toaster position="top-right" />
       <h2>Items in Cart</h2>
+
       <Box
         sx={{
           display: "flex",
@@ -207,21 +241,12 @@ const Items = () => {
         <Button variant="contained" onClick={() => setShowAddModal(true)}>
           Add New Antique
         </Button>
+
         <TextField
           label="Search by name..."
           variant="outlined"
           size="small"
-          onChange={(e) => {
-            const value = e.target.value.toLowerCase();
-            if (!value) {
-              setItems(allItems);
-            } else {
-              const filtered = allItems.filter((item) =>
-                item.name.toLowerCase().includes(value)
-              );
-              setItems(filtered);
-            }
-          }}
+          onChange={(e) => setSearchTerm((e.target.value || "").toLowerCase())}
         />
       </Box>
 
@@ -239,18 +264,7 @@ const Items = () => {
                     <Select
                       value={categoryFilter}
                       label="Category"
-                      onChange={(e) => {
-                        setCategoryFilter(e.target.value);
-                        if (!e.target.value) {
-                          setItems(allItems);
-                        } else {
-                          setItems(
-                            allItems.filter(
-                              (item) => item.category === e.target.value
-                            )
-                          );
-                        }
-                      }}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
                     >
                       <MenuItem value="">All</MenuItem>
                       {categories.map((cat) => (
@@ -262,19 +276,20 @@ const Items = () => {
                   </FormControl>
                 </TableCell>
                 <TableCell>Price</TableCell>
-                <TableCell>Condition (1–10)</TableCell>{/* ✅ new column */}
+                <TableCell>Condition (1–10)</TableCell>
                 <TableCell>Images</TableCell>
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
+
             <TableBody>
               {items.length ? (
                 items.map((item) => (
                   <TableRow key={item._id}>
                     <TableCell>{item.name}</TableCell>
-                    <TableCell>{item.category}</TableCell>
+                    <TableCell>{renderCategoryCell(item)}</TableCell>
                     <TableCell>₱{item.price}</TableCell>
-                    <TableCell>{item.condition ?? "—"}</TableCell>{/* ✅ show condition */}
+                    <TableCell>{item.condition ?? "—"}</TableCell>
                     <TableCell>
                       {item.images && item.images.length > 0 ? (
                         <Box sx={{ display: "flex", gap: 1 }}>
@@ -297,9 +312,7 @@ const Items = () => {
                       )}
                     </TableCell>
                     <TableCell align="center">
-                      <IconButton
-                        onClick={(e) => handleMenuOpen(e, item._id)}
-                      >
+                      <IconButton onClick={(e) => handleMenuOpen(e, item._id)}>
                         <MoreVert />
                       </IconButton>
                       <Menu
@@ -307,9 +320,7 @@ const Items = () => {
                         open={Boolean(anchorEl) && menuItemId === item._id}
                         onClose={handleMenuClose}
                       >
-                        <MenuItem onClick={() => handleEdit(item)}>
-                          Edit
-                        </MenuItem>
+                        <MenuItem onClick={() => handleEdit(item)}>Edit</MenuItem>
                         <MenuItem onClick={() => handleDelete(item._id)}>
                           Delete
                         </MenuItem>
@@ -322,7 +333,8 @@ const Items = () => {
                               toast.success("Item added as featured");
                             } catch (error) {
                               toast.error(
-                                error.response?.data?.error || "Failed to add as featured"
+                                error.response?.data?.error ||
+                                  "Failed to add as featured"
                               );
                             }
                             handleMenuClose();
@@ -346,7 +358,7 @@ const Items = () => {
         </TableContainer>
       )}
 
-      {/* ✅ Add Item Modal */}
+      {/* Add Item Modal (kept same props) */}
       <AddItemModal
         show={showAddModal}
         onHide={() => setShowAddModal(false)}
@@ -357,7 +369,7 @@ const Items = () => {
         categories={categories}
       />
 
-      {/* ✅ Edit Modal */}
+      {/* Edit Item Modal (kept same props) */}
       {selectedItem && (
         <EditItemModal
           show={showEditModal}
