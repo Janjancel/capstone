@@ -22,10 +22,10 @@ import {
 import html2pdf from "html2pdf.js";
 import "bootstrap/dist/css/bootstrap.min.css";
 
-const API_URL = process.env.REACT_APP_API_URL; // ✅ Use env variable
+const API_URL = process.env.REACT_APP_API_URL; // ✅ env variable
 
 const CURRENCY = (n) =>
-  `₱${(Number.isFinite(n) ? n : 0).toLocaleString("en-PH", {
+  `₱${(Number.isFinite(Number(n)) ? Number(n) : 0).toLocaleString("en-PH", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -33,7 +33,34 @@ const CURRENCY = (n) =>
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Colors for charts
-const COLORS = ["#198754", "#dc3545", "#0d6efd", "#6f42c1", "#fd7e14", "#20c997", "#6c757d"];
+const COLORS = ["#198754", "#dc3545", "#0d6efd", "#6f42c1", "#fd7e14", "#20c997", "#6c757d", "#0dcaf0"];
+
+// --- Helpers
+const norm = (v) => String(v ?? "").toLowerCase().trim();
+const normStatus = (s) => norm(String(s).replaceAll("_", " "));
+
+// Map raw statuses into buckets we chart consistently
+const mapStatusBucket = (status) => {
+  const s = normStatus(status);
+  if (s.includes("delivered") || s.includes("completed")) return "delivered";
+  if (s.includes("cancelled") || s.includes("canceled") || s.includes("declined")) return "cancelled";
+  if (s.includes("pending") || s.includes("processing") || s.includes("awaiting")) return "pending";
+  return s || "pending";
+};
+
+// Grouping key
+const bucketKey = (dateObj, mode) => {
+  const d = new Date(dateObj);
+  if (Number.isNaN(d.getTime())) return "Invalid Date";
+  if (mode === "day") return d.toISOString().split("T")[0];
+  if (mode === "week") {
+    const start = new Date(d);
+    start.setDate(d.getDate() - d.getDay()); // Sunday
+    return start.toISOString().split("T")[0];
+  }
+  // month
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -43,7 +70,7 @@ const Dashboard = () => {
   const [sellCount, setSellCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
 
-  // Keep raw arrays so we can compute extra analytics
+  // Raw arrays for analytics
   const [demolishArr, setDemolishArr] = useState([]);
   const [sellArr, setSellArr] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -51,14 +78,14 @@ const Dashboard = () => {
   // Report analytics (existing + new)
   const [chartData, setChartData] = useState([]); // Sales over time
   const [statusChartData, setStatusChartData] = useState([]); // Order status trend
-  const [itemSalesData, setItemSalesData] = useState([]); // Top-selling items
+  const [itemSalesData, setItemSalesData] = useState([]); // Top-selling items (₱)
   const [pieData, setPieData] = useState([]); // Delivered vs Cancelled
   const [filter, setFilter] = useState("day"); // day | week | month
   const [pendingOrders, setPendingOrders] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
 
   // New metrics
-  const [aov, setAov] = useState(0); // Average order value (delivered)
+  const [aov, setAov] = useState(0); // Average order value (delivered/completed)
   const [deliveryRate, setDeliveryRate] = useState(0);
   const [cancelRate, setCancelRate] = useState(0);
   const [uniqueBuyers, setUniqueBuyers] = useState(0);
@@ -72,26 +99,11 @@ const Dashboard = () => {
   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
   const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
 
-  // ---- Helper to format date bucket
-  const bucketKey = (dateObj, mode) => {
-    const d = new Date(dateObj);
-    if (Number.isNaN(d.getTime())) return "Invalid Date";
-    if (mode === "day") return d.toISOString().split("T")[0];
-    if (mode === "week") {
-      const start = new Date(d);
-      // set to Sunday start-of-week (0)
-      start.setDate(d.getDate() - d.getDay());
-      return start.toISOString().split("T")[0];
-    }
-    // month
-    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}`;
-  };
-
   // ---- Fetch current user (to display email)
   useEffect(() => {
     if (!userId) return;
     const token = localStorage.getItem("token");
-    const fetchMe = async () => {
+    (async () => {
       try {
         const res = await axios.get(`${API_URL}/api/users/${userId}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -105,13 +117,12 @@ const Dashboard = () => {
         console.error("Failed to load current user:", e);
         setCurrentUser((u) => ({ ...u, email: "N/A" }));
       }
-    };
-    fetchMe();
-  }, [userId, API_URL]);
+    })();
+  }, [userId]);
 
   // ---- Fetch demolish/sell counts (top tiles)
   useEffect(() => {
-    const fetchCounts = async () => {
+    (async () => {
       try {
         const [demolishRes, sellRes, ordersRes] = await Promise.all([
           axios.get(`${API_URL}/api/demolish`),
@@ -119,28 +130,31 @@ const Dashboard = () => {
           axios.get(`${API_URL}/api/orders`)
         ]);
 
-        const demolish = demolishRes.data || [];
-        const sell = sellRes.data || [];
-        const ordersArr = ordersRes.data || [];
+        const demolish = Array.isArray(demolishRes.data) ? demolishRes.data : [];
+        const sell = Array.isArray(sellRes.data) ? sellRes.data : [];
+        const ordersArr = Array.isArray(ordersRes.data) ? ordersRes.data : [];
 
         setDemolitionCount(demolish.length || 0);
         setSellCount(sell.length || 0);
         setOrderCount(ordersArr.length || 0);
 
-        // store raw
+        // store raw for trend
         setDemolishArr(demolish);
         setSellArr(sell);
       } catch (error) {
         console.error("Error fetching top tile counts:", error);
+        setDemolitionCount(0);
+        setSellCount(0);
+        setOrderCount(0);
+        setDemolishArr([]);
+        setSellArr([]);
       }
-    };
+    })();
+  }, []);
 
-    fetchCounts();
-  }, [API_URL]);
-
-  // ---- Fetch orders + sales for analytics (plus: hydrate missing order emails)
+  // ---- Fetch orders + sales for analytics (hydrate missing order emails)
   useEffect(() => {
-    const fetchAnalytics = async () => {
+    (async () => {
       try {
         const token = localStorage.getItem("token");
         const [ordersRes, salesRes] = await Promise.all([
@@ -149,16 +163,10 @@ const Dashboard = () => {
         ]);
 
         // ----------------- HYDRATE ORDER EMAILS -----------------
-        const fetchedOrders = ordersRes.data || [];
-
-        // Collect userIds that don't have an email on the order object
-        const missingIds = Array.from(
-          new Set(
-            fetchedOrders
-              .filter((o) => !o.userEmail && o.userId)
-              .map((o) => o.userId)
-          )
-        );
+        const fetchedOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+        const missingIds = Array.from(new Set(
+          fetchedOrders.filter((o) => !o.userEmail && o.userId).map((o) => o.userId)
+        ));
 
         let idToEmail = {};
         if (missingIds.length > 0) {
@@ -180,38 +188,31 @@ const Dashboard = () => {
 
         const hydratedOrders = fetchedOrders.map((o) => ({
           ...o,
-          userEmail: o.userEmail || idToEmail[o.userId] || "—",
+          userEmail: o.userEmail || idToEmail[o.userId] || o.email || "—",
         }));
         setOrders(hydratedOrders);
 
         // ----------------- ANALYTICS -----------------
-        const salesData = salesRes.data || [];
+        const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
 
         // ===== Order Status Trend + Pie + Pending
-        const statusCountMap = {};
+        const statusCountMap = {}; // { bucket: { date, pending, cancelled, delivered } }
         let pendingCount = 0;
         let deliveredTotal = 0;
         let cancelledTotal = 0;
 
         hydratedOrders.forEach((order) => {
           const key = bucketKey(order.createdAt, filter);
-          const statusKey = String(order.status || "Pending").toLowerCase();
+          const bucket = mapStatusBucket(order.status);
 
           if (!statusCountMap[key]) {
             statusCountMap[key] = { date: key, pending: 0, cancelled: 0, delivered: 0 };
           }
-          if (statusKey.includes("pending")) {
-            statusCountMap[key].pending++;
-            pendingCount++;
-          }
-          if (statusKey.includes("cancelled")) {
-            statusCountMap[key].cancelled++;
-            cancelledTotal++;
-          }
-          if (statusKey.includes("delivered")) {
-            statusCountMap[key].delivered++;
-            deliveredTotal++;
-          }
+          statusCountMap[key][bucket] = (statusCountMap[key][bucket] || 0) + 1;
+
+          if (bucket === "pending") pendingCount++;
+          if (bucket === "cancelled") cancelledTotal++;
+          if (bucket === "delivered") deliveredTotal++;
         });
 
         setPendingOrders(pendingCount);
@@ -219,28 +220,28 @@ const Dashboard = () => {
           Object.values(statusCountMap).sort((a, b) => new Date(a.date) - new Date(b.date))
         );
         setPieData([
-          { name: "Delivered", value: deliveredTotal },
-          { name: "Cancelled", value: cancelledTotal },
+          { name: "Delivered/Completed", value: deliveredTotal },
+          { name: "Cancelled/Declined", value: cancelledTotal },
         ]);
 
         // ===== Sales over time + Top-selling items + Total revenue
-        const salesMap = {};
+        const salesMap = {}; // { bucket: totalRevenue }
         let total = 0;
-        const itemMap = {};
-        const buyerSpend = {};
+        const itemMap = {}; // { itemName: amount }
+        const buyerSpend = {}; // { email: total }
         const weekdayMap = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
 
         salesData.forEach((sale) => {
           const key = bucketKey(sale.deliveredAt || sale.createdAt, filter);
-          const saleTotal = sale.total || 0;
+          const saleTotal = Number(sale.total) || 0;
 
           salesMap[key] = (salesMap[key] || 0) + saleTotal;
           total += saleTotal;
 
-          // top items
-          sale.items?.forEach((item) => {
+          // top items (by revenue)
+          (sale.items || []).forEach((item) => {
             const name = item.name || "Unnamed Item";
-            const amount = (item.price || 0) * (item.quantity || 0);
+            const amount = (Number(item.price) || 0) * (Number(item.quantity) || 0);
             itemMap[name] = (itemMap[name] || 0) + amount;
           });
 
@@ -248,10 +249,11 @@ const Dashboard = () => {
           const email = sale.userEmail || sale.customerEmail || sale.email || "Unknown";
           buyerSpend[email] = (buyerSpend[email] || 0) + saleTotal;
 
-          // weekday revenue
+          // weekday revenue (based on deliveredAt when present)
           const d = new Date(sale.deliveredAt || sale.createdAt);
           if (!Number.isNaN(d.getTime())) {
-            weekdayMap[d.getDay()] = (weekdayMap[d.getDay()] || 0) + saleTotal;
+            const wd = d.getDay();
+            weekdayMap[wd] = (weekdayMap[wd] || 0) + saleTotal;
           }
         });
 
@@ -267,13 +269,13 @@ const Dashboard = () => {
           .slice(0, 5);
 
         setChartData(chartArray.sort((a, b) => new Date(a.date) - new Date(b.date)));
-        setItemSalesData(itemArray);
+        setItemSalesData(itemArray.sort((a, b) => b.total - a.total).slice(0, 12));
         setTotalRevenue(total);
         setWeekdayRevenueData(weekdayArray);
         setTopCustomers(topCustomerArray);
 
         // ===== High-level KPIs
-        const deliveredCount = salesData.length; // assuming 1 sale == 1 delivered order
+        const deliveredCount = salesData.length; // assuming each sale = delivered/completed order
         setAov(deliveredCount > 0 ? total / deliveredCount : 0);
 
         const totalResolved = deliveredTotal + cancelledTotal;
@@ -299,13 +301,13 @@ const Dashboard = () => {
             (o.cod === true ? "Cash on Delivery" : o.cod === false ? "Cash" : undefined) ||
             o.method ||
             "Unknown";
-          // Normalize a bit
-          method = String(method).toLowerCase().includes("cod")
+          const m = norm(method);
+          const label = m.includes("cod")
             ? "Cash on Delivery"
-            : String(method).toLowerCase().includes("cash")
+            : m.includes("cash")
             ? "Cash"
-            : method;
-          paymentMap[method] = (paymentMap[method] || 0) + 1;
+            : method || "Unknown";
+          paymentMap[label] = (paymentMap[label] || 0) + 1;
         });
         const paymentArray = Object.entries(paymentMap).map(([name, value]) => ({ name, value }));
         setPaymentMixData(paymentArray);
@@ -328,26 +330,42 @@ const Dashboard = () => {
         setRequestTrendData(trendArray);
       } catch (error) {
         console.error("Error fetching analytics:", error);
+        setOrders([]);
+        setChartData([]);
+        setStatusChartData([]);
+        setItemSalesData([]);
+        setPieData([]);
+        setWeekdayRevenueData([]);
+        setPaymentMixData([]);
+        setRequestTrendData([]);
+        setTopCustomers([]);
+        setPendingOrders(0);
+        setTotalRevenue(0);
+        setAov(0);
+        setDeliveryRate(0);
+        setCancelRate(0);
+        setUniqueBuyers(0);
+        setRepeatBuyers(0);
       }
-    };
-
-    fetchAnalytics();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [API_URL, filter, demolishArr.length, sellArr.length]); // re-run when filter or source arrays change
+    })();
+    // re-run when filter or sources change size (cheap heuristic)
+  }, [filter, demolishArr.length, sellArr.length]);
 
   // ---- Export helpers (CSV/PDF)
   const exportCSV = () => {
-    const headers = "Order ID,User Email,Total Items,Total Amount\n";
+    const headers = "Order ID,User Email,Status,Total Items,Total Amount,Created At\n";
     const rows = (orders || [])
       .map((order) => {
         const totalItems =
-          order.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+          (order.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0) || 0;
         const totalAmount =
-          order.items?.reduce(
-            (sum, item) => sum + (item.quantity || 0) * (item.price || 0),
+          (order.items || []).reduce(
+            (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.price) || 0),
             0
           ) || 0;
-        return `${order._id},${order.userEmail || ""},${totalItems},${totalAmount}`;
+        const oid = order.orderId || order._id || "";
+        const created = order.createdAt ? new Date(order.createdAt).toISOString() : "";
+        return `${oid},${(order.userEmail || "").replaceAll(",", " ")},${(order.status || "").replaceAll(",", " ")},${totalItems},${totalAmount},${created}`;
       })
       .join("\n");
 
@@ -367,7 +385,7 @@ const Dashboard = () => {
       margin: 0.5,
       filename: "dashboard-report.pdf",
       image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2 },
+      html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
     };
     html2pdf().set(options).from(element).save();
@@ -471,7 +489,7 @@ const Dashboard = () => {
             <Card.Body>
               <h6>Average Order Value</h6>
               <h4 className="mb-0">{CURRENCY(aov)}</h4>
-              <small className="text-muted">Delivered orders</small>
+              <small className="text-muted">Delivered/Completed orders</small>
             </Card.Body>
           </Card>
         </Col>
@@ -480,7 +498,7 @@ const Dashboard = () => {
             <Card.Body>
               <h6>Delivery Rate</h6>
               <h4 className="mb-0">{deliveryRate.toFixed(1)}%</h4>
-              <small className="text-muted">Delivered / (Delivered + Cancelled)</small>
+              <small className="text-muted">Delivered ÷ (Delivered + Cancelled)</small>
             </Card.Body>
           </Card>
         </Col>
@@ -489,7 +507,7 @@ const Dashboard = () => {
             <Card.Body>
               <h6>Cancel Rate</h6>
               <h4 className="mb-0">{cancelRate.toFixed(1)}%</h4>
-              <small className="text-muted">Cancelled share</small>
+              <small className="text-muted">Cancelled/Declined share</small>
             </Card.Body>
           </Card>
         </Col>
@@ -510,7 +528,10 @@ const Dashboard = () => {
         <Card className="p-4 shadow-sm mb-4 bg-light">
           <Row>
             <Col md={6}>
-              <h5 className="mb-3">Sales Over Time</h5>
+              <h5 className="mb-1">Sales Over Time</h5>
+              <small className="text-muted d-block mb-3">
+                Grouped by {filter === "day" ? "day" : filter === "week" ? "week (Sun start)" : "month"}
+              </small>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -531,8 +552,8 @@ const Dashboard = () => {
                   <Tooltip />
                   <Legend />
                   <Line type="monotone" dataKey="pending" stroke="#ffc107" name="Pending" />
-                  <Line type="monotone" dataKey="cancelled" stroke="#dc3545" name="Cancelled" />
-                  <Line type="monotone" dataKey="delivered" stroke="#198754" name="Delivered" />
+                  <Line type="monotone" dataKey="cancelled" stroke="#dc3545" name="Cancelled/Declined" />
+                  <Line type="monotone" dataKey="delivered" stroke="#198754" name="Delivered/Completed" />
                 </LineChart>
               </ResponsiveContainer>
             </Col>
@@ -541,7 +562,7 @@ const Dashboard = () => {
 
         {/* Top-Selling Items */}
         <Card className="p-4 shadow-sm mb-4 bg-light">
-          <h5 className="mb-3">Top-Selling Items</h5>
+          <h5 className="mb-3">Top-Selling Items (by Revenue)</h5>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={itemSalesData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -670,26 +691,27 @@ const Dashboard = () => {
                 <tr>
                   <th>Order ID</th>
                   <th>User Email</th>
+                  <th>Status</th>
                   <th>Total Items</th>
                   <th>Total Amount</th>
                 </tr>
               </thead>
               <tbody>
-                {orders.slice(0, 10).map((order) => (
-                  <tr key={order._id}>
-                    <td>{order._id}</td>
-                    <td>{order.userEmail || "—"}</td>
-                    <td>{order.items?.reduce((sum, i) => sum + (i.quantity || 0), 0) || 0}</td>
-                    <td>
-                      {CURRENCY(
-                        (order.items || []).reduce(
-                          (sum, i) => sum + (i.quantity || 0) * (i.price || 0),
-                          0
-                        )
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {(orders || []).slice(0, 10).map((order) => {
+                  const itemsCount = (order.items || [])
+                    .reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
+                  const amount = (order.items || [])
+                    .reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.price) || 0), 0);
+                  return (
+                    <tr key={order._id}>
+                      <td>{order.orderId || order._id}</td>
+                      <td>{order.userEmail || "—"}</td>
+                      <td>{(order.status || "Pending").toString().replaceAll("_", " ")}</td>
+                      <td>{itemsCount}</td>
+                      <td>{CURRENCY(amount)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </Table>
           </Card.Body>
