@@ -1,5 +1,6 @@
 
-// import React, { useState } from "react";
+
+// import React, { useState, useEffect } from "react";
 // import { FaBell, FaSignOutAlt } from "react-icons/fa";
 // import { Button, Badge } from "react-bootstrap";
 // import { useNavigate, useLocation } from "react-router-dom";
@@ -16,9 +17,42 @@
 //   const [unreadCount, setUnreadCount] = useState(0);
 //   const location = useLocation();
 //   const navigate = useNavigate();
+//   const API_URL = process.env.REACT_APP_API_URL;
 
 //   const { setUser } = useAuth(); // Auth context
 //   // const { setCartCount } = useCart(); // Cart context
+
+//   // 🔁 Polling in background every 5s to keep unread count fresh
+//   useEffect(() => {
+//     let isMounted = true;
+
+//     const fetchUnreadCount = async () => {
+//       try {
+//         const res = await axios.get(`${API_URL}/api/notifications`);
+//         if (!Array.isArray(res.data)) return;
+
+//         const adminNotifs = res.data.filter((n) => n.role === "admin");
+//         const unread = adminNotifs.filter((n) => !n.read).length;
+
+//         if (isMounted) {
+//           setUnreadCount(unread);
+//         }
+//       } catch (err) {
+//         console.error("Error polling notifications:", err);
+//       }
+//     };
+
+//     // initial fetch
+//     fetchUnreadCount();
+
+//     // poll every 5 seconds
+//     const intervalId = setInterval(fetchUnreadCount, 5000);
+
+//     return () => {
+//       isMounted = false;
+//       clearInterval(intervalId);
+//     };
+//   }, [API_URL]);
 
 //   const handleLogout = async () => {
 //     Swal.fire({
@@ -33,7 +67,7 @@
 //         try {
 //           const userId = localStorage.getItem("userId");
 //           if (userId) {
-//             await axios.post(`${process.env.REACT_APP_API_URL}/api/auth/logout`, { userId });
+//             await axios.post(`${API_URL}/api/auth/logout`, { userId });
 //           }
 
 //           localStorage.clear();
@@ -59,10 +93,15 @@
 //   return (
 //     <div className="d-flex justify-content-between align-items-center p-3 bg-white sticky-top z-3">
 //       <div className="d-flex align-items-center gap-3">
-//         <Button variant="secondary" onClick={onToggleSidebar} title="Toggle Sidebar">
+//         <Button
+//           variant="secondary"
+//           onClick={onToggleSidebar}
+//           title="Toggle Sidebar"
+//         >
 //           <svg
 //             xmlns="http://www.w3.org/2000/svg"
-//             width="16" height="16"
+//             width="16"
+//             height="16"
 //             fill="currentColor"
 //             className="bi bi-window-sidebar"
 //             viewBox="0 0 16 16"
@@ -74,15 +113,24 @@
 //         {/* <h4 className="mb-0 fw-bold text-dark">{getPageName()} Dashboard</h4> */}
 //       </div>
 
-//       <div className="d-flex align-items-center gap-3" style={{ marginRight: "100px" }}>
+//       <div
+//         className="d-flex align-items-center gap-3"
+//         style={{ marginRight: "100px" }}
+//       >
 //         <Button
 //           variant="light"
 //           onClick={() => setShowNotifModal(true)}
-//           className={`position-relative ${unreadCount > 0 ? "animate__animated animate__tada" : ""}`}
+//           className={`position-relative ${
+//             unreadCount > 0 ? "animate__animated animate__tada" : ""
+//           }`}
 //         >
 //           <FaBell size={20} />
 //           {unreadCount > 0 && (
-//             <Badge bg="danger" pill className="position-absolute top-0 start-100 translate-middle">
+//             <Badge
+//               bg="danger"
+//               pill
+//               className="position-absolute top-0 start-100 translate-middle"
+//             >
 //               {unreadCount}
 //             </Badge>
 //           )}
@@ -105,6 +153,7 @@
 
 // export default DashboardNavbar;
 
+// src/components/DashboardNavbar/DashboardNavbar.jsx
 import React, { useState, useEffect } from "react";
 import { FaBell, FaSignOutAlt } from "react-icons/fa";
 import { Button, Badge } from "react-bootstrap";
@@ -115,49 +164,89 @@ import axios from "axios";
 import "animate.css";
 import DashboardNavbarNotifModal from "./DashboardNavbarNotifModal";
 import { useAuth } from "../../context/AuthContext";
-// import { useCart } from "../../context/CartContext";
 
 const DashboardNavbar = ({ onLogout, onToggleSidebar }) => {
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [userId, setUserId] = useState(null);
+
   const location = useLocation();
   const navigate = useNavigate();
   const API_URL = process.env.REACT_APP_API_URL;
 
-  const { setUser } = useAuth(); // Auth context
-  // const { setCartCount } = useCart(); // Cart context
+  const { setUser } = useAuth();
 
-  // 🔁 Polling in background every 5s to keep unread count fresh
+  // ---- helpers ----
+  const authHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : undefined;
+  };
+
+  // Load userId (mirrors NotificationBell.jsx)
   useEffect(() => {
+    const loadUserId = async () => {
+      const cached = localStorage.getItem("userId");
+      const token = localStorage.getItem("token");
+
+      if (cached) {
+        setUserId(cached);
+        return;
+      }
+
+      if (token) {
+        try {
+          const res = await axios.get(`${API_URL}/api/users/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.data?._id) {
+            localStorage.setItem("userId", res.data._id);
+            setUserId(res.data._id);
+          }
+        } catch {
+          // invalid/expired token
+          localStorage.removeItem("token");
+          localStorage.removeItem("userId");
+        }
+      }
+    };
+    loadUserId();
+  }, [API_URL]);
+
+  // 🔁 Poll unread ADMIN count from the same per-user feed used elsewhere
+  useEffect(() => {
+    if (!userId) return;
+
     let isMounted = true;
+    let intervalId;
 
     const fetchUnreadCount = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/notifications`);
-        if (!Array.isArray(res.data)) return;
-
-        const adminNotifs = res.data.filter((n) => n.role === "admin");
+        const res = await axios.get(
+          `${API_URL}/api/notifications/users/${userId}/notifications`,
+          { headers: authHeaders() }
+        );
+        const all = Array.isArray(res.data) ? res.data : [];
+        // admin-only
+        const adminNotifs = all.filter(
+          (n) => String(n.role || "").toLowerCase() === "admin"
+        );
         const unread = adminNotifs.filter((n) => !n.read).length;
 
-        if (isMounted) {
-          setUnreadCount(unread);
-        }
+        if (isMounted) setUnreadCount(unread);
       } catch (err) {
         console.error("Error polling notifications:", err);
       }
     };
 
-    // initial fetch
+    // initial + 5s poll
     fetchUnreadCount();
-
-    // poll every 5 seconds
-    const intervalId = setInterval(fetchUnreadCount, 5000);
+    intervalId = setInterval(fetchUnreadCount, 5000);
 
     return () => {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [API_URL]);
+  }, [API_URL, userId]);
 
   const handleLogout = async () => {
     Swal.fire({
@@ -170,17 +259,14 @@ const DashboardNavbar = ({ onLogout, onToggleSidebar }) => {
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
-          const userId = localStorage.getItem("userId");
-          if (userId) {
-            await axios.post(`${API_URL}/api/auth/logout`, { userId });
+          const uid = localStorage.getItem("userId");
+          if (uid) {
+            await axios.post(`${API_URL}/api/auth/logout`, { userId: uid });
           }
-
           localStorage.clear();
           if (setUser) setUser(null);
-          // if (setCartCount) setCartCount(0);
           toast.success("You have been successfully logged out.");
           navigate("/", { replace: true });
-
           if (onLogout) onLogout();
         } catch (error) {
           console.error("Logout error:", error);
@@ -250,6 +336,8 @@ const DashboardNavbar = ({ onLogout, onToggleSidebar }) => {
       <DashboardNavbarNotifModal
         show={showNotifModal}
         onHide={() => setShowNotifModal(false)}
+        // This setter will now receive ADMIN-only unread values from the modal too,
+        // and both use the same per-user dataset → counts stay consistent.
         setUnreadCount={setUnreadCount}
       />
     </div>

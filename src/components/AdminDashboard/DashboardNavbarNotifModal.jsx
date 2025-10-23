@@ -8,53 +8,21 @@ import axios from "axios";
 const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [polling, setPolling] = useState(false);
-  const [userId, setUserId] = useState(null);
-  const navigate = useNavigate();
 
-  // Keep env usage stable
+  // follow NotificationBell semantics (startPolling toggles interval)
+  const [startPolling, setStartPolling] = useState(false);
+
+  // mirror NotificationBell: load userId and use per-user endpoints
+  const [userId, setUserId] = useState(null);
+
+  const navigate = useNavigate();
   const API_URL = useMemo(() => process.env.REACT_APP_API_URL, []);
 
-  // --- Auth helpers & user ---
-  const authHeaders = () => {
-    const token = localStorage.getItem("token");
-    return token ? { Authorization: `Bearer ${token}` } : undefined;
-  };
+  // ---------- Helpers (kept intact) ----------
 
-  useEffect(() => {
-    const loadUserId = async () => {
-      // prefer cached
-      const cached = localStorage.getItem("userId");
-      if (cached) {
-        setUserId(cached);
-        return;
-      }
-      // try /me if token exists
-      const token = localStorage.getItem("token");
-      if (!token) return;
-      try {
-        const res = await axios.get(`${API_URL}/api/users/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.data?._id) {
-          localStorage.setItem("userId", res.data._id);
-          setUserId(res.data._id);
-        }
-      } catch {
-        // token invalid; clean up
-        localStorage.removeItem("token");
-        localStorage.removeItem("userId");
-      }
-    };
-    loadUserId();
-  }, [API_URL]);
-
-  // --- Helpers (model-agnostic) ---
-
-  // Map legacy `type` or new `for` to a normalized area
+  // Normalize area: new `for` or legacy `type`
   const getArea = (n) => {
     if (n?.for) return n.for; // "order" | "sell" | "demolish"
-    // Legacy fallbacks using `type`
     const t = (n?.type || "").toLowerCase();
     if (t.includes("order") || t === "cancel_request") return "order";
     if (t.startsWith("sell")) return "sell";
@@ -67,24 +35,21 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     return "general";
   };
 
-  // Decide route, prefer deep link
+  // Prefer deep link, else area route (kept)
   const resolveRoute = (n) => {
     if (n?.link) return n.link;
 
     const area = getArea(n);
     if (area === "order") {
-      // If you have a details route, you can swap `/admin/orders` to `/admin/orders/${n.orderId}`
       return "/admin/orders";
     }
     if (area === "sell") {
-      // If you have an id route, e.g. `/sellDashboard/:id`, you can use n.sellRequestId
       return "/sellDashboard";
     }
     if (area === "demolish") {
-      // If you have an id route, e.g. `/demolishDashboard/:id`, you can use n.demolishRequestId
       return "/demolishDashboard";
     }
-    return "/"; // fallback
+    return "/";
   };
 
   const ctaLabel = (n) => {
@@ -117,20 +82,59 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     }
   };
 
-  // --- Data fetching / polling ---
+  const authHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : undefined;
+    // (NotificationBell uses this pattern)
+  };
 
-  // Fetch notifications (admin only)
+  // ---------- Load userId (same pattern as NotificationBell) ----------
+  useEffect(() => {
+    const loadUserId = async () => {
+      const storedId = localStorage.getItem("userId");
+      const token = localStorage.getItem("token");
+
+      if (storedId) {
+        setUserId(storedId);
+        return;
+      }
+
+      if (token) {
+        try {
+          const res = await axios.get(`${API_URL}/api/users/me`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.data?._id) {
+            localStorage.setItem("userId", res.data._id);
+            setUserId(res.data._id);
+          }
+        } catch {
+          console.warn("Auth token invalid");
+          localStorage.removeItem("token");
+          localStorage.removeItem("userId");
+        }
+      }
+    };
+
+    loadUserId();
+  }, [API_URL]);
+
+  // ---------- Fetch admin notifications (per-user) ----------
   const fetchNotifications = async () => {
+    if (!userId) return;
+
     try {
-      const res = await axios.get(`${API_URL}/api/notifications`, {
-        headers: authHeaders(),
-      });
-      const list = Array.isArray(res.data) ? res.data : [];
+      // Use the same per-user dataset as NotificationBell
+      const res = await axios.get(
+        `${API_URL}/api/notifications/users/${userId}/notifications`,
+        { headers: authHeaders() }
+      );
+      const all = Array.isArray(res.data) ? res.data : [];
 
-      // Admin-only filter still intact
-      const adminNotifs = list.filter((n) => n.role === "admin");
+      // Fetch ONLY admin notifications
+      const adminNotifs = all.filter((n) => n.role === "admin");
 
-      // Sort by newest first if backend doesn't sort
+      // Sort newest first (kept)
       adminNotifs.sort((a, b) => {
         const da = new Date(a.createdAt || 0).getTime();
         const db = new Date(b.createdAt || 0).getTime();
@@ -139,9 +143,10 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
 
       setNotifications(adminNotifs);
 
+      // Unread + polling behavior identical to NotificationBell
       const unread = adminNotifs.filter((n) => !n.read).length;
       setUnreadCount(unread);
-      setPolling(unread > 0);
+      setStartPolling(unread > 0);
     } catch (err) {
       console.error("Error fetching notifications:", err);
     } finally {
@@ -149,175 +154,130 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     }
   };
 
-  // Fetch when modal opens
+  // Fetch when modal opens (and when userId becomes available)
   useEffect(() => {
-    if (show) {
+    if (show && userId) {
       setLoading(true);
       fetchNotifications();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [show]);
+  }, [show, userId]);
 
-  // Poll if unread exists
+  // Poll for notifications if unread exists (same cadence/stop rule)
   useEffect(() => {
-    if (!polling) return undefined;
-    const id = setInterval(fetchNotifications, 3000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polling]);
+    if (!userId || !startPolling) return;
 
-  // --- Actions (with robust endpoints & fallbacks) ---
-
-  // Single: mark notification as read (prefer per-user route, fallback to legacy)
-  const handleMarkAsRead = async (id) => {
-    try {
-      // Try new per-user route first (if we know userId)
-      if (userId) {
-        await axios.patch(
-          `${API_URL}/api/notifications/users/${userId}/notifications/${id}`,
-          { read: true },
+    const poll = async () => {
+      try {
+        const res = await axios.get(
+          `${API_URL}/api/notifications/users/${userId}/notifications`,
           { headers: authHeaders() }
         );
-      } else {
-        // Fallback legacy route
-        await axios.patch(
-          `${API_URL}/api/notifications/${id}/read`,
-          { read: true },
-          { headers: authHeaders() }
-        );
+        const all = Array.isArray(res.data) ? res.data : [];
+        const adminNotifs = all.filter((n) => n.role === "admin");
+
+        adminNotifs.sort((a, b) => {
+          const da = new Date(a.createdAt || 0).getTime();
+          const db = new Date(b.createdAt || 0).getTime();
+          return db - da;
+        });
+
+        setNotifications(adminNotifs);
+
+        const unread = adminNotifs.filter((n) => !n.read).length;
+        setUnreadCount(unread);
+        if (unread === 0) setStartPolling(false);
+      } catch (err) {
+        console.error("Polling error:", err);
       }
+    };
 
-      // Local state updates
+    const id = setInterval(poll, 3000);
+    return () => clearInterval(id);
+  }, [userId, startPolling, API_URL, setUnreadCount]);
+
+  // ---------- Actions (ported 1:1 from NotificationBell style) ----------
+
+  const handleMarkAsRead = async (notifId) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `${API_URL}/api/notifications/users/${userId}/notifications/${notifId}`,
+        { read: true },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
       setNotifications((prev) =>
         prev.map((n) =>
-          n._id === id ? { ...n, read: true, readAt: new Date().toISOString() } : n
+          n._id === notifId ? { ...n, read: true, readAt: new Date().toISOString() } : n
         )
       );
 
       setUnreadCount((prev) => {
         const next = Math.max((typeof prev === "number" ? prev : 0) - 1, 0);
-        if (next === 0) setPolling(false);
+        if (next === 0) setStartPolling(false);
         return next;
       });
     } catch (err) {
-      // If per-user route failed and we haven't tried legacy yet, try it once more
-      if (userId) {
-        try {
-          await axios.patch(
-            `${API_URL}/api/notifications/${id}/read`,
-            { read: true },
-            { headers: authHeaders() }
-          );
-          setNotifications((prev) =>
-            prev.map((n) =>
-              n._id === id ? { ...n, read: true, readAt: new Date().toISOString() } : n
-            )
-          );
-          setUnreadCount((prev) => {
-            const next = Math.max((typeof prev === "number" ? prev : 0) - 1, 0);
-            if (next === 0) setPolling(false);
-            return next;
-          });
-          return;
-        } catch (e2) {
-          console.error("Error marking as read (fallback failed):", e2);
-        }
-      } else {
-        console.error("Error marking as read:", err);
-      }
+      console.error("Error marking as read:", err);
       Swal.fire("Error", "Failed to mark as read", "error");
     }
   };
 
-  // Bulk: mark all as read (prefer per-user bulk, then legacy bulk, then per-item fallback)
   const handleMarkAllAsRead = async () => {
-    const unreadIds = notifications.filter((n) => !n.read).map((n) => n._id);
-    if (unreadIds.length === 0) return;
-
     try {
-      if (userId) {
-        // New per-user bulk route
-        await axios.patch(
-          `${API_URL}/api/notifications/users/${userId}/notifications`,
-          { read: true },
-          { headers: authHeaders() }
-        );
-      } else {
-        // Legacy bulk route (if your API supports something like this)
-        await axios.patch(
-          `${API_URL}/api/notifications/mark-all-read`,
-          {},
-          { headers: authHeaders() }
-        );
-      }
-    } catch (err) {
-      // Last-resort: best-effort mark each unread one-by-one via legacy single endpoint
-      try {
-        await Promise.allSettled(
-          unreadIds.map((id) =>
-            axios.patch(
-              `${API_URL}/api/notifications/${id}/read`,
-              { read: true },
-              { headers: authHeaders() }
-            )
-          )
-        );
-      } catch (e2) {
-        console.error("Bulk mark-all fallback failed:", e2);
-        Swal.fire("Error", "Failed to mark all as read", "error");
-        return;
-      }
-    }
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `${API_URL}/api/notifications/users/${userId}/notifications`,
+        { read: true },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    // Local state updates
-    setNotifications((prev) =>
-      prev.map((n) => ({ ...n, read: true, readAt: new Date().toISOString() }))
-    );
-    setUnreadCount(0);
-    setPolling(false);
+      // Only mark admin notifs as read locally (to mirror what we display)
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.role === "admin" ? { ...n, read: true, readAt: new Date().toISOString() } : n
+        )
+      );
+
+      setUnreadCount(0);
+      setStartPolling(false);
+    } catch (err) {
+      console.error("Error marking all as read:", err);
+      Swal.fire("Error", "Failed to mark all as read", "error");
+    }
   };
 
-  // Clear notifications (prefer per-user route, fallback to legacy clear)
   const handleClearNotifications = async () => {
     try {
-      if (userId) {
-        await axios.delete(
-          `${API_URL}/api/notifications/users/${userId}/notifications`,
-          { headers: authHeaders() }
-        );
-      } else {
-        await axios.delete(`${API_URL}/api/notifications/clear`, {
-          headers: authHeaders(),
-        });
-      }
+      const token = localStorage.getItem("token");
+      // Clear the entire per-user list, then we show only admin (which will be empty)
+      await axios.delete(
+        `${API_URL}/api/notifications/users/${userId}/notifications`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
       setNotifications([]);
       setUnreadCount(0);
-      setPolling(false);
+      setStartPolling(false);
     } catch (err) {
       console.error("Error clearing notifications:", err);
       Swal.fire("Error", "Failed to clear notifications", "error");
     }
   };
 
-  // Price payload: support both legacy `data` and new `payload`
-  const getPayload = (n) => n?.data || n?.payload || {};
-
-  // CTA: learn more (mark read optimistically; keep your routing logic intact)
   const handleLearnMore = async (notification) => {
     try {
+      // Mark as read optimistically (don't block nav) — like NotificationBell
       if (!notification.read) {
-        // Mark as read but don't block navigation
         handleMarkAsRead(notification._id);
       }
 
-      // Backward-compatibility for legacy type-based routing
+      // Legacy routing kept intact
       const legacyType = (notification.type || "").toLowerCase();
       if (legacyType === "cancel_request" || legacyType === "order_update") {
         navigate("/admin/orders");
-      } else if (
-        legacyType === "sell_request" ||
-        legacyType === "sell_update"
-      ) {
+      } else if (legacyType === "sell_request" || legacyType === "sell_update") {
         navigate("/sellDashboard");
       } else if (
         legacyType === "demolish_request" ||
@@ -337,6 +297,8 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
       onHide();
     }
   };
+
+  const getPayload = (n) => n?.data || n?.payload || {};
 
   const hasUnread = notifications.some((n) => !n.read);
 
@@ -407,9 +369,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
                         : "General"}
                     </span>
                     {statusText && (
-                      <span
-                        className={`badge text-bg-${n.read ? "secondary" : "info"}`}
-                      >
+                      <span className={`badge text-bg-${n.read ? "secondary" : "info"}`}>
                         {statusText}
                       </span>
                     )}
