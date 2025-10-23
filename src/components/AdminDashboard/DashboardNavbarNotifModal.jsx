@@ -9,10 +9,45 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [polling, setPolling] = useState(false);
+  const [userId, setUserId] = useState(null);
   const navigate = useNavigate();
 
   // Keep env usage stable
   const API_URL = useMemo(() => process.env.REACT_APP_API_URL, []);
+
+  // --- Auth helpers & user ---
+  const authHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : undefined;
+  };
+
+  useEffect(() => {
+    const loadUserId = async () => {
+      // prefer cached
+      const cached = localStorage.getItem("userId");
+      if (cached) {
+        setUserId(cached);
+        return;
+      }
+      // try /me if token exists
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const res = await axios.get(`${API_URL}/api/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.data?._id) {
+          localStorage.setItem("userId", res.data._id);
+          setUserId(res.data._id);
+        }
+      } catch {
+        // token invalid; clean up
+        localStorage.removeItem("token");
+        localStorage.removeItem("userId");
+      }
+    };
+    loadUserId();
+  }, [API_URL]);
 
   // --- Helpers (model-agnostic) ---
 
@@ -87,7 +122,9 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
   // Fetch notifications (admin only)
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/notifications`);
+      const res = await axios.get(`${API_URL}/api/notifications`, {
+        headers: authHeaders(),
+      });
       const list = Array.isArray(res.data) ? res.data : [];
 
       // Admin-only filter still intact
@@ -129,13 +166,32 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [polling]);
 
-  // --- Actions ---
+  // --- Actions (with robust endpoints & fallbacks) ---
 
+  // Single: mark notification as read (prefer per-user route, fallback to legacy)
   const handleMarkAsRead = async (id) => {
     try {
-      await axios.patch(`${API_URL}/api/notifications/${id}/read`);
+      // Try new per-user route first (if we know userId)
+      if (userId) {
+        await axios.patch(
+          `${API_URL}/api/notifications/users/${userId}/notifications/${id}`,
+          { read: true },
+          { headers: authHeaders() }
+        );
+      } else {
+        // Fallback legacy route
+        await axios.patch(
+          `${API_URL}/api/notifications/${id}/read`,
+          { read: true },
+          { headers: authHeaders() }
+        );
+      }
+
+      // Local state updates
       setNotifications((prev) =>
-        prev.map((n) => (n._id === id ? { ...n, read: true, readAt: new Date().toISOString() } : n))
+        prev.map((n) =>
+          n._id === id ? { ...n, read: true, readAt: new Date().toISOString() } : n
+        )
       );
 
       setUnreadCount((prev) => {
@@ -144,14 +200,96 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
         return next;
       });
     } catch (err) {
-      console.error("Error marking as read:", err);
+      // If per-user route failed and we haven't tried legacy yet, try it once more
+      if (userId) {
+        try {
+          await axios.patch(
+            `${API_URL}/api/notifications/${id}/read`,
+            { read: true },
+            { headers: authHeaders() }
+          );
+          setNotifications((prev) =>
+            prev.map((n) =>
+              n._id === id ? { ...n, read: true, readAt: new Date().toISOString() } : n
+            )
+          );
+          setUnreadCount((prev) => {
+            const next = Math.max((typeof prev === "number" ? prev : 0) - 1, 0);
+            if (next === 0) setPolling(false);
+            return next;
+          });
+          return;
+        } catch (e2) {
+          console.error("Error marking as read (fallback failed):", e2);
+        }
+      } else {
+        console.error("Error marking as read:", err);
+      }
       Swal.fire("Error", "Failed to mark as read", "error");
     }
   };
 
+  // Bulk: mark all as read (prefer per-user bulk, then legacy bulk, then per-item fallback)
+  const handleMarkAllAsRead = async () => {
+    const unreadIds = notifications.filter((n) => !n.read).map((n) => n._id);
+    if (unreadIds.length === 0) return;
+
+    try {
+      if (userId) {
+        // New per-user bulk route
+        await axios.patch(
+          `${API_URL}/api/notifications/users/${userId}/notifications`,
+          { read: true },
+          { headers: authHeaders() }
+        );
+      } else {
+        // Legacy bulk route (if your API supports something like this)
+        await axios.patch(
+          `${API_URL}/api/notifications/mark-all-read`,
+          {},
+          { headers: authHeaders() }
+        );
+      }
+    } catch (err) {
+      // Last-resort: best-effort mark each unread one-by-one via legacy single endpoint
+      try {
+        await Promise.allSettled(
+          unreadIds.map((id) =>
+            axios.patch(
+              `${API_URL}/api/notifications/${id}/read`,
+              { read: true },
+              { headers: authHeaders() }
+            )
+          )
+        );
+      } catch (e2) {
+        console.error("Bulk mark-all fallback failed:", e2);
+        Swal.fire("Error", "Failed to mark all as read", "error");
+        return;
+      }
+    }
+
+    // Local state updates
+    setNotifications((prev) =>
+      prev.map((n) => ({ ...n, read: true, readAt: new Date().toISOString() }))
+    );
+    setUnreadCount(0);
+    setPolling(false);
+  };
+
+  // Clear notifications (prefer per-user route, fallback to legacy clear)
   const handleClearNotifications = async () => {
     try {
-      await axios.delete(`${API_URL}/api/notifications/clear`);
+      if (userId) {
+        await axios.delete(
+          `${API_URL}/api/notifications/users/${userId}/notifications`,
+          { headers: authHeaders() }
+        );
+      } else {
+        await axios.delete(`${API_URL}/api/notifications/clear`, {
+          headers: authHeaders(),
+        });
+      }
       setNotifications([]);
       setUnreadCount(0);
       setPolling(false);
@@ -161,19 +299,20 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     }
   };
 
+  // Price payload: support both legacy `data` and new `payload`
+  const getPayload = (n) => n?.data || n?.payload || {};
+
+  // CTA: learn more (mark read optimistically; keep your routing logic intact)
   const handleLearnMore = async (notification) => {
     try {
-      // Mark as read optimistically (don't block nav)
       if (!notification.read) {
+        // Mark as read but don't block navigation
         handleMarkAsRead(notification._id);
       }
 
       // Backward-compatibility for legacy type-based routing
       const legacyType = (notification.type || "").toLowerCase();
-      if (
-        legacyType === "cancel_request" ||
-        legacyType === "order_update"
-      ) {
+      if (legacyType === "cancel_request" || legacyType === "order_update") {
         navigate("/admin/orders");
       } else if (
         legacyType === "sell_request" ||
@@ -199,23 +338,33 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     }
   };
 
-  // Price payload: support both legacy `data` and new `payload`
-  const getPayload = (n) => n?.data || n?.payload || {};
+  const hasUnread = notifications.some((n) => !n.read);
 
   return (
     <Modal show={show} onHide={onHide} centered scrollable>
       <Modal.Header closeButton>
         <Modal.Title className="w-100 d-flex justify-content-between align-items-center">
           Admin Notifications
-          {notifications.length > 0 && (
-            <Button
-              variant="link"
-              className="text-danger p-0"
-              onClick={handleClearNotifications}
-            >
-              Clear All
-            </Button>
-          )}
+          <div className="d-flex align-items-center gap-3">
+            {hasUnread && (
+              <Button
+                variant="link"
+                className="p-0"
+                onClick={handleMarkAllAsRead}
+              >
+                Mark all as read
+              </Button>
+            )}
+            {notifications.length > 0 && (
+              <Button
+                variant="link"
+                className="text-danger p-0"
+                onClick={handleClearNotifications}
+              >
+                Clear All
+              </Button>
+            )}
+          </div>
         </Modal.Title>
       </Modal.Header>
 
@@ -258,7 +407,9 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
                         : "General"}
                     </span>
                     {statusText && (
-                      <span className={`badge text-bg-${n.read ? "secondary" : "info"}`}>
+                      <span
+                        className={`badge text-bg-${n.read ? "secondary" : "info"}`}
+                      >
                         {statusText}
                       </span>
                     )}
