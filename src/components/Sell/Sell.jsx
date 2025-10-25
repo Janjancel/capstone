@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import Swal from "sweetalert2";
-import toast, { Toaster } from "react-hot-toast";
+import Swal from "sweetalert2"; // ✅ Only for confirmations
+import toast, { Toaster } from "react-hot-toast"; // ✅ General notifications
 import axios from "axios";
 import {
   MapContainer,
@@ -118,6 +118,8 @@ const Sell = () => {
     const file = e.dataTransfer?.files?.[0];
     if (file && file.type.startsWith("image/")) {
       handleImageChange(file, type);
+    } else {
+      toast.error("Please drop an image file.");
     }
   };
   const onDragOver = (e) => {
@@ -143,7 +145,7 @@ const Sell = () => {
         }));
         toast.success("Address pinned on map ✅");
       } else {
-        Swal.fire("Not Found", "Address not found. Try a different one.", "info");
+        toast.error("Address not found. Try a different one.");
       }
     } catch (error) {
       console.error("Geocode Error:", error);
@@ -154,11 +156,7 @@ const Sell = () => {
   // Location detection
   const getLocation = () => {
     if (!navigator.geolocation) {
-      Swal.fire(
-        "Location Error",
-        "Geolocation is not supported by your browser.",
-        "error"
-      );
+      toast.error("Geolocation is not supported by your browser.");
       return;
     }
 
@@ -174,7 +172,7 @@ const Sell = () => {
         toast.success("Location detected 📍");
       },
       async () => {
-        Swal.fire("Location Error", "Using IP-based location instead.", "warning");
+        toast("Using IP-based location instead.");
         try {
           const res = await fetch("https://ipapi.co/json/");
           const data = await res.json();
@@ -183,9 +181,12 @@ const Sell = () => {
               ...prev,
               location: { lat: data.latitude, lng: data.longitude },
             }));
+            toast.success("Approximate location detected via IP.");
+          } else {
+            toast.error("Could not detect location from IP.");
           }
         } catch (err) {
-          Swal.fire("Backup Location Error", "Could not fetch location.", "error");
+          toast.error("Could not fetch backup location.");
         }
       }
     );
@@ -205,11 +206,26 @@ const Sell = () => {
   // Submit handler
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // ✅ SweetAlert used ONLY for confirmation
+    const confirm = await Swal.fire({
+      title: "Submit this sell request?",
+      text: "Please review your details before sending.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, submit",
+      cancelButtonText: "Cancel",
+      reverseButtons: true,
+      focusCancel: true,
+    });
+
+    if (!confirm.isConfirmed) return;
+
     setIsSubmitting(true);
 
     const userId = localStorage.getItem("userId");
     if (!userId) {
-      Swal.fire("Login Required", "Please login to submit your request.", "warning");
+      toast.error("Please login to submit your request.");
       setIsSubmitting(false);
       return;
     }
@@ -308,7 +324,6 @@ const Sell = () => {
           borderRadius: "8px",
           minHeight: 160,
           p: 1.5,
-          // ⬇️ Center whatever is inside (text OR preview)
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -333,7 +348,6 @@ const Sell = () => {
               alignItems: "center",
               justifyContent: "center",
               bgcolor: "#fff",
-              // keep it centered even if parent layout changes
               mx: "auto",
             }}
           >

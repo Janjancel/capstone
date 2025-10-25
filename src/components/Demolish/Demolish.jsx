@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import Swal from "sweetalert2";
-import toast, { Toaster } from "react-hot-toast";
+import Swal from "sweetalert2"; // ✅ Only for confirmations
+import toast, { Toaster } from "react-hot-toast"; // ✅ General notifications
 import axios from "axios";
 import {
   MapContainer,
@@ -98,6 +98,10 @@ const Demolition = () => {
   // Handle image selection (single file per slot)
   const handleImageChange = (file, type) => {
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file.");
+      return;
+    }
     // Revoke old objectURL to avoid memory leaks
     if (previewUrls[type]?.startsWith("blob:")) {
       URL.revokeObjectURL(previewUrls[type]);
@@ -113,6 +117,8 @@ const Demolition = () => {
     const file = e.dataTransfer?.files?.[0];
     if (file && file.type.startsWith("image/")) {
       handleImageChange(file, type);
+    } else {
+      toast.error("Please drop an image file.");
     }
   };
   const onDragOver = (e) => {
@@ -138,7 +144,7 @@ const Demolition = () => {
         }));
         toast.success("Address pinned on map ✅");
       } else {
-        Swal.fire("Not Found", "Address not found. Try a different one.", "info");
+        toast.error("Address not found. Try a different one.");
       }
     } catch (error) {
       console.error("Geocode Error:", error);
@@ -149,11 +155,7 @@ const Demolition = () => {
   // Get user's current location
   const getLocation = () => {
     if (!navigator.geolocation) {
-      Swal.fire(
-        "Location Error",
-        "Geolocation is not supported by your browser.",
-        "error"
-      );
+      toast.error("Geolocation is not supported by your browser.");
       return;
     }
 
@@ -184,7 +186,7 @@ const Demolition = () => {
             message = "An unknown error occurred.";
         }
 
-        Swal.fire("Location Error", message, "warning");
+        toast(message);
 
         try {
           const res = await fetch("https://ipapi.co/json/");
@@ -194,13 +196,12 @@ const Demolition = () => {
               ...prev,
               location: { lat: data.latitude, lng: data.longitude },
             }));
+            toast.success("Approximate location detected via IP.");
+          } else {
+            toast.error("Could not detect location from IP.");
           }
         } catch (err) {
-          Swal.fire(
-            "Backup Location Error",
-            "Could not fetch location via IP either.",
-            "error"
-          );
+          toast.error("Could not fetch backup location.");
         }
       }
     );
@@ -220,23 +221,37 @@ const Demolition = () => {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // ✅ SweetAlert used ONLY for confirmation
+    const confirm = await Swal.fire({
+      title: "Submit this demolition request?",
+      text: "Please review your details before sending.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, submit",
+      cancelButtonText: "Cancel",
+      reverseButtons: true,
+      focusCancel: true,
+    });
+    if (!confirm.isConfirmed) return;
+
     setIsSubmitting(true);
 
     const userId = localStorage.getItem("userId");
     if (!userId) {
-      Swal.fire("Login Required", "Please login to submit your request.", "warning");
+      toast.error("Please login to submit your request.");
       setIsSubmitting(false);
       return;
     }
 
     // client-side guard
     if (!formData.name.trim() || !formData.contact.trim() || !formData.description.trim()) {
-      Swal.fire("Missing Details", "Name, contact, and description are required.", "warning");
+      toast.error("Name, contact, and description are required.");
       setIsSubmitting(false);
       return;
     }
     if (!formData.location?.lat || !formData.location?.lng) {
-      Swal.fire("Missing Location", "Please pin the location on the map.", "warning");
+      toast.error("Please pin the location on the map.");
       setIsSubmitting(false);
       return;
     }
@@ -297,8 +312,14 @@ const Demolition = () => {
       resetPicker("sideImage");
       resetPicker("backImage");
     } catch (error) {
-      const msg = error?.response?.data?.error || error.message || "Failed to submit the request.";
-      console.error("Error submitting demolition request:", error?.response?.data || error.message);
+      const msg =
+        error?.response?.data?.error ||
+        error.message ||
+        "Failed to submit the request.";
+      console.error(
+        "Error submitting demolition request:",
+        error?.response?.data || error.message
+      );
       toast.error(msg);
     } finally {
       setIsSubmitting(false);
