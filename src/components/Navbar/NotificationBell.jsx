@@ -795,6 +795,7 @@ export default function NotificationBell() {
 
   const navigate = useNavigate();
   const API_URL = useMemo(() => process.env.REACT_APP_API_URL, []);
+  const BASE = `${API_URL}/api/notifications`;
 
   // ------- Helpers -------
   const formatWhen = (dt) => {
@@ -881,7 +882,8 @@ export default function NotificationBell() {
       setLoadingNotifs(true);
       try {
         const res = await axios.get(
-          `${API_URL}/api/notifications/users/${userId}/notifications`
+          `${BASE}/users/${userId}/notifications`,
+          { headers: authHeaders() }
         );
         const list = Array.isArray(res.data) ? res.data : [];
         setNotifications(list);
@@ -897,7 +899,7 @@ export default function NotificationBell() {
     };
 
     fetchInitial();
-  }, [userId, API_URL]);
+  }, [userId, BASE]);
 
   // Poll for notifications if unread exists
   useEffect(() => {
@@ -906,7 +908,8 @@ export default function NotificationBell() {
     const poll = async () => {
       try {
         const res = await axios.get(
-          `${API_URL}/api/notifications/users/${userId}/notifications`
+          `${BASE}/users/${userId}/notifications`,
+          { headers: authHeaders() }
         );
         const list = Array.isArray(res.data) ? res.data : [];
         setNotifications(list);
@@ -920,15 +923,14 @@ export default function NotificationBell() {
 
     const intervalId = setInterval(poll, 3000);
     return () => clearInterval(intervalId);
-  }, [userId, startPolling, API_URL]);
+  }, [userId, startPolling, BASE]);
 
   const handleMarkAsRead = async (notifId) => {
     try {
-      const token = localStorage.getItem("token");
       await axios.patch(
-        `${API_URL}/api/notifications/users/${userId}/notifications/${notifId}`,
+        `${BASE}/users/${userId}/notifications/${notifId}`,
         { read: true },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: authHeaders() }
       );
 
       setNotifications((prev) =>
@@ -948,20 +950,44 @@ export default function NotificationBell() {
     }
   };
 
+  // Bulk mark-all with graceful fallback to per-item PATCH if bulk endpoint is missing (404/405)
   const handleMarkAllAsRead = async () => {
+    const unreadItems = notifications.filter((n) => !n.read);
+
+    // Try bulk endpoint first
     try {
-      const token = localStorage.getItem("token");
       await axios.patch(
-        `${API_URL}/api/notifications/users/${userId}/notifications`,
+        `${BASE}/users/${userId}/notifications`,
         { read: true },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: authHeaders() }
       );
     } catch (err) {
-      console.error("Failed to mark all as read:", err);
-      toast.error("Failed to mark all as read.");
-      return;
+      // If backend doesn't support bulk, fall back to per-item calls
+      const status = err?.response?.status;
+      if (status === 404 || status === 405) {
+        try {
+          await Promise.allSettled(
+            unreadItems.map((n) =>
+              axios.patch(
+                `${BASE}/users/${userId}/notifications/${n._id}`,
+                { read: true },
+                { headers: authHeaders() }
+              )
+            )
+          );
+        } catch (innerErr) {
+          console.error("Fallback mark-all failed:", innerErr);
+          toast.error("Failed to mark all as read.");
+          return;
+        }
+      } else {
+        console.error("Failed to mark all as read:", err);
+        toast.error("Failed to mark all as read.");
+        return;
+      }
     }
 
+    // Optimistic UI update
     setNotifications((prev) =>
       prev.map((n) => ({ ...n, read: true, readAt: new Date().toISOString() }))
     );
@@ -985,12 +1011,9 @@ export default function NotificationBell() {
     if (!confirm.isConfirmed) return;
 
     try {
-      const token = localStorage.getItem("token");
       await axios.delete(
-        `${API_URL}/api/notifications/users/${userId}/notifications`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        `${BASE}/users/${userId}/notifications`,
+        { headers: authHeaders() }
       );
       setNotifications([]);
       setUnreadCount(0);
@@ -1009,7 +1032,9 @@ export default function NotificationBell() {
 
     try {
       if (notifId) await handleMarkAsRead(notifId);
-      const res = await axios.get(`${API_URL}/api/orders/${orderId}`);
+      const res = await axios.get(`${API_URL}/api/orders/${orderId}`, {
+        headers: authHeaders(),
+      });
       setSelectedOrder(res.data);
       setUserEmail(res.data?.email || "");
       setShowOrderModal(true);
@@ -1021,7 +1046,7 @@ export default function NotificationBell() {
     }
   };
 
-  // "View Request" now redirects to /requests
+  // "View Request" redirects to /requests
   const handleViewRequest = async (n) => {
     if (!n) return;
     try {
