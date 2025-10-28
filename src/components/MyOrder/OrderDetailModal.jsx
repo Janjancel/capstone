@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import {
   Dialog,
@@ -20,12 +19,71 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import toast from "react-hot-toast";
+import Swal from "sweetalert2"; // ✅ confirmations only
+
+// ---------- Shared image-display logic (same approach as CartModal) ----------
+const PLACEHOLDER_IMG = "/placeholder.jpg";
+
+function getFirstUrl(candidate) {
+  // returns the first usable string URL from various shapes
+  if (!candidate) return null;
+
+  if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+
+  if (Array.isArray(candidate)) {
+    // find the first non-empty string
+    const found = candidate.find(
+      (c) => typeof c === "string" && c.trim().length > 0
+    );
+    if (found) return found.trim();
+    // allow array of objects like [{url:'...'}]
+    for (const c of candidate) {
+      const nested = getFirstUrl(c);
+      if (nested) return nested;
+    }
+    return null;
+  }
+
+  if (typeof candidate === "object") {
+    // common keys first
+    const priorityKeys = ["front", "main", "cover", "primary", "side", "back", "url"];
+    for (const k of priorityKeys) {
+      if (k in candidate) {
+        const nested = getFirstUrl(candidate[k]);
+        if (nested) return nested;
+      }
+    }
+    // then scan all props
+    for (const k in candidate) {
+      const nested = getFirstUrl(candidate[k]);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
+}
+
+function getItemImage(item) {
+  // Try the flexible shapes used across the app
+  return (
+    getFirstUrl(item?.images) ||
+    getFirstUrl(item?.image) ||
+    PLACEHOLDER_IMG
+  );
+}
+// ---------------------------------------------------------------------------
 
 const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders }) => {
   const [realTimeOrder, setRealTimeOrder] = useState(order);
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState({});
+  const [cancelling, setCancelling] = useState(false);
   const API_URL = process.env.REACT_APP_API_URL;
+
+  const authHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : undefined;
+  };
 
   useEffect(() => {
     if (!order?.id && !order?._id) return;
@@ -34,23 +92,24 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
       try {
         const orderId = order.id || order._id;
         const [orderRes, usersRes] = await Promise.all([
-          axios.get(`${API_URL}/api/orders/${orderId}`),
-          axios.get(`${API_URL}/api/users`),
+          axios.get(`${API_URL}/api/orders/${orderId}`, { headers: authHeaders() }),
+          axios.get(`${API_URL}/api/users`, { headers: authHeaders() }),
         ]);
 
         const userMap = {};
-        usersRes.data.forEach((user) => {
-          userMap[user._id] = user;
+        (usersRes.data || []).forEach((u) => {
+          if (u?._id) userMap[u._id] = u;
         });
 
+        setUserData(userMap);
         setRealTimeOrder({
           ...orderRes.data,
-          userEmail: userMap[orderRes.data.userId]?.email || "Unknown",
+          userEmail: userMap[orderRes.data?.userId]?.email || "Unknown",
         });
-        setUserData(userMap);
-        updateParentOrders(orderRes.data);
+        updateParentOrders?.(orderRes.data);
       } catch (err) {
         console.error("Error fetching order:", err);
+        toast.error("Failed to load order details.");
       } finally {
         setLoading(false);
       }
@@ -59,32 +118,86 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
     fetchOrder();
     const interval = setInterval(fetchOrder, 5000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.id, order?._id, API_URL]);
 
   const handleCancelRequest = async () => {
-    try {
-      const orderId = realTimeOrder.id || realTimeOrder._id;
-      await axios.patch(`${API_URL}/api/orders/${orderId}/cancel`, {
-        email: userEmail,
-      });
+    // ✅ SweetAlert used ONLY for confirmation
+    const confirm = await Swal.fire({
+      title: "Request order cancellation?",
+      text: "We will notify the admin to review your request.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, request cancellation",
+      cancelButtonText: "No, keep order",
+      reverseButtons: true,
+      focusCancel: true,
+    });
+    if (!confirm.isConfirmed) return;
 
-      // Notify admin
-      await axios.post(`${API_URL}/api/notifications`, {
-        orderId: orderId,
+    if (cancelling) return;
+    setCancelling(true);
+
+    const orderId = realTimeOrder.id || realTimeOrder._id;
+
+    // Step 1: make the cancellation request
+    try {
+      await axios.patch(
+        `${API_URL}/api/orders/${orderId}/cancel`,
+        { email: userEmail },
+        { headers: authHeaders() }
+      );
+    } catch (err) {
+      console.error("Error requesting cancellation (PATCH):", err);
+      toast.error("Failed to request cancellation.");
+      setCancelling(false);
+      return;
+    }
+
+    // Update UI immediately after a successful cancel
+    const updatedOrder = { ...realTimeOrder, status: "Cancellation Requested" };
+    setRealTimeOrder(updatedOrder);
+    updateParentOrders?.(updatedOrder);
+    toast.success("Cancellation request sent. Admin will review it.");
+
+    // Step 2 (non-blocking): try to notify admin. If it fails, warn but don’t error the whole flow.
+    try {
+      const payload = {
+        orderId,
         userId: realTimeOrder.userId,
         status: "Cancellation Requested",
         role: "admin",
+        for: "order",
         message: `User ${userEmail} requested cancellation for Order ID: ${orderId}`,
-      });
+      };
 
-      const updatedOrder = { ...realTimeOrder, status: "Cancellation Requested" };
-      setRealTimeOrder(updatedOrder);
-      updateParentOrders(updatedOrder);
-      toast.success("Cancellation request sent and admin notified.");
+      // Primary notifications route
+      await axios.post(`${API_URL}/api/notifications`, payload, {
+        headers: authHeaders(),
+      });
+    } catch (err1) {
+      // Fallback to per-user route if primary doesn't exist
+      try {
+        await axios.post(
+          `${API_URL}/api/notifications/users/${realTimeOrder.userId}/notifications`,
+          {
+            orderId,
+            status: "Cancellation Requested",
+            role: "admin",
+            for: "order",
+            message: `User ${userEmail} requested cancellation for Order ID: ${orderId}`,
+          },
+          { headers: authHeaders() }
+        );
+      } catch (err2) {
+        console.warn("Notification send failed:", err1, err2);
+        toast("Cancellation submitted, but admin notification could not be sent automatically.", {
+          icon: "⚠️",
+        });
+      }
+    } finally {
+      setCancelling(false);
       onClose();
-    } catch (err) {
-      console.error("Error requesting cancellation:", err);
-      toast.error("Failed to request cancellation.");
     }
   };
 
@@ -132,7 +245,9 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
             </Typography>
             <Typography>
               <strong>Date:</strong>{" "}
-              {new Date(realTimeOrder.createdAt).toLocaleString() || "N/A"}
+              {realTimeOrder.createdAt
+                ? new Date(realTimeOrder.createdAt).toLocaleString()
+                : "N/A"}
             </Typography>
             <Typography>
               <strong>Status:</strong>{" "}
@@ -175,44 +290,47 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {items.map((item, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <Box
-                          sx={{
-                            width: 60,
-                            height: 50,
-                            position: 'relative',
-                            overflow: 'hidden',
-                            borderRadius: 1,
-                            bgcolor: 'background.paper',
-                            boxShadow: 1
-                          }}
-                        >
-                          <img
-                            src={item.image || "/placeholder.jpg"}
-                            alt={item.name}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              display: 'block'
+                  {(items || []).map((item, i) => {
+                    const imgSrc = getItemImage(item);
+                    return (
+                      <TableRow key={i}>
+                        <TableCell>
+                          <Box
+                            sx={{
+                              width: 60,
+                              height: 50,
+                              position: "relative",
+                              overflow: "hidden",
+                              borderRadius: 1,
+                              bgcolor: "background.paper",
+                              boxShadow: 1,
                             }}
-                            onError={(e) => {
-                              e.target.src = "/placeholder.jpg";
-                              e.target.onerror = null;
-                            }}
-                          />
-                        </Box>
-                      </TableCell>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>₱{parseFloat(item.price).toFixed(2)}</TableCell>
-                      <TableCell>
-                        ₱{(item.quantity * parseFloat(item.price)).toFixed(2)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          >
+                            <img
+                              src={imgSrc}
+                              alt={item.name}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                display: "block",
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.src = PLACEHOLDER_IMG;
+                                e.currentTarget.onerror = null;
+                              }}
+                            />
+                          </Box>
+                        </TableCell>
+                        <TableCell>{item.name}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>₱{parseFloat(item.price || 0).toFixed(2)}</TableCell>
+                        <TableCell>
+                          ₱{((item.quantity || 0) * parseFloat(item.price || 0)).toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -221,11 +339,16 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
       </DialogContent>
       <DialogActions>
         {showCancelBtn && (
-          <Button variant="contained" color="error" onClick={handleCancelRequest}>
-            Request Order Cancellation
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleCancelRequest}
+            disabled={cancelling}
+          >
+            {cancelling ? "Requesting..." : "Request Order Cancellation"}
           </Button>
         )}
-        <Button variant="outlined" onClick={onClose}>
+        <Button variant="outlined" onClick={onClose} disabled={cancelling}>
           Back
         </Button>
       </DialogActions>

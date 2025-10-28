@@ -1,4 +1,3 @@
-// src/components/DashboardNavbar/DashboardNavbarNotifModal.jsx
 import React, { useEffect, useState, useMemo } from "react";
 import { Modal, Button, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +16,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
 
   const navigate = useNavigate();
   const API_URL = useMemo(() => process.env.REACT_APP_API_URL, []);
+  const BASE = `${API_URL}/api/notifications`;
 
   // ---------- Helpers (kept intact) ----------
 
@@ -85,7 +85,6 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
   const authHeaders = () => {
     const token = localStorage.getItem("token");
     return token ? { Authorization: `Bearer ${token}` } : undefined;
-    // (NotificationBell uses this pattern)
   };
 
   // ---------- Load userId (same pattern as NotificationBell) ----------
@@ -126,7 +125,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     try {
       // Use the same per-user dataset as NotificationBell
       const res = await axios.get(
-        `${API_URL}/api/notifications/users/${userId}/notifications`,
+        `${BASE}/users/${userId}/notifications`,
         { headers: authHeaders() }
       );
       const all = Array.isArray(res.data) ? res.data : [];
@@ -170,7 +169,7 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     const poll = async () => {
       try {
         const res = await axios.get(
-          `${API_URL}/api/notifications/users/${userId}/notifications`,
+          `${BASE}/users/${userId}/notifications`,
           { headers: authHeaders() }
         );
         const all = Array.isArray(res.data) ? res.data : [];
@@ -194,17 +193,16 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
 
     const id = setInterval(poll, 3000);
     return () => clearInterval(id);
-  }, [userId, startPolling, API_URL, setUnreadCount]);
+  }, [userId, startPolling, BASE, setUnreadCount]);
 
   // ---------- Actions (ported 1:1 from NotificationBell style) ----------
 
   const handleMarkAsRead = async (notifId) => {
     try {
-      const token = localStorage.getItem("token");
       await axios.patch(
-        `${API_URL}/api/notifications/users/${userId}/notifications/${notifId}`,
+        `${BASE}/users/${userId}/notifications/${notifId}`,
         { read: true },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { ...authHeaders() } }
       );
 
       setNotifications((prev) =>
@@ -214,7 +212,8 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
       );
 
       setUnreadCount((prev) => {
-        const next = Math.max((typeof prev === "number" ? prev : 0) - 1, 0);
+        const current = typeof prev === "number" ? prev : 0;
+        const next = Math.max(current - 1, 0);
         if (next === 0) setStartPolling(false);
         return next;
       });
@@ -224,37 +223,58 @@ const DashboardNavbarNotifModal = ({ show, onHide, setUnreadCount }) => {
     }
   };
 
+  // Bulk mark-all with graceful fallback to per-item PATCH if bulk endpoint is missing (404/405)
   const handleMarkAllAsRead = async () => {
+    const unreadAdmin = notifications.filter((n) => n.role === "admin" && !n.read);
+
     try {
-      const token = localStorage.getItem("token");
       await axios.patch(
-        `${API_URL}/api/notifications/users/${userId}/notifications`,
+        `${BASE}/users/${userId}/notifications`,
         { read: true },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { ...authHeaders() } }
       );
-
-      // Only mark admin notifs as read locally (to mirror what we display)
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.role === "admin" ? { ...n, read: true, readAt: new Date().toISOString() } : n
-        )
-      );
-
-      setUnreadCount(0);
-      setStartPolling(false);
     } catch (err) {
-      console.error("Error marking all as read:", err);
-      Swal.fire("Error", "Failed to mark all as read", "error");
+      const status = err?.response?.status;
+      if (status === 404 || status === 405) {
+        // Fallback: mark each unread admin notification individually
+        try {
+          await Promise.allSettled(
+            unreadAdmin.map((n) =>
+              axios.patch(
+                `${BASE}/users/${userId}/notifications/${n._id}`,
+                { read: true },
+                { headers: { ...authHeaders() } }
+              )
+            )
+          );
+        } catch (innerErr) {
+          console.error("Error marking all as read (fallback):", innerErr);
+          Swal.fire("Error", "Failed to mark all as read", "error");
+          return;
+        }
+      } else {
+        console.error("Error marking all as read:", err);
+        Swal.fire("Error", "Failed to mark all as read", "error");
+        return;
+      }
     }
+
+    // Local state update mirrors what we display (admin-only list)
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.role === "admin" ? { ...n, read: true, readAt: new Date().toISOString() } : n
+      )
+    );
+    setUnreadCount(0);
+    setStartPolling(false);
   };
 
   const handleClearNotifications = async () => {
     try {
-      const token = localStorage.getItem("token");
       // Clear the entire per-user list, then we show only admin (which will be empty)
       await axios.delete(
-        `${API_URL}/api/notifications/users/${userId}/notifications`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        `${BASE}/users/${userId}/notifications`,
+        { headers: { ...authHeaders() } }
       );
 
       setNotifications([]);
