@@ -382,17 +382,22 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import Swal from "sweetalert2"; // ✅ confirmations only
 
-// ---------- Shared image-display logic (flexible across shapes) ----------
+// ---------- Shared image-display logic (same as CartModal) ----------
+const PLACEHOLDER_IMG = "/placeholder.jpg";
+
 function getFirstUrl(candidate) {
+  // returns the first usable string URL from various shapes
   if (!candidate) return null;
 
-  // string
   if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
 
-  // array [strings, objects, nested]
   if (Array.isArray(candidate)) {
-    const firstStr = candidate.find((c) => typeof c === "string" && c.trim());
-    if (firstStr) return firstStr.trim();
+    // find the first non-empty string
+    const found = candidate.find(
+      (c) => typeof c === "string" && c.trim().length > 0
+    );
+    if (found) return found.trim();
+    // allow array of objects like [{url:'...'}]
     for (const c of candidate) {
       const nested = getFirstUrl(c);
       if (nested) return nested;
@@ -400,40 +405,32 @@ function getFirstUrl(candidate) {
     return null;
   }
 
-  // object with likely keys; then scan all props
   if (typeof candidate === "object") {
-    const priority = ["front", "main", "cover", "primary", "side", "back", "thumb", "url", "secure_url"];
-    for (const k of priority) {
+    // common keys first
+    const priorityKeys = ["front", "main", "cover", "primary", "side", "back", "url"];
+    for (const k of priorityKeys) {
       if (k in candidate) {
         const nested = getFirstUrl(candidate[k]);
         if (nested) return nested;
       }
     }
+    // then scan all props
     for (const k in candidate) {
       const nested = getFirstUrl(candidate[k]);
       if (nested) return nested;
     }
   }
+
   return null;
 }
 
+// ----- Shared image-display logic used in Cart + CartModal -----
 function getItemImage(item) {
-  // Try many common shapes used across your app and snapshots
+  // Try the flexible shapes you use across the app
   return (
-    // direct fields
-    getFirstUrl(item?.image) ||
     getFirstUrl(item?.images) ||
-    getFirstUrl(item?.img) ||
-    getFirstUrl(item?.photos) ||
-    // nested snapshot/product/item shapes
-    getFirstUrl(item?.snapshot?.image) ||
-    getFirstUrl(item?.snapshot?.images) ||
-    getFirstUrl(item?.product?.image) ||
-    getFirstUrl(item?.product?.images) ||
-    getFirstUrl(item?.item?.image) ||
-    getFirstUrl(item?.item?.images) ||
-    // final fallback: null (no placeholder)
-    null
+    getFirstUrl(item?.image) ||
+    PLACEHOLDER_IMG
   );
 }
 // ---------------------------------------------------------------------------
@@ -667,24 +664,21 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
                               boxShadow: 1,
                             }}
                           >
-                            {imgSrc ? (
-                              <img
-                                src={imgSrc}
-                                alt={item.name || "item"}
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                  display: "block",
-                                }}
-                                // Hide broken images silently (no placeholder)
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                }}
-                              />
-                            ) : null}
+                            <img
+                              src={imgSrc}
+                              alt={item.name || "item"}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                display: "block",
+                              }}
+                              className="img-thumbnail"
+                              onError={(e) => {
+                                e.currentTarget.src = PLACEHOLDER_IMG;
+                                e.currentTarget.onerror = null;
+                              }}
+                            />
                           </Box>
                         </TableCell>
                         <TableCell>{item.name || "Unnamed item"}</TableCell>

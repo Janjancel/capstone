@@ -20,15 +20,12 @@
 // import LocalMallIcon from "@mui/icons-material/LocalMall"; // order
 // import SellIcon from "@mui/icons-material/Sell"; // sell
 // import ConstructionIcon from "@mui/icons-material/Construction"; // demolish
-// import Swal from "sweetalert2";
+// import Swal from "sweetalert2"; // ✅ confirmations only
+// import toast from "react-hot-toast"; // ✅ general notifications
 // import "animate.css";
 // import axios from "axios";
 // import { useNavigate } from "react-router-dom";
 // import OrderDetailModal from "../MyOrder/OrderDetailModal";
-
-// // Detail modals used in MyRequest.jsx
-// import SellReqDetailModal from "../AdminDashboard/Requests/SellDashboard/ReqDetailModal";
-// import DemolishReqDetailModal from "../AdminDashboard/Requests/DemolishDashboard/ReqDetailModal";
 
 // export default function NotificationBell() {
 //   const [userId, setUserId] = useState(null);
@@ -43,20 +40,14 @@
 //   const [orderLoading, setOrderLoading] = useState(false);
 //   const [userEmail, setUserEmail] = useState("");
 
-//   // Sell/Demolish detail modals (same components as MyRequest.jsx)
-//   const [showSellModal, setShowSellModal] = useState(false);
-//   const [showDemoModal, setShowDemoModal] = useState(false);
-//   const [selectedSell, setSelectedSell] = useState(null);
-//   const [selectedDemo, setSelectedDemo] = useState(null);
-
 //   const [loadingNotifs, setLoadingNotifs] = useState(false);
-//   const [detailLoading, setDetailLoading] = useState(false);
 
 //   // filter by `for`
 //   const [forFilter, setForFilter] = useState(""); // "", "order", "sell", "demolish"
 
 //   const navigate = useNavigate();
 //   const API_URL = useMemo(() => process.env.REACT_APP_API_URL, []);
+//   const BASE = `${API_URL}/api/notifications`;
 
 //   // ------- Helpers -------
 //   const formatWhen = (dt) => {
@@ -99,150 +90,10 @@
 //     return "General";
 //   };
 
-//   // Prefer potential IDs in a stable order
-//   const candidateIds = (n) => {
-//     const bag = [
-//       n.sellRequestId,
-//       n.demolishRequestId,
-//       n.requestId,
-//       n.itemId,
-//       n.orderId,
-//       n?.data?.requestId,
-//       n?.data?.id,
-//       n?.data?.sellRequestId,
-//       n?.data?.demolishRequestId,
-//       n?._id, // last resort
-//     ].filter(Boolean);
-//     return [...new Set(bag.map(String))];
-//   };
-
 //   const authHeaders = () => {
 //     const token = localStorage.getItem("token");
 //     return token ? { Authorization: `Bearer ${token}` } : undefined;
 //   };
-
-//   // Normalize any array-like API response shape used in your app
-//   const normalizeToArray = (raw) => {
-//     if (Array.isArray(raw)) return raw;
-//     if (Array.isArray(raw?.data)) return raw.data;
-//     if (Array.isArray(raw?.requests)) return raw.requests;
-//     if (Array.isArray(raw?.sellRequest)) return raw.sellRequest;
-//     if (Array.isArray(raw?.items)) return raw.items;
-//     return [];
-//   };
-
-//   // Match by any common id fields
-//   const isMatchByAnyId = (rec, id) => {
-//     const target = String(id);
-//     const keys = [
-//       rec?._id,
-//       rec?.id,
-//       rec?.requestId,
-//       rec?.sellRequestId,
-//       rec?.demolishRequestId,
-//       rec?.itemId,
-//     ]
-//       .filter(Boolean)
-//       .map(String);
-//     return keys.includes(target);
-//   };
-
-//   // Try first endpoint that returns a usable object (detail)
-//   const tryFirstOkObject = async (paths) => {
-//     for (const p of paths) {
-//       try {
-//         const { data } = await axios.get(`${API_URL}${p}`, { headers: authHeaders() });
-//         if (data && typeof data === "object" && !Array.isArray(data)) {
-//           // unwrap common shapes if needed
-//           if (data.data && typeof data.data === "object" && !Array.isArray(data.data)) {
-//             return data.data;
-//           }
-//           return data;
-//         }
-//       } catch {
-//         // try next
-//       }
-//     }
-//     return null;
-//   };
-
-//   // Try list endpoints then find record by id
-//   const tryListsAndFind = async (listPaths, id) => {
-//     for (const p of listPaths) {
-//       try {
-//         const { data } = await axios.get(`${API_URL}${p}`, { headers: authHeaders() });
-//         const arr = normalizeToArray(data);
-//         if (arr?.length) {
-//           const found = arr.find((r) => isMatchByAnyId(r, id));
-//           if (found) return found;
-//         }
-//       } catch {
-//         // continue
-//       }
-//     }
-//     return null;
-//   };
-
-//   // SELL fetch with fallback to list endpoints
-//   const fetchSellById = async (id) => {
-//     const detail = await tryFirstOkObject([
-//       `/api/sell/${id}`,
-//       `/api/sell-requests/${id}`,
-//       `/api/sellrequest/${id}`,
-//       `/api/sell/requests/${id}`,
-//     ]);
-//     if (detail) return detail;
-
-//     const fromList = await tryListsAndFind(
-//       [
-//         "/api/sell-requests",
-//         "/api/sell",
-//         "/api/sellrequest",
-//         "/api/sell/requests",
-//       ],
-//       id
-//     );
-//     if (fromList) return fromList;
-
-//     // last-ditch query param attempts (harmless if unsupported)
-//     const queryHit = await tryFirstOkObject([
-//       `/api/sell?id=${encodeURIComponent(id)}`,
-//       `/api/sell-requests?id=${encodeURIComponent(id)}`,
-//       `/api/sellrequest?id=${encodeURIComponent(id)}`,
-//       `/api/sell/requests?id=${encodeURIComponent(id)}`,
-//       `/api/sell?requestId=${encodeURIComponent(id)}`,
-//     ]);
-//     if (queryHit) return queryHit;
-
-//     throw new Error("Sell request not found.");
-//   };
-
-//   // DEMOLISH fetch with fallback to list endpoints
-//   const fetchDemolishById = async (id) => {
-//     const detail = await tryFirstOkObject([
-//       `/api/demolish/${id}`,
-//       `/api/demolition/${id}`,
-//       `/api/demolitions/${id}`,
-//     ]);
-//     if (detail) return detail;
-
-//     const fromList = await tryListsAndFind(
-//       ["/api/demolition", "/api/demolitions", "/api/demolish"],
-//       id
-//     );
-//     if (fromList) return fromList;
-
-//     const queryHit = await tryFirstOkObject([
-//       `/api/demolish?id=${encodeURIComponent(id)}`,
-//       `/api/demolition?id=${encodeURIComponent(id)}`,
-//       `/api/demolitions?id=${encodeURIComponent(id)}`,
-//       `/api/demolish?requestId=${encodeURIComponent(id)}`,
-//     ]);
-//     if (queryHit) return queryHit;
-
-//     throw new Error("Demolition request not found.");
-//   };
-//   // -----------------------
 
 //   // Load userId
 //   useEffect(() => {
@@ -283,7 +134,8 @@
 //       setLoadingNotifs(true);
 //       try {
 //         const res = await axios.get(
-//           `${API_URL}/api/notifications/users/${userId}/notifications`
+//           `${BASE}/users/${userId}/notifications`,
+//           { headers: authHeaders() }
 //         );
 //         const list = Array.isArray(res.data) ? res.data : [];
 //         setNotifications(list);
@@ -292,13 +144,14 @@
 //         if (unread > 0) setStartPolling(true);
 //       } catch (err) {
 //         console.error("Initial notification fetch failed:", err);
+//         toast.error("Failed to load notifications.");
 //       } finally {
 //         setLoadingNotifs(false);
 //       }
 //     };
 
 //     fetchInitial();
-//   }, [userId, API_URL]);
+//   }, [userId, BASE]);
 
 //   // Poll for notifications if unread exists
 //   useEffect(() => {
@@ -307,7 +160,8 @@
 //     const poll = async () => {
 //       try {
 //         const res = await axios.get(
-//           `${API_URL}/api/notifications/users/${userId}/notifications`
+//           `${BASE}/users/${userId}/notifications`,
+//           { headers: authHeaders() }
 //         );
 //         const list = Array.isArray(res.data) ? res.data : [];
 //         setNotifications(list);
@@ -321,15 +175,14 @@
 
 //     const intervalId = setInterval(poll, 3000);
 //     return () => clearInterval(intervalId);
-//   }, [userId, startPolling, API_URL]);
+//   }, [userId, startPolling, BASE]);
 
 //   const handleMarkAsRead = async (notifId) => {
 //     try {
-//       const token = localStorage.getItem("token");
 //       await axios.patch(
-//         `${API_URL}/api/notifications/users/${userId}/notifications/${notifId}`,
+//         `${BASE}/users/${userId}/notifications/${notifId}`,
 //         { read: true },
-//         { headers: { Authorization: `Bearer ${token}` } }
+//         { headers: authHeaders() }
 //       );
 
 //       setNotifications((prev) =>
@@ -345,43 +198,82 @@
 //       });
 //     } catch (err) {
 //       console.error("Failed to mark as read:", err);
-//       Swal.fire("Error", "Failed to mark as read", "error");
+//       toast.error("Failed to mark as read.");
 //     }
 //   };
 
+//   // Bulk mark-all with graceful fallback to per-item PATCH if bulk endpoint is missing (404/405)
 //   const handleMarkAllAsRead = async () => {
+//     const unreadItems = notifications.filter((n) => !n.read);
+
+//     // Try bulk endpoint first
 //     try {
-//       const token = localStorage.getItem("token");
 //       await axios.patch(
-//         `${API_URL}/api/notifications/users/${userId}/notifications`,
+//         `${BASE}/users/${userId}/notifications`,
 //         { read: true },
-//         { headers: { Authorization: `Bearer ${token}` } }
+//         { headers: authHeaders() }
 //       );
-//       setNotifications((prev) =>
-//         prev.map((n) => ({ ...n, read: true, readAt: new Date().toISOString() }))
-//       );
-//       setUnreadCount(0);
-//       setStartPolling(false);
 //     } catch (err) {
-//       console.error("Failed to mark all as read:", err);
-//       Swal.fire("Error", "Failed to mark all as read", "error");
+//       // If backend doesn't support bulk, fall back to per-item calls
+//       const status = err?.response?.status;
+//       if (status === 404 || status === 405) {
+//         try {
+//           await Promise.allSettled(
+//             unreadItems.map((n) =>
+//               axios.patch(
+//                 `${BASE}/users/${userId}/notifications/${n._id}`,
+//                 { read: true },
+//                 { headers: authHeaders() }
+//               )
+//             )
+//           );
+//         } catch (innerErr) {
+//           console.error("Fallback mark-all failed:", innerErr);
+//           toast.error("Failed to mark all as read.");
+//           return;
+//         }
+//       } else {
+//         console.error("Failed to mark all as read:", err);
+//         toast.error("Failed to mark all as read.");
+//         return;
+//       }
 //     }
+
+//     // Optimistic UI update
+//     setNotifications((prev) =>
+//       prev.map((n) => ({ ...n, read: true, readAt: new Date().toISOString() }))
+//     );
+//     setUnreadCount(0);
+//     setStartPolling(false);
+//     toast.success("Marked all as read.");
 //   };
 
 //   const handleClearNotifications = async () => {
+//     // ✅ SweetAlert used ONLY for confirmation
+//     const confirm = await Swal.fire({
+//       title: "Clear all notifications?",
+//       text: "This action cannot be undone.",
+//       icon: "warning",
+//       showCancelButton: true,
+//       confirmButtonText: "Yes, clear all",
+//       cancelButtonText: "Cancel",
+//       reverseButtons: true,
+//       focusCancel: true,
+//     });
+//     if (!confirm.isConfirmed) return;
+
 //     try {
-//       const token = localStorage.getItem("token");
 //       await axios.delete(
-//         `${API_URL}/api/notifications/users/${userId}/notifications`,
-//         {
-//           headers: { Authorization: `Bearer ${token}` },
-//         }
+//         `${BASE}/users/${userId}/notifications`,
+//         { headers: authHeaders() }
 //       );
 //       setNotifications([]);
 //       setUnreadCount(0);
 //       setStartPolling(false);
+//       toast.success("Notifications cleared.");
 //     } catch (err) {
-//       Swal.fire("Error", "Failed to clear notifications", "error");
+//       console.error("Failed to clear notifications:", err);
+//       toast.error("Failed to clear notifications.");
 //     }
 //   };
 
@@ -392,100 +284,32 @@
 
 //     try {
 //       if (notifId) await handleMarkAsRead(notifId);
-//       const res = await axios.get(`${API_URL}/api/orders/${orderId}`);
+//       const res = await axios.get(`${API_URL}/api/orders/${orderId}`, {
+//         headers: authHeaders(),
+//       });
 //       setSelectedOrder(res.data);
 //       setUserEmail(res.data?.email || "");
 //       setShowOrderModal(true);
 //     } catch (err) {
-//       Swal.fire("Error", "Failed to fetch order", "error");
+//       console.error("Failed to fetch order:", err);
+//       toast.error("Failed to fetch order.");
 //     } finally {
 //       setOrderLoading(false);
 //     }
 //   };
 
-//   // Open Sell request modal by ID (same modal used in MyRequest.jsx)
-//   const openSellDetail = async (sellId, notifId) => {
-//     if (!sellId) return;
-//     setShowNotifModal(false);
-//     setDetailLoading(true);
-//     try {
-//       if (notifId) await handleMarkAsRead(notifId);
-//       const data = await fetchSellById(sellId);
-//       setSelectedSell(data);
-//       setShowSellModal(true);
-//     } catch (e) {
-//       console.error("Failed to fetch sell request:", e);
-//       Swal.fire("Error", "Failed to fetch sell request", "error");
-//     } finally {
-//       setDetailLoading(false);
-//     }
-//   };
-
-//   // Open Demolish request modal by ID (same modal used in MyRequest.jsx)
-//   const openDemolishDetail = async (demoId, notifId) => {
-//     if (!demoId) return;
-//     setShowNotifModal(false);
-//     setDetailLoading(true);
-//     try {
-//       if (notifId) await handleMarkAsRead(notifId);
-//       const data = await fetchDemolishById(demoId);
-//       setSelectedDemo(data);
-//       setShowDemoModal(true);
-//     } catch (e) {
-//       console.error("Failed to fetch demolish request:", e);
-//       Swal.fire("Error", "Failed to fetch demolish request", "error");
-//     } finally {
-//       setDetailLoading(false);
-//     }
-//   };
-
-//   // "View Request" and "Open" both route to the same modal logic
+//   // "View Request" redirects to /requests
 //   const handleViewRequest = async (n) => {
 //     if (!n) return;
-//     const kind = getKind(n);
-//     const ids = candidateIds(n);
-
-//     if (kind === "sell" && ids.length) {
-//       await openSellDetail(ids[0], n._id);
-//       return;
-//     }
-//     if (kind === "demolish" && ids.length) {
-//       await openDemolishDetail(ids[0], n._id);
-//       return;
-//     }
-//   };
-
-//   // Unified "Open" action per notification
-//   const handleOpenNotification = async (n) => {
-//     const kind = getKind(n);
-//     const ids = candidateIds(n);
-//     const markPromise = !n.read ? handleMarkAsRead(n._id) : Promise.resolve();
-
-//     if (kind === "sell" && ids.length) {
-//       await openSellDetail(ids[0], n._id);
-//       return;
-//     }
-
-//     if (kind === "demolish" && ids.length) {
-//       await openDemolishDetail(ids[0], n._id);
-//       return;
-//     }
-
-//     // Prefer deep link for other kinds
-//     if (n.link) {
-//       await markPromise;
+//     try {
+//       if (!n.read) await handleMarkAsRead(n._id);
+//     } finally {
 //       setShowNotifModal(false);
-//       navigate(n.link);
-//       return;
+//       // Route points to <Route path="/requests" element={<MyRequests />} />
+//       navigate("/requests");
+//       // If you later want to preselect a tab:
+//       // const kind = getKind(n); navigate("/requests", { state: { initialTab: kind } });
 //     }
-
-//     if (kind === "order" && n.orderId) {
-//       await handleViewOrder(n.orderId, n._id);
-//       return;
-//     }
-
-//     await markPromise;
-//     setShowNotifModal(false);
 //   };
 
 //   // === Derived counts & filtered list for the "for" filter ===
@@ -633,15 +457,6 @@
 
 //                   <Box display="flex" justifyContent="space-between" mt={1}>
 //                     <Stack direction="row" spacing={1}>
-//                       <Button
-//                         size="small"
-//                         variant="text"
-//                         color="info"
-//                         onClick={() => handleOpenNotification(n)}
-//                       >
-//                         Open
-//                       </Button>
-
 //                       {(kind === "sell" || kind === "demolish") && (
 //                         <Button
 //                           size="small"
@@ -703,29 +518,8 @@
 //         />
 //       )}
 
-//       {/* Sell / Demolish Detail Modals (exactly like MyRequest.jsx) */}
-//       {showSellModal && selectedSell && (
-//         <SellReqDetailModal
-//           request={selectedSell}
-//           onClose={() => {
-//             setShowSellModal(false);
-//             setSelectedSell(null);
-//           }}
-//         />
-//       )}
-
-//       {showDemoModal && selectedDemo && (
-//         <DemolishReqDetailModal
-//           request={selectedDemo}
-//           onClose={() => {
-//             setShowDemoModal(false);
-//             setSelectedDemo(null);
-//           }}
-//         />
-//       )}
-
-//       {/* Loading Overlays */}
-//       {(orderLoading || detailLoading) && (
+//       {/* Loading Overlay */}
+//       {orderLoading && (
 //         <Box
 //           sx={{
 //             position: "fixed",
@@ -746,6 +540,7 @@
 //     </Box>
 //   );
 // }
+
 
 import React, { useState, useEffect, useMemo } from "react";
 import { FaBell } from "react-icons/fa";
@@ -768,8 +563,7 @@ import {
 import LocalMallIcon from "@mui/icons-material/LocalMall"; // order
 import SellIcon from "@mui/icons-material/Sell"; // sell
 import ConstructionIcon from "@mui/icons-material/Construction"; // demolish
-import Swal from "sweetalert2"; // ✅ confirmations only
-import toast from "react-hot-toast"; // ✅ general notifications
+import toast from "react-hot-toast";
 import "animate.css";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -796,6 +590,7 @@ export default function NotificationBell() {
   const navigate = useNavigate();
   const API_URL = useMemo(() => process.env.REACT_APP_API_URL, []);
   const BASE = `${API_URL}/api/notifications`;
+  const ROLE = "client"; // 🔒 enforce client-only notifications
 
   // ------- Helpers -------
   const formatWhen = (dt) => {
@@ -843,6 +638,19 @@ export default function NotificationBell() {
     return token ? { Authorization: `Bearer ${token}` } : undefined;
   };
 
+  // Best-effort role check on object (fallback if backend ignores ?role=client)
+  const isClientRole = (n) => {
+    const roleField =
+      (n.role ||
+        n.recipientRole ||
+        n.targetRole ||
+        n.userRole ||
+        n.forRole ||
+        "").toString().toLowerCase();
+    // If a role-like field exists, require it to be "client". If no role field, accept it (per-user feed).
+    return roleField ? roleField === ROLE : true;
+  };
+
   // Load userId
   useEffect(() => {
     const loadUserId = async () => {
@@ -874,7 +682,7 @@ export default function NotificationBell() {
     loadUserId();
   }, [API_URL]);
 
-  // Fetch initial notifications
+  // Fetch initial notifications (role=client)
   useEffect(() => {
     if (!userId) return;
 
@@ -883,9 +691,13 @@ export default function NotificationBell() {
       try {
         const res = await axios.get(
           `${BASE}/users/${userId}/notifications`,
-          { headers: authHeaders() }
+          {
+            headers: authHeaders(),
+            params: { role: ROLE }, // ✅ server-side filter
+          }
         );
-        const list = Array.isArray(res.data) ? res.data : [];
+        const raw = Array.isArray(res.data) ? res.data : [];
+        const list = raw.filter(isClientRole); // ✅ client-side safeguard
         setNotifications(list);
         const unread = list.filter((n) => !n.read).length;
         setUnreadCount(unread);
@@ -901,7 +713,7 @@ export default function NotificationBell() {
     fetchInitial();
   }, [userId, BASE]);
 
-  // Poll for notifications if unread exists
+  // Poll for notifications if unread exists (role=client)
   useEffect(() => {
     if (!userId || !startPolling) return;
 
@@ -909,9 +721,13 @@ export default function NotificationBell() {
       try {
         const res = await axios.get(
           `${BASE}/users/${userId}/notifications`,
-          { headers: authHeaders() }
+          {
+            headers: authHeaders(),
+            params: { role: ROLE }, // ✅ keep filtering on poll
+          }
         );
-        const list = Array.isArray(res.data) ? res.data : [];
+        const raw = Array.isArray(res.data) ? res.data : [];
+        const list = raw.filter(isClientRole);
         setNotifications(list);
         const unread = list.filter((n) => !n.read).length;
         setUnreadCount(unread);
@@ -930,7 +746,10 @@ export default function NotificationBell() {
       await axios.patch(
         `${BASE}/users/${userId}/notifications/${notifId}`,
         { read: true },
-        { headers: authHeaders() }
+        {
+          headers: authHeaders(),
+          params: { role: ROLE }, // ✅ scope to client notifications
+        }
       );
 
       setNotifications((prev) =>
@@ -950,7 +769,7 @@ export default function NotificationBell() {
     }
   };
 
-  // Bulk mark-all with graceful fallback to per-item PATCH if bulk endpoint is missing (404/405)
+  // Bulk mark-all with graceful fallback; include role=client
   const handleMarkAllAsRead = async () => {
     const unreadItems = notifications.filter((n) => !n.read);
 
@@ -959,10 +778,12 @@ export default function NotificationBell() {
       await axios.patch(
         `${BASE}/users/${userId}/notifications`,
         { read: true },
-        { headers: authHeaders() }
+        {
+          headers: authHeaders(),
+          params: { role: ROLE }, // ✅
+        }
       );
     } catch (err) {
-      // If backend doesn't support bulk, fall back to per-item calls
       const status = err?.response?.status;
       if (status === 404 || status === 405) {
         try {
@@ -971,7 +792,10 @@ export default function NotificationBell() {
               axios.patch(
                 `${BASE}/users/${userId}/notifications/${n._id}`,
                 { read: true },
-                { headers: authHeaders() }
+                {
+                  headers: authHeaders(),
+                  params: { role: ROLE }, // ✅
+                }
               )
             )
           );
@@ -996,24 +820,15 @@ export default function NotificationBell() {
     toast.success("Marked all as read.");
   };
 
+  // Clear all — role=client
   const handleClearNotifications = async () => {
-    // ✅ SweetAlert used ONLY for confirmation
-    const confirm = await Swal.fire({
-      title: "Clear all notifications?",
-      text: "This action cannot be undone.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Yes, clear all",
-      cancelButtonText: "Cancel",
-      reverseButtons: true,
-      focusCancel: true,
-    });
-    if (!confirm.isConfirmed) return;
-
     try {
       await axios.delete(
         `${BASE}/users/${userId}/notifications`,
-        { headers: authHeaders() }
+        {
+          headers: authHeaders(),
+          params: { role: ROLE }, // ✅
+        }
       );
       setNotifications([]);
       setUnreadCount(0);
@@ -1053,10 +868,7 @@ export default function NotificationBell() {
       if (!n.read) await handleMarkAsRead(n._id);
     } finally {
       setShowNotifModal(false);
-      // Route points to <Route path="/requests" element={<MyRequests />} />
       navigate("/requests");
-      // If you later want to preselect a tab:
-      // const kind = getKind(n); navigate("/requests", { state: { initialTab: kind } });
     }
   };
 
