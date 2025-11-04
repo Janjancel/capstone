@@ -689,13 +689,10 @@ export default function NotificationBell() {
     const fetchInitial = async () => {
       setLoadingNotifs(true);
       try {
-        const res = await axios.get(
-          `${BASE}/users/${userId}/notifications`,
-          {
-            headers: authHeaders(),
-            params: { role: ROLE }, // ✅ server-side filter
-          }
-        );
+        const res = await axios.get(`${BASE}/users/${userId}/notifications`, {
+          headers: authHeaders(),
+          params: { role: ROLE }, // ✅ server-side filter
+        });
         const raw = Array.isArray(res.data) ? res.data : [];
         const list = raw.filter(isClientRole); // ✅ client-side safeguard
         setNotifications(list);
@@ -719,13 +716,10 @@ export default function NotificationBell() {
 
     const poll = async () => {
       try {
-        const res = await axios.get(
-          `${BASE}/users/${userId}/notifications`,
-          {
-            headers: authHeaders(),
-            params: { role: ROLE }, // ✅ keep filtering on poll
-          }
-        );
+        const res = await axios.get(`${BASE}/users/${userId}/notifications`, {
+          headers: authHeaders(),
+          params: { role: ROLE }, // ✅ keep filtering on poll
+        });
         const raw = Array.isArray(res.data) ? res.data : [];
         const list = raw.filter(isClientRole);
         setNotifications(list);
@@ -823,13 +817,10 @@ export default function NotificationBell() {
   // Clear all — role=client
   const handleClearNotifications = async () => {
     try {
-      await axios.delete(
-        `${BASE}/users/${userId}/notifications`,
-        {
-          headers: authHeaders(),
-          params: { role: ROLE }, // ✅
-        }
-      );
+      await axios.delete(`${BASE}/users/${userId}/notifications`, {
+        headers: authHeaders(),
+        params: { role: ROLE }, // ✅
+      });
       setNotifications([]);
       setUnreadCount(0);
       setStartPolling(false);
@@ -908,8 +899,11 @@ export default function NotificationBell() {
         onClose={() => setShowNotifModal(false)}
         fullWidth
         maxWidth="sm"
+        PaperProps={{ sx: { bgcolor: "background.paper", color: "text.primary" } }}
       >
-        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <DialogTitle
+          sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+        >
           Notifications
           <Stack direction="row" spacing={1}>
             {notifications.some((n) => !n.read) && (
@@ -962,18 +956,18 @@ export default function NotificationBell() {
           </Stack>
         </Box>
 
-        <DialogContent dividers sx={{ maxHeight: "420px", pt: 1 }}>
+        <DialogContent
+          dividers
+          sx={{ maxHeight: "420px", pt: 1, bgcolor: "background.default" }}
+        >
           {loadingNotifs ? (
-            <Box sx={{ py: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Box
+              sx={{ py: 4, display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
               <CircularProgress size={28} />
             </Box>
           ) : filteredNotifications.length === 0 ? (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              align="center"
-              sx={{ mt: 2 }}
-            >
+            <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 2 }}>
               No notifications
             </Typography>
           ) : (
@@ -985,13 +979,22 @@ export default function NotificationBell() {
                   sx={{
                     p: 1.5,
                     mb: 1,
-                    bgcolor: n.read ? "grey.100" : "grey.800",
-                    color: n.read ? "text.primary" : "#fff",
+                    bgcolor: n.read ? "grey.50" : "grey.100",
+                    color: "text.primary",
                     fontSize: "0.9rem",
+                    border: "1px solid",
+                    borderColor: n.read ? "grey.200" : "primary.light",
+                    borderLeft: "4px solid",
+                    borderLeftColor: n.read ? "grey.300" : "primary.main",
                   }}
                   elevation={n.read ? 0 : 1}
                 >
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5, flexWrap: "wrap" }}>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={1}
+                    sx={{ mb: 0.5, flexWrap: "wrap" }}
+                  >
                     {typeIcon(kind)}
                     <Chip
                       size="small"
@@ -1044,7 +1047,7 @@ export default function NotificationBell() {
                       <Button
                         size="small"
                         variant="text"
-                        color="inherit"
+                        color="primary"
                         onClick={() => handleMarkAsRead(n._id)}
                       >
                         Mark as Read
