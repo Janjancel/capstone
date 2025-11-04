@@ -497,15 +497,18 @@ const PLACEHOLDER_IMG = `${process.env.PUBLIC_URL || ""}/placeholder.jpg`;
 
 /** -------------------------------- Image helpers -------------------------------- */
 function getFirstUrl(candidate) {
+  // returns the first usable string URL from various shapes
   if (!candidate) return null;
 
   if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
 
   if (Array.isArray(candidate)) {
+    // find the first non-empty string
     const found = candidate.find(
       (c) => typeof c === "string" && c.trim().length > 0
     );
     if (found) return found.trim();
+    // allow array of objects like [{url:'...'}]
     for (const c of candidate) {
       const nested = getFirstUrl(c);
       if (nested) return nested;
@@ -514,6 +517,7 @@ function getFirstUrl(candidate) {
   }
 
   if (typeof candidate === "object") {
+    // common keys first
     const priorityKeys = ["front", "main", "cover", "primary", "side", "back", "url"];
     for (const k of priorityKeys) {
       if (k in candidate) {
@@ -521,6 +525,7 @@ function getFirstUrl(candidate) {
         if (nested) return nested;
       }
     }
+    // then scan all props
     for (const k in candidate) {
       const nested = getFirstUrl(candidate[k]);
       if (nested) return nested;
@@ -532,6 +537,7 @@ function getFirstUrl(candidate) {
 
 // ----- Shared image-display logic used in Cart + CartModal -----
 export function getItemImage(item) {
+  // Try the flexible shapes you use across the app
   return (
     getFirstUrl(item?.images) ||
     getFirstUrl(item?.image) ||
@@ -553,7 +559,7 @@ function SafeImg({ src, alt, style, className }) {
       alt={alt}
       style={style}
       className={className}
-      onError={() => {
+      onError={(e) => {
         if (finalSrc !== PLACEHOLDER_IMG) setFinalSrc(PLACEHOLDER_IMG);
       }}
     />
@@ -656,6 +662,7 @@ const CartModal = ({
           }
         } catch (err) {
           console.error("Error fetching user address:", err);
+          // don't block the modal; just notify
           toast.error("Failed to load address.");
         }
       };
@@ -738,13 +745,13 @@ const CartModal = ({
     }
   };
 
-  /** Normalize selected items -> compact snapshot for backend */
-  const buildItemsSnapshot = () => {
-    return (selectedItems || []).map((i) => {
+  /** Build the clean JSON payload the backend likely expects (no multipart). */
+  const buildOrderPayload = () => {
+    const items = (selectedItems || []).map((i) => {
       const priceNum = Number(i.price) || 0;
       const qtyNum = Number(i.quantity) || 1;
 
-      // Normalize images to an array of strings
+      // Normalize images to an array of strings (if present)
       let imagesArr = [];
       if (Array.isArray(i.images)) {
         imagesArr = i.images
@@ -755,40 +762,32 @@ const CartModal = ({
       }
 
       return {
-        id: i.id, // matches Cart.cartItems[].id
+        id: i.id, // should match Cart.cartItems[].id
         quantity: qtyNum,
+        // snapshot fields
         name: i.name,
         price: priceNum,
-        image: getItemImage(i),
-        images: imagesArr,
+        image: getItemImage(i), // primary image (fallback handled)
+        images: imagesArr, // optional
+        // frontend subtotal (server can recompute)
         subtotal: Number((qtyNum * priceNum).toFixed(2)),
       };
     });
+
+    const numericTotal =
+      items.reduce((acc, it) => acc + (Number(it.subtotal) || 0), 0) || 0;
+
+    return {
+      userId: user?._id,
+      items,
+      address,
+      notes: "",
+      // Provide total as hint; server should still validate
+      total: Number(numericTotal.toFixed(2)),
+    };
   };
 
-  /** Append File/Blob(s) only, for Multer to receive under "images" */
-  const appendMaybeFiles = (formData, candidate) => {
-    if (!candidate) return;
-
-    // Handle File or Blob (File extends Blob)
-    const isBlob =
-      typeof Blob !== "undefined" && candidate instanceof Blob;
-
-    if (isBlob) {
-      formData.append("images", candidate);
-      return;
-    }
-
-    if (Array.isArray(candidate)) {
-      for (const c of candidate) appendMaybeFiles(formData, c);
-      return;
-    }
-    if (typeof candidate === "object") {
-      for (const k in candidate) appendMaybeFiles(formData, candidate[k]);
-    }
-  };
-
-  // --- Order confirmation (multipart to satisfy Multer) ---
+  // --- Order confirmation ---
   const handleOrderConfirmation = async () => {
     if (!user) return toast.error("User not found.");
     if (!isAddressComplete())
@@ -799,24 +798,11 @@ const CartModal = ({
     setError("");
     setLoading(true);
     try {
-      const itemsSnapshot = buildItemsSnapshot();
+      const payload = buildOrderPayload();
 
-      // Build FormData — IMPORTANT: don't set Content-Type manually
-      const formData = new FormData();
-      formData.append("userId", user._id);
-      formData.append("items", JSON.stringify(itemsSnapshot));
-      formData.append("address", JSON.stringify(address));
-      formData.append("notes", "");
-
-      // Only append file objects; URLs stay inside items JSON
-      selectedItems.forEach((item) => {
-        appendMaybeFiles(formData, item.image);
-        appendMaybeFiles(formData, item.images);
-      });
-
-      const orderRes = await axios.post(`${API_URL}/api/orders`, formData, {
-        // Let the browser set multipart boundaries; just pass auth if available
-        headers: { ...authHeaders() },
+      // Prefer JSON submission (cleaner, avoids server-side multer requirements)
+      const orderRes = await axios.post(`${API_URL}/api/orders`, payload, {
+        headers: { "Content-Type": "application/json", ...authHeaders() },
       });
 
       const created = orderRes.data;
@@ -861,10 +847,10 @@ const CartModal = ({
       toast.success("Order placed successfully!");
       onClose();
     } catch (err) {
-      // Surface backend message clearly
+      // Robust error extraction
       const serverMsg =
-        err?.response?.data?.error ||
         err?.response?.data?.message ||
+        err?.response?.data?.error ||
         err?.message ||
         "Failed to place the order. Please try again.";
       console.error("Order failed:", err);
