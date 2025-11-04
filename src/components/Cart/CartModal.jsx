@@ -492,21 +492,20 @@ import axios from "axios";
 import EditAddressModal from "../Profile/EditAddressModal";
 import addressData from "../../data/addressData.json";
 
-const PLACEHOLDER_IMG = "/placeholder.jpg";
+// Use PUBLIC_URL so it works whether hosted at "/" or a subpath
+const PLACEHOLDER_IMG = `${process.env.PUBLIC_URL || ""}/placeholder.jpg`;
 
+/** -------------------------------- Image helpers -------------------------------- */
 function getFirstUrl(candidate) {
-  // returns the first usable string URL from various shapes
   if (!candidate) return null;
 
   if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
 
   if (Array.isArray(candidate)) {
-    // find the first non-empty string
     const found = candidate.find(
       (c) => typeof c === "string" && c.trim().length > 0
     );
     if (found) return found.trim();
-    // allow array of objects like [{url:'...'}]
     for (const c of candidate) {
       const nested = getFirstUrl(c);
       if (nested) return nested;
@@ -515,7 +514,6 @@ function getFirstUrl(candidate) {
   }
 
   if (typeof candidate === "object") {
-    // common keys first
     const priorityKeys = ["front", "main", "cover", "primary", "side", "back", "url"];
     for (const k of priorityKeys) {
       if (k in candidate) {
@@ -523,7 +521,6 @@ function getFirstUrl(candidate) {
         if (nested) return nested;
       }
     }
-    // then scan all props
     for (const k in candidate) {
       const nested = getFirstUrl(candidate[k]);
       if (nested) return nested;
@@ -535,7 +532,6 @@ function getFirstUrl(candidate) {
 
 // ----- Shared image-display logic used in Cart + CartModal -----
 export function getItemImage(item) {
-  // Try the flexible shapes you use across the app
   return (
     getFirstUrl(item?.images) ||
     getFirstUrl(item?.image) ||
@@ -543,6 +539,28 @@ export function getItemImage(item) {
   );
 }
 
+/** One-time-fallback <img/> to avoid onError loops / flicker */
+function SafeImg({ src, alt, style, className }) {
+  const [finalSrc, setFinalSrc] = useState(src || PLACEHOLDER_IMG);
+
+  useEffect(() => {
+    setFinalSrc(src || PLACEHOLDER_IMG);
+  }, [src]);
+
+  return (
+    <img
+      src={finalSrc}
+      alt={alt}
+      style={style}
+      className={className}
+      onError={() => {
+        if (finalSrc !== PLACEHOLDER_IMG) setFinalSrc(PLACEHOLDER_IMG);
+      }}
+    />
+  );
+}
+
+/** -------------------------------- Component -------------------------------- */
 const CartModal = ({
   show,
   onClose,
@@ -574,6 +592,12 @@ const CartModal = ({
     cities: [],
     barangays: [],
   });
+
+  // Auth header helper
+  const authHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : undefined;
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -623,7 +647,9 @@ const CartModal = ({
       loadRegions();
       const fetchAddress = async () => {
         try {
-          const res = await axios.get(`${API_URL}/api/address/${user._id}`);
+          const res = await axios.get(`${API_URL}/api/address/${user._id}`, {
+            headers: authHeaders(),
+          });
           const userAddress = res.data;
           if (userAddress && Object.keys(userAddress).length > 0) {
             setAddress(userAddress);
@@ -635,6 +661,7 @@ const CartModal = ({
       };
       fetchAddress();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show, user, API_URL]);
 
   useEffect(() => {
@@ -697,10 +724,11 @@ const CartModal = ({
     const isComplete = Object.values(address).every((field) => field !== "");
     if (!isComplete) return toast.error("Please fill in all the fields.");
     try {
-      await axios.post(`${API_URL}/api/address/save`, {
-        userId: user._id,
-        address,
-      });
+      await axios.post(
+        `${API_URL}/api/address/save`,
+        { userId: user._id, address },
+        { headers: { "Content-Type": "application/json", ...authHeaders() } }
+      );
       toast.success("Address saved!");
       setIsEditing(false);
       setShowModal(true);
@@ -710,13 +738,47 @@ const CartModal = ({
     }
   };
 
-  // helper to add File(s) only
+  /** Normalize selected items -> compact snapshot for backend */
+  const buildItemsSnapshot = () => {
+    return (selectedItems || []).map((i) => {
+      const priceNum = Number(i.price) || 0;
+      const qtyNum = Number(i.quantity) || 1;
+
+      // Normalize images to an array of strings
+      let imagesArr = [];
+      if (Array.isArray(i.images)) {
+        imagesArr = i.images
+          .map((x) => getFirstUrl(x))
+          .filter((u) => typeof u === "string" && u.trim().length > 0);
+      } else if (typeof i.images === "string") {
+        imagesArr = [i.images];
+      }
+
+      return {
+        id: i.id, // matches Cart.cartItems[].id
+        quantity: qtyNum,
+        name: i.name,
+        price: priceNum,
+        image: getItemImage(i),
+        images: imagesArr,
+        subtotal: Number((qtyNum * priceNum).toFixed(2)),
+      };
+    });
+  };
+
+  /** Append File/Blob(s) only, for Multer to receive under "images" */
   const appendMaybeFiles = (formData, candidate) => {
     if (!candidate) return;
-    if (candidate instanceof File) {
+
+    // Handle File or Blob (File extends Blob)
+    const isBlob =
+      typeof Blob !== "undefined" && candidate instanceof Blob;
+
+    if (isBlob) {
       formData.append("images", candidate);
       return;
     }
+
     if (Array.isArray(candidate)) {
       for (const c of candidate) appendMaybeFiles(formData, c);
       return;
@@ -726,48 +788,72 @@ const CartModal = ({
     }
   };
 
-  // --- Order confirmation ---
+  // --- Order confirmation (multipart to satisfy Multer) ---
   const handleOrderConfirmation = async () => {
-    if (!user || !isAddressComplete()) return;
+    if (!user) return toast.error("User not found.");
+    if (!isAddressComplete())
+      return toast.error("Please complete your shipping address first.");
+    if (!selectedItems || selectedItems.length === 0)
+      return toast.error("No items selected.");
 
-    setLoading(true);
     setError("");
+    setLoading(true);
     try {
+      const itemsSnapshot = buildItemsSnapshot();
+
+      // Build FormData — IMPORTANT: don't set Content-Type manually
       const formData = new FormData();
       formData.append("userId", user._id);
-      formData.append("items", JSON.stringify(selectedItems));
+      formData.append("items", JSON.stringify(itemsSnapshot));
       formData.append("address", JSON.stringify(address));
       formData.append("notes", "");
 
-      // append images only if they are File objects (robust to shapes)
+      // Only append file objects; URLs stay inside items JSON
       selectedItems.forEach((item) => {
         appendMaybeFiles(formData, item.image);
         appendMaybeFiles(formData, item.images);
       });
 
       const orderRes = await axios.post(`${API_URL}/api/orders`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        // Let the browser set multipart boundaries; just pass auth if available
+        headers: { ...authHeaders() },
       });
 
-      const orderId = orderRes.data?._id;
+      const created = orderRes.data;
+      const orderId = created?._id || created?.order?._id || created?.orderId;
 
-      // 🔹 Create notification for admin
+      // 🔹 Create notification for admin (best-effort)
       if (orderId) {
-        await axios.post(`${API_URL}/api/notifications`, {
-          userId: user._id,
-          orderId,
-          for: "order",
-          role: "admin",
-          status: "new",
-          message: `New order placed by ${user.displayName || user.email}`,
-        });
+        try {
+          await axios.post(
+            `${API_URL}/api/notifications`,
+            {
+              userId: user._id,
+              orderId,
+              for: "order",
+              role: "admin",
+              status: "new",
+              message: `New order placed by ${user.displayName || user.email}`,
+            },
+            { headers: { "Content-Type": "application/json", ...authHeaders() } }
+          );
+        } catch (notifErr) {
+          console.warn("Notification create failed (non-blocking):", notifErr);
+        }
       }
 
-      // remove from cart etc...
-      await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
-        removeItems: selectedItems.map((i) => i.id),
-      });
+      // 🔹 Remove ordered items from cart
+      try {
+        await axios.put(
+          `${API_URL}/api/cart/${user._id}/remove`,
+          { removeItems: selectedItems.map((i) => i.id) },
+          { headers: { "Content-Type": "application/json", ...authHeaders() } }
+        );
+      } catch (rmErr) {
+        console.warn("Cart cleanup failed (non-blocking):", rmErr);
+      }
 
+      // 🔹 Reset UI state
       setCartItems([]);
       setSelectedItems([]);
       setCartCount(0);
@@ -775,13 +861,15 @@ const CartModal = ({
       toast.success("Order placed successfully!");
       onClose();
     } catch (err) {
-      console.error("Order failed:", err);
-      const msg =
+      // Surface backend message clearly
+      const serverMsg =
         err?.response?.data?.error ||
+        err?.response?.data?.message ||
         err?.message ||
         "Failed to place the order. Please try again.";
-      setError(msg);
-      toast.error(msg);
+      console.error("Order failed:", err);
+      setError(serverMsg);
+      toast.error(serverMsg);
     } finally {
       setLoading(false);
     }
@@ -805,8 +893,7 @@ const CartModal = ({
       {Object.entries(address).map(([key, value]) => (
         <p className="mb-1" key={key}>
           <strong>
-            {key.charAt(0).toUpperCase() +
-              key.slice(1).replace(/([A-Z])/g, " $1")}
+            {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, " $1")}
             :
           </strong>{" "}
           {value || "Not Provided"}
@@ -869,8 +956,7 @@ const CartModal = ({
                   {!isAddressComplete() && (
                     <Alert variant="warning">
                       Your shipping address is incomplete. Please{" "}
-                      <a href="/profile">add your address</a> in your profile
-                      first.
+                      <a href="/profile">add your address</a> in your profile first.
                     </Alert>
                   )}
 
@@ -896,10 +982,12 @@ const CartModal = ({
                       <tbody>
                         {selectedItems.map((item) => {
                           const imgSrc = getItemImage(item);
+                          const qty = Number(item.quantity) || 0;
+                          const price = Number(item.price) || 0;
                           return (
                             <tr key={item.id}>
                               <td>
-                                <img
+                                <SafeImg
                                   src={imgSrc}
                                   alt={item.name}
                                   style={{
@@ -908,20 +996,12 @@ const CartModal = ({
                                     objectFit: "cover",
                                   }}
                                   className="img-thumbnail"
-                                  onError={(e) => {
-                                    e.currentTarget.src = PLACEHOLDER_IMG;
-                                  }}
                                 />
                               </td>
                               <td>{item.name}</td>
-                              <td>{item.quantity}</td>
-                              <td>{formatPHP(parseFloat(item.price))}</td>
-                              <td>
-                                {formatPHP(
-                                  (Number(item.quantity) || 0) *
-                                    (parseFloat(item.price) || 0)
-                                )}
-                              </td>
+                              <td>{qty}</td>
+                              <td>{formatPHP(price)}</td>
+                              <td>{formatPHP(qty * price)}</td>
                             </tr>
                           );
                         })}
@@ -936,22 +1016,29 @@ const CartModal = ({
                   <h4>
                     Total:{" "}
                     <span className="text-success">
-                      {formatPHP(parseFloat(totalPrice))}
+                      {formatPHP(Number(totalPrice) || 0)}
                     </span>
                   </h4>
                   <Button
                     variant="success"
                     onClick={handleOrderConfirmation}
-                    disabled={!isAddressComplete()}
+                    disabled={!isAddressComplete() || loading || selectedItems.length === 0}
                   >
-                    Confirm Order
+                    {loading ? (
+                      <>
+                        <Spinner size="sm" animation="border" className="me-2" />
+                        Processing...
+                      </>
+                    ) : (
+                      "Confirm Order"
+                    )}
                   </Button>
                 </div>
               </>
             )}
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={onClose}>
+            <Button variant="secondary" onClick={onClose} disabled={loading}>
               Close
             </Button>
           </Modal.Footer>
