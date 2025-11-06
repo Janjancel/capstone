@@ -1,3 +1,4 @@
+
 // // src/components/Cart/CartModal.jsx
 // import React, { useState, useEffect } from "react";
 // import { Modal, Button, Spinner, Form, Alert } from "react-bootstrap";
@@ -6,8 +7,10 @@
 // import EditAddressModal from "../Profile/EditAddressModal";
 // import addressData from "../../data/addressData.json";
 
-// const PLACEHOLDER_IMG = "/placeholder.jpg";
+// // Use PUBLIC_URL so it works whether hosted at "/" or a subpath
+// const PLACEHOLDER_IMG = `${process.env.PUBLIC_URL || ""}/placeholder.jpg`;
 
+// /** -------------------------------- Image helpers -------------------------------- */
 // function getFirstUrl(candidate) {
 //   // returns the first usable string URL from various shapes
 //   if (!candidate) return null;
@@ -57,6 +60,28 @@
 //   );
 // }
 
+// /** One-time-fallback <img/> to avoid onError loops / flicker */
+// function SafeImg({ src, alt, style, className }) {
+//   const [finalSrc, setFinalSrc] = useState(src || PLACEHOLDER_IMG);
+
+//   useEffect(() => {
+//     setFinalSrc(src || PLACEHOLDER_IMG);
+//   }, [src]);
+
+//   return (
+//     <img
+//       src={finalSrc}
+//       alt={alt}
+//       style={style}
+//       className={className}
+//       onError={(e) => {
+//         if (finalSrc !== PLACEHOLDER_IMG) setFinalSrc(PLACEHOLDER_IMG);
+//       }}
+//     />
+//   );
+// }
+
+// /** -------------------------------- Component -------------------------------- */
 // const CartModal = ({
 //   show,
 //   onClose,
@@ -88,6 +113,12 @@
 //     cities: [],
 //     barangays: [],
 //   });
+
+//   // Auth header helper
+//   const authHeaders = () => {
+//     const token = localStorage.getItem("token");
+//     return token ? { Authorization: `Bearer ${token}` } : undefined;
+//   };
 
 //   const handleInputChange = (e) => {
 //     const { name, value } = e.target;
@@ -137,18 +168,22 @@
 //       loadRegions();
 //       const fetchAddress = async () => {
 //         try {
-//           const res = await axios.get(`${API_URL}/api/address/${user._id}`);
+//           const res = await axios.get(`${API_URL}/api/address/${user._id}`, {
+//             headers: authHeaders(),
+//           });
 //           const userAddress = res.data;
 //           if (userAddress && Object.keys(userAddress).length > 0) {
 //             setAddress(userAddress);
 //           }
 //         } catch (err) {
 //           console.error("Error fetching user address:", err);
+//           // don't block the modal; just notify
 //           toast.error("Failed to load address.");
 //         }
 //       };
 //       fetchAddress();
 //     }
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
 //   }, [show, user, API_URL]);
 
 //   useEffect(() => {
@@ -211,10 +246,11 @@
 //     const isComplete = Object.values(address).every((field) => field !== "");
 //     if (!isComplete) return toast.error("Please fill in all the fields.");
 //     try {
-//       await axios.post(`${API_URL}/api/address/save`, {
-//         userId: user._id,
-//         address,
-//       });
+//       await axios.post(
+//         `${API_URL}/api/address/save`,
+//         { userId: user._id, address },
+//         { headers: { "Content-Type": "application/json", ...authHeaders() } }
+//       );
 //       toast.success("Address saved!");
 //       setIsEditing(false);
 //       setShowModal(true);
@@ -224,63 +260,101 @@
 //     }
 //   };
 
-//   // helper to add File(s) only
-//   const appendMaybeFiles = (formData, candidate) => {
-//     if (!candidate) return;
-//     if (candidate instanceof File) {
-//       formData.append("images", candidate);
-//       return;
-//     }
-//     if (Array.isArray(candidate)) {
-//       for (const c of candidate) appendMaybeFiles(formData, c);
-//       return;
-//     }
-//     if (typeof candidate === "object") {
-//       for (const k in candidate) appendMaybeFiles(formData, candidate[k]);
-//     }
+//   /** Build the clean JSON payload the backend likely expects (no multipart). */
+//   const buildOrderPayload = () => {
+//     const items = (selectedItems || []).map((i) => {
+//       const priceNum = Number(i.price) || 0;
+//       const qtyNum = Number(i.quantity) || 1;
+
+//       // Normalize images to an array of strings (if present)
+//       let imagesArr = [];
+//       if (Array.isArray(i.images)) {
+//         imagesArr = i.images
+//           .map((x) => getFirstUrl(x))
+//           .filter((u) => typeof u === "string" && u.trim().length > 0);
+//       } else if (typeof i.images === "string") {
+//         imagesArr = [i.images];
+//       }
+
+//       return {
+//         id: i.id, // should match Cart.cartItems[].id
+//         quantity: qtyNum,
+//         // snapshot fields
+//         name: i.name,
+//         price: priceNum,
+//         image: getItemImage(i), // primary image (fallback handled)
+//         images: imagesArr, // optional
+//         // frontend subtotal (server can recompute)
+//         subtotal: Number((qtyNum * priceNum).toFixed(2)),
+//       };
+//     });
+
+//     const numericTotal =
+//       items.reduce((acc, it) => acc + (Number(it.subtotal) || 0), 0) || 0;
+
+//     return {
+//       userId: user?._id,
+//       items,
+//       address,
+//       notes: "",
+//       // Provide total as hint; server should still validate
+//       total: Number(numericTotal.toFixed(2)),
+//     };
 //   };
 
 //   // --- Order confirmation ---
 //   const handleOrderConfirmation = async () => {
-//     if (!user || !isAddressComplete()) return;
+//     if (!user) return toast.error("User not found.");
+//     if (!isAddressComplete())
+//       return toast.error("Please complete your shipping address first.");
+//     if (!selectedItems || selectedItems.length === 0)
+//       return toast.error("No items selected.");
 
+//     setError("");
 //     setLoading(true);
 //     try {
-//       const formData = new FormData();
-//       formData.append("userId", user._id);
-//       formData.append("items", JSON.stringify(selectedItems));
-//       formData.append("address", JSON.stringify(address));
-//       formData.append("notes", "");
+//       const payload = buildOrderPayload();
 
-//       // append images only if they are File objects (robust to shapes)
-//       selectedItems.forEach((item) => {
-//         appendMaybeFiles(formData, item.image);
-//         appendMaybeFiles(formData, item.images);
+//       // Prefer JSON submission (cleaner, avoids server-side multer requirements)
+//       const orderRes = await axios.post(`${API_URL}/api/orders`, payload, {
+//         headers: { "Content-Type": "application/json", ...authHeaders() },
 //       });
 
-//       const orderRes = await axios.post(`${API_URL}/api/orders`, formData, {
-//         headers: { "Content-Type": "multipart/form-data" },
-//       });
+//       const created = orderRes.data;
+//       const orderId = created?._id || created?.order?._id || created?.orderId;
 
-//       const orderId = orderRes.data?._id;
-
-//       // 🔹 Create notification for admin
+//       // 🔹 Create notification for admin (best-effort)
 //       if (orderId) {
-//         await axios.post(`${API_URL}/api/notifications`, {
-//           userId: user._id,
-//           orderId,
-//           for: "order",
-//           role: "admin",
-//           status: "new",
-//           message: `New order placed by ${user.displayName || user.email}`,
-//         });
+//         try {
+//           await axios.post(
+//             `${API_URL}/api/notifications`,
+//             {
+//               userId: user._id,
+//               orderId,
+//               for: "order",
+//               role: "admin",
+//               status: "new",
+//               message: `New order placed by ${user.displayName || user.email}`,
+//             },
+//             { headers: { "Content-Type": "application/json", ...authHeaders() } }
+//           );
+//         } catch (notifErr) {
+//           console.warn("Notification create failed (non-blocking):", notifErr);
+//         }
 //       }
 
-//       // remove from cart etc...
-//       await axios.put(`${API_URL}/api/cart/${user._id}/remove`, {
-//         removeItems: selectedItems.map((i) => i.id),
-//       });
+//       // 🔹 Remove ordered items from cart
+//       try {
+//         await axios.put(
+//           `${API_URL}/api/cart/${user._id}/remove`,
+//           { removeItems: selectedItems.map((i) => i.id) },
+//           { headers: { "Content-Type": "application/json", ...authHeaders() } }
+//         );
+//       } catch (rmErr) {
+//         console.warn("Cart cleanup failed (non-blocking):", rmErr);
+//       }
 
+//       // 🔹 Reset UI state
 //       setCartItems([]);
 //       setSelectedItems([]);
 //       setCartCount(0);
@@ -288,8 +362,15 @@
 //       toast.success("Order placed successfully!");
 //       onClose();
 //     } catch (err) {
+//       // Robust error extraction
+//       const serverMsg =
+//         err?.response?.data?.message ||
+//         err?.response?.data?.error ||
+//         err?.message ||
+//         "Failed to place the order. Please try again.";
 //       console.error("Order failed:", err);
-//       setError("Failed to place the order. Please try again.");
+//       setError(serverMsg);
+//       toast.error(serverMsg);
 //     } finally {
 //       setLoading(false);
 //     }
@@ -313,8 +394,7 @@
 //       {Object.entries(address).map(([key, value]) => (
 //         <p className="mb-1" key={key}>
 //           <strong>
-//             {key.charAt(0).toUpperCase() +
-//               key.slice(1).replace(/([A-Z])/g, " $1")}
+//             {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, " $1")}
 //             :
 //           </strong>{" "}
 //           {value || "Not Provided"}
@@ -377,8 +457,7 @@
 //                   {!isAddressComplete() && (
 //                     <Alert variant="warning">
 //                       Your shipping address is incomplete. Please{" "}
-//                       <a href="/profile">add your address</a> in your profile
-//                       first.
+//                       <a href="/profile">add your address</a> in your profile first.
 //                     </Alert>
 //                   )}
 
@@ -404,10 +483,12 @@
 //                       <tbody>
 //                         {selectedItems.map((item) => {
 //                           const imgSrc = getItemImage(item);
+//                           const qty = Number(item.quantity) || 0;
+//                           const price = Number(item.price) || 0;
 //                           return (
 //                             <tr key={item.id}>
 //                               <td>
-//                                 <img
+//                                 <SafeImg
 //                                   src={imgSrc}
 //                                   alt={item.name}
 //                                   style={{
@@ -416,20 +497,12 @@
 //                                     objectFit: "cover",
 //                                   }}
 //                                   className="img-thumbnail"
-//                                   onError={(e) => {
-//                                     e.currentTarget.src = PLACEHOLDER_IMG;
-//                                   }}
 //                                 />
 //                               </td>
 //                               <td>{item.name}</td>
-//                               <td>{item.quantity}</td>
-//                               <td>{formatPHP(parseFloat(item.price))}</td>
-//                               <td>
-//                                 {formatPHP(
-//                                   (Number(item.quantity) || 0) *
-//                                     (parseFloat(item.price) || 0)
-//                                 )}
-//                               </td>
+//                               <td>{qty}</td>
+//                               <td>{formatPHP(price)}</td>
+//                               <td>{formatPHP(qty * price)}</td>
 //                             </tr>
 //                           );
 //                         })}
@@ -444,22 +517,29 @@
 //                   <h4>
 //                     Total:{" "}
 //                     <span className="text-success">
-//                       {formatPHP(parseFloat(totalPrice))}
+//                       {formatPHP(Number(totalPrice) || 0)}
 //                     </span>
 //                   </h4>
 //                   <Button
 //                     variant="success"
 //                     onClick={handleOrderConfirmation}
-//                     disabled={!isAddressComplete()}
+//                     disabled={!isAddressComplete() || loading || selectedItems.length === 0}
 //                   >
-//                     Confirm Order
+//                     {loading ? (
+//                       <>
+//                         <Spinner size="sm" animation="border" className="me-2" />
+//                         Processing...
+//                       </>
+//                     ) : (
+//                       "Confirm Order"
+//                     )}
 //                   </Button>
 //                 </div>
 //               </>
 //             )}
 //           </Modal.Body>
 //           <Modal.Footer>
-//             <Button variant="secondary" onClick={onClose}>
+//             <Button variant="secondary" onClick={onClose} disabled={loading}>
 //               Close
 //             </Button>
 //           </Modal.Footer>
@@ -494,6 +574,13 @@ import addressData from "../../data/addressData.json";
 
 // Use PUBLIC_URL so it works whether hosted at "/" or a subpath
 const PLACEHOLDER_IMG = `${process.env.PUBLIC_URL || ""}/placeholder.jpg`;
+
+/** ------------------------------- ID helper ------------------------------- */
+function getItemId(candidate) {
+  // Normalize possible keys coming from Cart flow vs Buy-Now flow
+  // Cart items usually: { id }, direct item objects: { _id }, sometimes { itemId }
+  return candidate?.id || candidate?.itemId || candidate?._id || null;
+}
 
 /** -------------------------------- Image helpers -------------------------------- */
 function getFirstUrl(candidate) {
@@ -538,11 +625,7 @@ function getFirstUrl(candidate) {
 // ----- Shared image-display logic used in Cart + CartModal -----
 export function getItemImage(item) {
   // Try the flexible shapes you use across the app
-  return (
-    getFirstUrl(item?.images) ||
-    getFirstUrl(item?.image) ||
-    PLACEHOLDER_IMG
-  );
+  return getFirstUrl(item?.images) || getFirstUrl(item?.image) || PLACEHOLDER_IMG;
 }
 
 /** One-time-fallback <img/> to avoid onError loops / flicker */
@@ -559,7 +642,7 @@ function SafeImg({ src, alt, style, className }) {
       alt={alt}
       style={style}
       className={className}
-      onError={(e) => {
+      onError={() => {
         if (finalSrc !== PLACEHOLDER_IMG) setFinalSrc(PLACEHOLDER_IMG);
       }}
     />
@@ -599,10 +682,10 @@ const CartModal = ({
     barangays: [],
   });
 
-  // Auth header helper
+  // Safer auth header helper (always returns object)
   const authHeaders = () => {
     const token = localStorage.getItem("token");
-    return token ? { Authorization: `Bearer ${token}` } : undefined;
+    return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
   const handleInputChange = (e) => {
@@ -745,10 +828,11 @@ const CartModal = ({
     }
   };
 
-  /** Build the clean JSON payload the backend likely expects (no multipart). */
+  /** Build the clean JSON payload the backend expects (no multipart). */
   const buildOrderPayload = () => {
     const items = (selectedItems || []).map((i) => {
-      const priceNum = Number(i.price) || 0;
+      const itemId = getItemId(i); // <-- FIX: normalize id for Buy Now
+      const priceNum = Number(i.price) || Number(i.unitPrice) || 0;
       const qtyNum = Number(i.quantity) || 1;
 
       // Normalize images to an array of strings (if present)
@@ -759,13 +843,16 @@ const CartModal = ({
           .filter((u) => typeof u === "string" && u.trim().length > 0);
       } else if (typeof i.images === "string") {
         imagesArr = [i.images];
+      } else if (i.image) {
+        const one = getFirstUrl(i.image);
+        if (one) imagesArr = [one];
       }
 
       return {
-        id: i.id, // should match Cart.cartItems[].id
+        id: itemId, // must exist for backend validation
         quantity: qtyNum,
         // snapshot fields
-        name: i.name,
+        name: i.name || i.title || i.itemName || `Item ${itemId || ""}`,
         price: priceNum,
         image: getItemImage(i), // primary image (fallback handled)
         images: imagesArr, // optional
@@ -800,7 +887,13 @@ const CartModal = ({
     try {
       const payload = buildOrderPayload();
 
-      // Prefer JSON submission (cleaner, avoids server-side multer requirements)
+      // Validate we have IDs (preempt 500s caused by undefined id)
+      const missingIds = payload.items.filter((it) => !it.id).length;
+      if (missingIds > 0) {
+        throw new Error("One or more items are missing an ID. Please retry.");
+      }
+
+      // Prefer JSON submission
       const orderRes = await axios.post(`${API_URL}/api/orders`, payload, {
         headers: { "Content-Type": "application/json", ...authHeaders() },
       });
@@ -828,24 +921,30 @@ const CartModal = ({
         }
       }
 
-      // 🔹 Remove ordered items from cart
+      // 🔹 Remove ordered items from cart (only if we actually have cart item ids)
       try {
-        await axios.put(
-          `${API_URL}/api/cart/${user._id}/remove`,
-          { removeItems: selectedItems.map((i) => i.id) },
-          { headers: { "Content-Type": "application/json", ...authHeaders() } }
-        );
+        const removeIds = (selectedItems || [])
+          .map((i) => getItemId(i))
+          .filter(Boolean);
+        if (removeIds.length > 0) {
+          await axios.put(
+            `${API_URL}/api/cart/${user._id}/remove`,
+            { removeItems: removeIds },
+            { headers: { "Content-Type": "application/json", ...authHeaders() } }
+          );
+        }
       } catch (rmErr) {
         console.warn("Cart cleanup failed (non-blocking):", rmErr);
       }
 
       // 🔹 Reset UI state
-      setCartItems([]);
-      setSelectedItems([]);
-      setCartCount(0);
-      setShowModal(false);
+      try { setCartItems && setCartItems([]); } catch {}
+      try { setSelectedItems && setSelectedItems([]); } catch {}
+      try { setCartCount && setCartCount(0); } catch {}
+      try { setShowModal && setShowModal(false); } catch {}
+
       toast.success("Order placed successfully!");
-      onClose();
+      onClose && onClose();
     } catch (err) {
       // Robust error extraction
       const serverMsg =
@@ -869,7 +968,7 @@ const CartModal = ({
           type="button"
           className="btn btn-sm btn-outline-primary"
           onClick={() => {
-            setShowModal(false);
+            setShowModal && setShowModal(false);
             setIsEditing(true);
           }}
         >
@@ -893,6 +992,13 @@ const CartModal = ({
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+
+  // Compute live total from selectedItems to stay consistent even if totalPrice prop is stale
+  const computedTotal = (selectedItems || []).reduce((sum, it) => {
+    const qty = Number(it.quantity) || 1;
+    const price = Number(it.price) || Number(it.unitPrice) || 0;
+    return sum + qty * price;
+  }, 0);
 
   return (
     <>
@@ -950,7 +1056,7 @@ const CartModal = ({
                 </Form>
 
                 <h5 className="mt-4">Order Summary</h5>
-                {selectedItems.length > 0 ? (
+                {selectedItems && selectedItems.length > 0 ? (
                   <div
                     className="table-responsive"
                     style={{ maxHeight: "200px", overflowY: "auto" }}
@@ -967,15 +1073,16 @@ const CartModal = ({
                       </thead>
                       <tbody>
                         {selectedItems.map((item) => {
+                          const id = getItemId(item) || item.name || Math.random();
                           const imgSrc = getItemImage(item);
-                          const qty = Number(item.quantity) || 0;
-                          const price = Number(item.price) || 0;
+                          const qty = Number(item.quantity) || 1;
+                          const price = Number(item.price) || Number(item.unitPrice) || 0;
                           return (
-                            <tr key={item.id}>
+                            <tr key={id}>
                               <td>
                                 <SafeImg
                                   src={imgSrc}
-                                  alt={item.name}
+                                  alt={item.name || "Item"}
                                   style={{
                                     width: "60px",
                                     height: "50px",
@@ -984,7 +1091,7 @@ const CartModal = ({
                                   className="img-thumbnail"
                                 />
                               </td>
-                              <td>{item.name}</td>
+                              <td>{item.name || item.title || `Item ${getItemId(item) || ""}`}</td>
                               <td>{qty}</td>
                               <td>{formatPHP(price)}</td>
                               <td>{formatPHP(qty * price)}</td>
@@ -1002,13 +1109,13 @@ const CartModal = ({
                   <h4>
                     Total:{" "}
                     <span className="text-success">
-                      {formatPHP(Number(totalPrice) || 0)}
+                      {formatPHP(computedTotal || totalPrice || 0)}
                     </span>
                   </h4>
                   <Button
                     variant="success"
                     onClick={handleOrderConfirmation}
-                    disabled={!isAddressComplete() || loading || selectedItems.length === 0}
+                    disabled={!isAddressComplete() || loading || !selectedItems || selectedItems.length === 0}
                   >
                     {loading ? (
                       <>
