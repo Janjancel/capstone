@@ -18,7 +18,6 @@ import {
   ListItemText,
   Collapse,
   Typography,
-  Divider,
 } from "@mui/material";
 import logo from "../../images/logo.png";
 
@@ -47,7 +46,7 @@ const Sidebar = () => {
   // Active NavLink style
   const activeStyle = {
     "&.active": {
-      backgroundColor: "#e6e6e6", // highlighted background
+      backgroundColor: "#e6e6e6",
       fontWeight: "bold",
       borderRadius: "8px",
       color: "black",
@@ -60,7 +59,7 @@ const Sidebar = () => {
       sx={{
         height: "100%",
         p: 2,
-        bgcolor: "#f8f9fa", // Sidebar background stays off-white
+        bgcolor: "#f8f9fa",
       }}
     >
       {/* Logo + Title */}
@@ -78,12 +77,7 @@ const Sidebar = () => {
       {/* Navigation */}
       <List component="navigation">
         {/* Dashboard */}
-        <ListItem
-          button
-          component={NavLink}
-          to="/admin/dashboard"
-          sx={activeStyle}
-        >
+        <ListItem button component={NavLink} to="/admin/dashboard" sx={activeStyle}>
           <ListItemIcon>
             <ListIcon />
           </ListItemIcon>
@@ -91,12 +85,7 @@ const Sidebar = () => {
         </ListItem>
 
         {/* Accounts */}
-        <ListItem
-          button
-          component={NavLink}
-          to="/admin/accounts"
-          sx={activeStyle}
-        >
+        <ListItem button component={NavLink} to="/admin/accounts" sx={activeStyle}>
           <ListItemIcon>
             <PersonIcon />
           </ListItemIcon>
@@ -104,12 +93,7 @@ const Sidebar = () => {
         </ListItem>
 
         {/* Items */}
-        <ListItem
-          button
-          component={NavLink}
-          to="/admin/items"
-          sx={activeStyle}
-        >
+        <ListItem button component={NavLink} to="/admin/items" sx={activeStyle}>
           <ListItemIcon>
             <InventoryIcon />
           </ListItemIcon>
@@ -117,12 +101,7 @@ const Sidebar = () => {
         </ListItem>
 
         {/* Orders */}
-        <ListItem
-          button
-          component={NavLink}
-          to="/admin/orders"
-          sx={activeStyle}
-        >
+        <ListItem button component={NavLink} to="/admin/orders" sx={activeStyle}>
           <ListItemIcon>
             <CartIcon />
           </ListItemIcon>
@@ -138,20 +117,10 @@ const Sidebar = () => {
 
           <Collapse in={isOpen || isHovering} timeout="auto" unmountOnExit>
             <List component="div" disablePadding sx={{ pl: 4 }}>
-              <ListItem
-                button
-                component={NavLink}
-                to="/admin/sellDashboard"
-                sx={activeStyle}
-              >
+              <ListItem button component={NavLink} to="/admin/sellDashboard" sx={activeStyle}>
                 <ListItemText primary="Sell" />
               </ListItem>
-              <ListItem
-                button
-                component={NavLink}
-                to="/admin/demolishDashboard"
-                sx={activeStyle}
-              >
+              <ListItem button component={NavLink} to="/admin/demolishDashboard" sx={activeStyle}>
                 <ListItemText primary="Demolish" />
               </ListItem>
             </List>
@@ -159,12 +128,7 @@ const Sidebar = () => {
         </Box>
 
         {/* Heritage */}
-        <ListItem
-          button
-          component={NavLink}
-          to="/admin/heritage"
-          sx={activeStyle}
-        >
+        <ListItem button component={NavLink} to="/admin/heritage" sx={activeStyle}>
           <ListItemIcon>
             <HeritageIcon />
           </ListItemIcon>
@@ -172,20 +136,13 @@ const Sidebar = () => {
         </ListItem>
 
         {/* Reports */}
-        <ListItem
-          button
-          component={NavLink}
-          to="/admin/report"
-          sx={activeStyle}
-        >
+        <ListItem button component={NavLink} to="/admin/report" sx={activeStyle}>
           <ListItemIcon>
             <ReportIcon />
           </ListItemIcon>
           <ListItemText primary="Reports" />
         </ListItem>
       </List>
-
-      {/* <Divider sx={{ mt: 2 }} /> */}
     </Box>
   );
 };
