@@ -1,5 +1,5 @@
 
-
+// // src/App.js
 // import { useEffect } from "react";
 // import { Route, Routes, useLocation, Navigate } from "react-router-dom";
 // import "bootstrap/dist/css/bootstrap.min.css";
@@ -15,9 +15,17 @@
 // import Admin from "./components/AdminDashboard/Admin/Admin";
 // import Cart from "./components/Cart/Cart";
 // import Buy from "./components/Buy";
+// import BuyPage from "./pages/BuyPage";
 // import Profile from "./components/Profile/Profile";
 // import Sell from "./components/Sell/Sell";
 // import Demolish from "./components/Demolish/Demolish";
+
+// // NEW: user “My Requests” page (already created)
+// import MyRequests from "./components/Requests/MyRequest";
+
+// // NEW: My Orders as a PAGE route
+// import MyOrders from "./components/MyOrder/MyOrders";
+// import ProductRatingPage from "./pages/ProductRatingPage";
 
 // import { Toaster } from "react-hot-toast";
 // import { useAuth } from "./context/AuthContext";
@@ -29,7 +37,7 @@
 //   const location = useLocation();
 //   const { user } = useAuth();
 
-//   // Adjust padding for admin layout
+//   // Keep your admin-page padding logic intact
 //   useEffect(() => {
 //     document.body.style.paddingTop = location.pathname.startsWith("/admin") ? "0" : "10vh";
 //   }, [location.pathname]);
@@ -40,22 +48,33 @@
 
 //       <div className="content-wrapper">
 //         <Routes>
+//           {/* Public */}
 //           <Route path="/" element={<Home />} />
 //           <Route path="/about" element={<About />} />
 //           <Route path="/contact" element={<Contact />} />
 
+//           {/* Authenticated (Client/User) */}
 //           <Route element={<PrivateRoute />}>
 //             <Route path="/buy" element={<Buy />} />
+//             <Route path="/buy/:id" element={<BuyPage />} />
 //             <Route path="/cart" element={<Cart />} />
 //             <Route path="/profile" element={<Profile />} />
 //             <Route path="/sell" element={<Sell />} />
 //             <Route path="/demolish" element={<Demolish />} />
+//             {/* NEW: “My Requests” combines Sell & Demolition created by the signed-in user */}
+//             <Route path="/requests" element={<MyRequests />} />
+//             {/* NEW: My Orders as dedicated page */}
+//             <Route path="/orders" element={<MyOrders />} />
+//             {/* Product Rating Page */}
+//             <Route path="/rate/:orderId/:productId" element={<ProductRatingPage />} />
 //           </Route>
 
+//           {/* Admin */}
 //           <Route element={<ProtectedAdminRoute />}>
 //             <Route path="/admin/*" element={<Admin />} />
 //           </Route>
 
+//           {/* Fallback */}
 //           <Route path="*" element={<Navigate to="/" replace />} />
 //         </Routes>
 //       </div>
@@ -98,14 +117,12 @@ import MyOrders from "./components/MyOrder/MyOrders";
 import ProductRatingPage from "./pages/ProductRatingPage";
 
 import { Toaster } from "react-hot-toast";
-import { useAuth } from "./context/AuthContext";
 import ProtectedAdminRoute from "./ProtectedAdminRoute";
 
 import { GoogleOAuthProvider } from "@react-oauth/google";
 
 function App() {
   const location = useLocation();
-  const { user } = useAuth();
 
   // Keep your admin-page padding logic intact
   useEffect(() => {
@@ -156,4 +173,3 @@ function App() {
 }
 
 export default App;
-

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from "react";
 import { FaEdit } from "react-icons/fa";
 import axios from "axios";
@@ -7,12 +5,12 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import AccountDetails from "./AccountDetails";
 import AddressForm from "./AddressForm";
 import ProfilePicture from "./ProfilePicture";
-import toast, { Toaster } from 'react-hot-toast';
+import toast from "react-hot-toast";
 
 export default function Profile() {
   const API_URL = process.env.REACT_APP_API_URL;
 
-  const [profilePic, setProfilePic] = useState(null);
+  // removed unused `profilePic`
   const [preview, setPreview] = useState("default-profile.png");
   const [userDetails, setUserDetails] = useState({ username: "", email: "" });
 
@@ -60,10 +58,11 @@ export default function Profile() {
         userId,
         imageBase64,
       });
-      setProfilePic(imageBase64);
+      // keep preview updated; removed unused setProfilePic
       setPreview(imageBase64);
     } catch (error) {
       console.error("Error uploading profile picture:", error);
+      toast.error("Failed to upload profile picture");
     }
   };
 

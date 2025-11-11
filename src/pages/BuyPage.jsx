@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   Typography,
   Button,
-  TextField,
   Box,
   IconButton,
+  CircularProgress,
 } from "@mui/material";
 import { ArrowBackIos, ArrowForwardIos } from "@mui/icons-material";
 
 const BuyPage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+
   const [item, setItem] = useState(null);
-  const [notes, setNotes] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [userAddress, setUserAddress] = useState({});
 
   const API_URL = process.env.REACT_APP_API_URL;
 
@@ -34,13 +34,8 @@ const BuyPage = () => {
         setLoading(false);
       }
     };
-    fetchItem();
+    if (id) fetchItem();
   }, [id, API_URL]);
-
-  useEffect(() => {
-    // Optionally fetch user address here if needed
-    // Example: fetch from /api/users/:userId/address
-  }, []);
 
   const images = Array.isArray(item?.images) && item.images.length > 0 ? item.images : ["placeholder.jpg"];
 
@@ -52,20 +47,32 @@ const BuyPage = () => {
     setCurrentIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
   };
 
-  const handleConfirm = () => {
-    // Implement order logic here
-    // Example: axios.post(`${API_URL}/api/orders`, {...})
-    // Add navigation or feedback here if needed
+  const handleConfirm = async () => {
+    // Implement order logic here (example stub)
+    try {
+      // await axios.post(`${API_URL}/api/orders`, { itemId: id });
+      console.log("Confirm purchase", { itemId: id });
+      navigate("/");
+    } catch (err) {
+      console.error("Order failed", err);
+    }
   };
 
   if (loading) {
-    return <Typography variant="h6">Loading item details...</Typography>;
+    return (
+      <Box sx={{ width: '100vw', minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }} variant="h6">Loading item details...</Typography>
+      </Box>
+    );
   }
+
   if (error) {
-    return <Typography color="error">{error}</Typography>;
+    return <Typography color="error" sx={{ p: 4 }}>{error}</Typography>;
   }
+
   if (!item) {
-    return <Typography variant="h6">No item found.</Typography>;
+    return <Typography variant="h6" sx={{ p: 4 }}>No item found.</Typography>;
   }
 
   return (
@@ -101,6 +108,7 @@ const BuyPage = () => {
             </Box>
           )}
         </Box>
+
         {/* Details Section */}
         <Box sx={{ flex: 2, minWidth: 320 }}>
           <Typography variant="h3" fontWeight="bold" gutterBottom>{item.name}</Typography>
@@ -108,9 +116,9 @@ const BuyPage = () => {
           <Typography variant="body1" sx={{ mb: 2 }}>{item.description}</Typography>
           {item.origin && <Typography variant="body2" sx={{ mb: 1 }}>Origin: <b>{item.origin}</b></Typography>}
           {item.age && <Typography variant="body2" sx={{ mb: 1 }}>Age: <b>{item.age}</b></Typography>}
-          {/* Add more details here if needed */}
+
           <Box mt={4} display="flex" gap={2}>
-            <Button variant="outlined" href="/">Back</Button>
+            <Button variant="outlined" onClick={() => navigate(-1)}>Back</Button>
             <Button onClick={handleConfirm} variant="contained" color="primary">Confirm Purchase</Button>
           </Box>
         </Box>
