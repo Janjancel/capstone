@@ -34,9 +34,7 @@
 
 //   if (Array.isArray(candidate)) {
 //     // find the first non-empty string
-//     const found = candidate.find(
-//       (c) => typeof c === "string" && c.trim().length > 0
-//     );
+//     const found = candidate.find((c) => typeof c === "string" && c.trim().length > 0);
 //     if (found) return found.trim();
 //     // allow array of objects like [{url:'...'}]
 //     for (const c of candidate) {
@@ -68,11 +66,7 @@
 // // ----- Shared image-display logic used in Cart + CartModal -----
 // function getItemImage(item) {
 //   // Try the flexible shapes you use across the app
-//   return (
-//     getFirstUrl(item?.images) ||
-//     getFirstUrl(item?.image) ||
-//     PLACEHOLDER_IMG
-//   );
+//   return getFirstUrl(item?.images) || getFirstUrl(item?.image) || PLACEHOLDER_IMG;
 // }
 // // ---------------------------------------------------------------------------
 
@@ -91,6 +85,8 @@
 //   useEffect(() => {
 //     if (!order?.id && !order?._id) return;
 
+//     let mounted = true;
+
 //     const fetchOrder = async () => {
 //       try {
 //         const orderId = order.id || order._id;
@@ -104,6 +100,7 @@
 //           if (u?._id) userMap[u._id] = u;
 //         });
 
+//         if (!mounted) return;
 //         setUserData(userMap);
 //         setRealTimeOrder({
 //           ...orderRes.data,
@@ -114,17 +111,21 @@
 //         console.error("Error fetching order:", err);
 //         toast.error("Failed to load order details.");
 //       } finally {
-//         setLoading(false);
+//         if (mounted) setLoading(false);
 //       }
 //     };
 
 //     fetchOrder();
 //     const interval = setInterval(fetchOrder, 5000);
-//     return () => clearInterval(interval);
+//     return () => {
+//       mounted = false;
+//       clearInterval(interval);
+//     };
 //     // eslint-disable-next-line react-hooks/exhaustive-deps
 //   }, [order?.id, order?._id, API_URL]);
 
 //   const handleCancelRequest = async () => {
+//     // Show Swal with extra z-index handling inside didOpen so it visually sits above MUI Dialog
 //     const confirm = await Swal.fire({
 //       title: "Request order cancellation?",
 //       text: "We will notify the admin to review your request.",
@@ -134,7 +135,22 @@
 //       cancelButtonText: "No, keep order",
 //       reverseButtons: true,
 //       focusCancel: true,
+//       // ensure visually on top of MUI Dialog
+//       didOpen: () => {
+//         // SweetAlert renders .swal2-container; raise z-index so it stacks above MUI Dialog
+//         const el = document.querySelector(".swal2-container");
+//         if (el) {
+//           // Very large number to be safe; !important via style property (inline)
+//           el.style.zIndex = "20000";
+//         }
+//       },
+//       // optional: restore z-index on close (clean up)
+//       willClose: () => {
+//         const el = document.querySelector(".swal2-container");
+//         if (el) el.style.zIndex = "";
+//       },
 //     });
+
 //     if (!confirm.isConfirmed) return;
 
 //     if (cancelling) return;
@@ -226,7 +242,16 @@
 //   const showCancelBtn = rawStatus === "pending";
 
 //   return (
-//     <Dialog open={show} onClose={onClose} fullWidth maxWidth="md">
+//     // disableEnforceFocus and disableAutoFocus allow Swal to take focus and overlay the dialog
+//     <Dialog
+//       open={show}
+//       onClose={onClose}
+//       fullWidth
+//       maxWidth="md"
+//       disableEnforceFocus
+//       disableAutoFocus
+//       scroll="paper"
+//     >
 //       <DialogTitle>Order Details</DialogTitle>
 //       <DialogContent dividers>
 //         {loading ? (
@@ -235,29 +260,20 @@
 //           </Box>
 //         ) : (
 //           <>
-//             <Typography variant="h6">
-//               Order ID: {realTimeOrder.id || realTimeOrder._id}
-//             </Typography>
+//             <Typography variant="h6">Order ID: {realTimeOrder.id || realTimeOrder._id}</Typography>
 //             <Typography>
 //               <strong>Email:</strong> {displayEmail || userEmail || "Unknown"}
 //             </Typography>
 //             <Typography>
 //               <strong>Date:</strong>{" "}
-//               {realTimeOrder.createdAt
-//                 ? new Date(realTimeOrder.createdAt).toLocaleString()
-//                 : "N/A"}
+//               {realTimeOrder.createdAt ? new Date(realTimeOrder.createdAt).toLocaleString() : "N/A"}
 //             </Typography>
 //             <Typography>
 //               <strong>Status:</strong>{" "}
-//               <Chip
-//                 label={realTimeOrder.status || "N/A"}
-//                 color={getStatusColor(rawStatus)}
-//                 size="small"
-//               />
+//               <Chip label={realTimeOrder.status || "N/A"} color={getStatusColor(rawStatus)} size="small" />
 //             </Typography>
 //             <Typography>
-//               <strong>Total Price:</strong> ₱
-//               {parseFloat(realTimeOrder.total || 0).toFixed(2)}
+//               <strong>Total Price:</strong> ₱{parseFloat(realTimeOrder.total || 0).toFixed(2)}
 //             </Typography>
 
 //             <Typography variant="subtitle1" sx={{ mt: 2 }}>
@@ -337,12 +353,7 @@
 //       </DialogContent>
 //       <DialogActions>
 //         {showCancelBtn && (
-//           <Button
-//             variant="contained"
-//             color="error"
-//             onClick={handleCancelRequest}
-//             disabled={cancelling}
-//           >
+//           <Button variant="contained" color="error" onClick={handleCancelRequest} disabled={cancelling}>
 //             {cancelling ? "Requesting..." : "Request Order Cancellation"}
 //           </Button>
 //         )}
@@ -355,7 +366,6 @@
 // };
 
 // export default OrderDetailModal;
-
 
 import React, { useEffect, useState } from "react";
 import {
@@ -430,7 +440,6 @@ function getItemImage(item) {
 const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders }) => {
   const [realTimeOrder, setRealTimeOrder] = useState(order);
   const [loading, setLoading] = useState(true);
-  const [userData, setUserData] = useState({});
   const [cancelling, setCancelling] = useState(false);
   const API_URL = process.env.REACT_APP_API_URL;
 
@@ -447,6 +456,7 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
     const fetchOrder = async () => {
       try {
         const orderId = order.id || order._id;
+        // fetch order + all users so we can map email -> userId
         const [orderRes, usersRes] = await Promise.all([
           axios.get(`${API_URL}/api/orders/${orderId}`, { headers: authHeaders() }),
           axios.get(`${API_URL}/api/users`, { headers: authHeaders() }),
@@ -458,11 +468,12 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
         });
 
         if (!mounted) return;
-        setUserData(userMap);
+
         setRealTimeOrder({
           ...orderRes.data,
           userEmail: userMap[orderRes.data?.userId]?.email || "Unknown",
         });
+
         updateParentOrders?.(orderRes.data);
       } catch (err) {
         console.error("Error fetching order:", err);
@@ -497,7 +508,7 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
         // SweetAlert renders .swal2-container; raise z-index so it stacks above MUI Dialog
         const el = document.querySelector(".swal2-container");
         if (el) {
-          // Very large number to be safe; !important via style property (inline)
+          // Very large number to be safe; inline style
           el.style.zIndex = "20000";
         }
       },
