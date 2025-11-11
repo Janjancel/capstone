@@ -65,7 +65,7 @@ const AddressForm = () => {
     };
 
     fetchUserAddress();
-  }, [user]);
+  }, [user, API_URL]);
 
   useEffect(() => {
     if (!address.region) return;
@@ -99,7 +99,7 @@ const AddressForm = () => {
     if (!address.province) return;
 
     const regionData = addressData[address.region];
-    const provinceData = regionData.province_list[address.province];
+    const provinceData = regionData?.province_list?.[address.province];
     if (provinceData && provinceData.municipality_list) {
       const filteredCities = Object.keys(provinceData.municipality_list).map(
         (city) => ({
@@ -126,8 +126,8 @@ const AddressForm = () => {
     if (!address.city) return;
 
     const regionData = addressData[address.region];
-    const provinceData = regionData.province_list[address.province];
-    const cityData = provinceData.municipality_list[address.city];
+    const provinceData = regionData?.province_list?.[address.province];
+    const cityData = provinceData?.municipality_list?.[address.city];
 
     if (cityData && cityData.barangay_list) {
       setOptions((prev) => ({
@@ -303,6 +303,7 @@ const AddressForm = () => {
 };
 
 export default AddressForm;
+
 
 
 // import React, { useState, useEffect } from "react";
