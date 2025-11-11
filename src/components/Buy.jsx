@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Container,
   Box,
@@ -20,12 +21,12 @@ import {
 import toast from "react-hot-toast";
 import axios from "axios";
 import CartModal from "./Cart/CartModal";
-import BuyModal from "./BuyModal"; // new modal for item details
 import { useAuth } from "../context/AuthContext";
 import FilterListIcon from "@mui/icons-material/FilterList";
 
 const Buy = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -35,7 +36,7 @@ const Buy = () => {
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [showCartModal, setShowCartModal] = useState(false);
-  const [showBuyModal, setShowBuyModal] = useState(false);
+  // const [showBuyModal, setShowBuyModal] = useState(false);
   const [userAddress, setUserAddress] = useState({});
   const [filterAnchor, setFilterAnchor] = useState(null);
 
@@ -153,8 +154,8 @@ const Buy = () => {
       toast.error("Please log in to proceed with purchase.");
       return;
     }
-    setSelectedItem({ ...item, quantity: 1 });
-    setShowCartModal(true);
+    // Use React Router navigation
+    navigate(`/buy/${item._id}`);
   };
 
   const handleOrderConfirm = async (address, notes) => {
@@ -277,10 +278,7 @@ const Buy = () => {
                   flexDirection: "column",
                   cursor: "pointer",
                 }}
-                onClick={() => {
-                  setSelectedItem(item);
-                  setShowBuyModal(true);
-                }}
+                onClick={() => handleBuyNow(item)}
               >
                 <CardMedia
                   component="img"
@@ -357,14 +355,7 @@ const Buy = () => {
         ) : null}
       </Grid>
 
-      {/* Buy Modal */}
-      {selectedItem && (
-        <BuyModal
-          open={showBuyModal}
-          onClose={() => setShowBuyModal(false)}
-          item={selectedItem}
-        />
-      )}
+  {/* BuyPage is now the dedicated purchase page. */}
 
       {/* Cart Modal */}
       {selectedItem && (

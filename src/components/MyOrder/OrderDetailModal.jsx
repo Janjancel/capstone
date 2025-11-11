@@ -1,3 +1,5 @@
+
+
 // import React, { useEffect, useState } from "react";
 // import {
 //   Dialog,
@@ -21,7 +23,7 @@
 // import toast from "react-hot-toast";
 // import Swal from "sweetalert2"; // ✅ confirmations only
 
-// // ---------- Shared image-display logic (same approach as CartModal) ----------
+// // ---------- Shared image-display logic (same as CartModal) ----------
 // const PLACEHOLDER_IMG = "/placeholder.jpg";
 
 // function getFirstUrl(candidate) {
@@ -63,8 +65,9 @@
 //   return null;
 // }
 
+// // ----- Shared image-display logic used in Cart + CartModal -----
 // function getItemImage(item) {
-//   // Try the flexible shapes used across the app
+//   // Try the flexible shapes you use across the app
 //   return (
 //     getFirstUrl(item?.images) ||
 //     getFirstUrl(item?.image) ||
@@ -122,7 +125,6 @@
 //   }, [order?.id, order?._id, API_URL]);
 
 //   const handleCancelRequest = async () => {
-//     // ✅ SweetAlert used ONLY for confirmation
 //     const confirm = await Swal.fire({
 //       title: "Request order cancellation?",
 //       text: "We will notify the admin to review your request.",
@@ -140,7 +142,6 @@
 
 //     const orderId = realTimeOrder.id || realTimeOrder._id;
 
-//     // Step 1: make the cancellation request
 //     try {
 //       await axios.patch(
 //         `${API_URL}/api/orders/${orderId}/cancel`,
@@ -154,13 +155,11 @@
 //       return;
 //     }
 
-//     // Update UI immediately after a successful cancel
 //     const updatedOrder = { ...realTimeOrder, status: "Cancellation Requested" };
 //     setRealTimeOrder(updatedOrder);
 //     updateParentOrders?.(updatedOrder);
 //     toast.success("Cancellation request sent. Admin will review it.");
 
-//     // Step 2 (non-blocking): try to notify admin. If it fails, warn but don’t error the whole flow.
 //     try {
 //       const payload = {
 //         orderId,
@@ -170,13 +169,10 @@
 //         for: "order",
 //         message: `User ${userEmail} requested cancellation for Order ID: ${orderId}`,
 //       };
-
-//       // Primary notifications route
 //       await axios.post(`${API_URL}/api/notifications`, payload, {
 //         headers: authHeaders(),
 //       });
 //     } catch (err1) {
-//       // Fallback to per-user route if primary doesn't exist
 //       try {
 //         await axios.post(
 //           `${API_URL}/api/notifications/users/${realTimeOrder.userId}/notifications`,
@@ -223,7 +219,9 @@
 
 //   if (!realTimeOrder) return null;
 
-//   const { address = {}, items = [], userEmail: displayEmail } = realTimeOrder;
+//   const { address = {}, userEmail: displayEmail } = realTimeOrder;
+//   // Accept either `items` or `orderItems` to be safe
+//   const items = realTimeOrder.items || realTimeOrder.orderItems || [];
 //   const rawStatus = (realTimeOrder.status || "").toLowerCase().trim();
 //   const showCancelBtn = rawStatus === "pending";
 
@@ -292,13 +290,14 @@
 //                 <TableBody>
 //                   {(items || []).map((item, i) => {
 //                     const imgSrc = getItemImage(item);
+//                     const subtotal = ((item.quantity || 0) * parseFloat(item.price || 0)).toFixed(2);
 //                     return (
 //                       <TableRow key={i}>
 //                         <TableCell>
 //                           <Box
 //                             sx={{
-//                               width: 60,
-//                               height: 50,
+//                               width: 64,
+//                               height: 54,
 //                               position: "relative",
 //                               overflow: "hidden",
 //                               borderRadius: 1,
@@ -308,13 +307,14 @@
 //                           >
 //                             <img
 //                               src={imgSrc}
-//                               alt={item.name}
+//                               alt={item.name || "item"}
 //                               style={{
 //                                 width: "100%",
 //                                 height: "100%",
 //                                 objectFit: "cover",
 //                                 display: "block",
 //                               }}
+//                               className="img-thumbnail"
 //                               onError={(e) => {
 //                                 e.currentTarget.src = PLACEHOLDER_IMG;
 //                                 e.currentTarget.onerror = null;
@@ -322,12 +322,10 @@
 //                             />
 //                           </Box>
 //                         </TableCell>
-//                         <TableCell>{item.name}</TableCell>
+//                         <TableCell>{item.name || "Unnamed item"}</TableCell>
 //                         <TableCell>{item.quantity}</TableCell>
 //                         <TableCell>₱{parseFloat(item.price || 0).toFixed(2)}</TableCell>
-//                         <TableCell>
-//                           ₱{((item.quantity || 0) * parseFloat(item.price || 0)).toFixed(2)}
-//                         </TableCell>
+//                         <TableCell>₱{subtotal}</TableCell>
 //                       </TableRow>
 //                     );
 //                   })}
@@ -393,9 +391,7 @@ function getFirstUrl(candidate) {
 
   if (Array.isArray(candidate)) {
     // find the first non-empty string
-    const found = candidate.find(
-      (c) => typeof c === "string" && c.trim().length > 0
-    );
+    const found = candidate.find((c) => typeof c === "string" && c.trim().length > 0);
     if (found) return found.trim();
     // allow array of objects like [{url:'...'}]
     for (const c of candidate) {
@@ -427,11 +423,7 @@ function getFirstUrl(candidate) {
 // ----- Shared image-display logic used in Cart + CartModal -----
 function getItemImage(item) {
   // Try the flexible shapes you use across the app
-  return (
-    getFirstUrl(item?.images) ||
-    getFirstUrl(item?.image) ||
-    PLACEHOLDER_IMG
-  );
+  return getFirstUrl(item?.images) || getFirstUrl(item?.image) || PLACEHOLDER_IMG;
 }
 // ---------------------------------------------------------------------------
 
@@ -450,6 +442,8 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
   useEffect(() => {
     if (!order?.id && !order?._id) return;
 
+    let mounted = true;
+
     const fetchOrder = async () => {
       try {
         const orderId = order.id || order._id;
@@ -463,6 +457,7 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
           if (u?._id) userMap[u._id] = u;
         });
 
+        if (!mounted) return;
         setUserData(userMap);
         setRealTimeOrder({
           ...orderRes.data,
@@ -473,17 +468,21 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
         console.error("Error fetching order:", err);
         toast.error("Failed to load order details.");
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     fetchOrder();
     const interval = setInterval(fetchOrder, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.id, order?._id, API_URL]);
 
   const handleCancelRequest = async () => {
+    // Show Swal with extra z-index handling inside didOpen so it visually sits above MUI Dialog
     const confirm = await Swal.fire({
       title: "Request order cancellation?",
       text: "We will notify the admin to review your request.",
@@ -493,7 +492,22 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
       cancelButtonText: "No, keep order",
       reverseButtons: true,
       focusCancel: true,
+      // ensure visually on top of MUI Dialog
+      didOpen: () => {
+        // SweetAlert renders .swal2-container; raise z-index so it stacks above MUI Dialog
+        const el = document.querySelector(".swal2-container");
+        if (el) {
+          // Very large number to be safe; !important via style property (inline)
+          el.style.zIndex = "20000";
+        }
+      },
+      // optional: restore z-index on close (clean up)
+      willClose: () => {
+        const el = document.querySelector(".swal2-container");
+        if (el) el.style.zIndex = "";
+      },
     });
+
     if (!confirm.isConfirmed) return;
 
     if (cancelling) return;
@@ -585,7 +599,16 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
   const showCancelBtn = rawStatus === "pending";
 
   return (
-    <Dialog open={show} onClose={onClose} fullWidth maxWidth="md">
+    // disableEnforceFocus and disableAutoFocus allow Swal to take focus and overlay the dialog
+    <Dialog
+      open={show}
+      onClose={onClose}
+      fullWidth
+      maxWidth="md"
+      disableEnforceFocus
+      disableAutoFocus
+      scroll="paper"
+    >
       <DialogTitle>Order Details</DialogTitle>
       <DialogContent dividers>
         {loading ? (
@@ -594,29 +617,20 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
           </Box>
         ) : (
           <>
-            <Typography variant="h6">
-              Order ID: {realTimeOrder.id || realTimeOrder._id}
-            </Typography>
+            <Typography variant="h6">Order ID: {realTimeOrder.id || realTimeOrder._id}</Typography>
             <Typography>
               <strong>Email:</strong> {displayEmail || userEmail || "Unknown"}
             </Typography>
             <Typography>
               <strong>Date:</strong>{" "}
-              {realTimeOrder.createdAt
-                ? new Date(realTimeOrder.createdAt).toLocaleString()
-                : "N/A"}
+              {realTimeOrder.createdAt ? new Date(realTimeOrder.createdAt).toLocaleString() : "N/A"}
             </Typography>
             <Typography>
               <strong>Status:</strong>{" "}
-              <Chip
-                label={realTimeOrder.status || "N/A"}
-                color={getStatusColor(rawStatus)}
-                size="small"
-              />
+              <Chip label={realTimeOrder.status || "N/A"} color={getStatusColor(rawStatus)} size="small" />
             </Typography>
             <Typography>
-              <strong>Total Price:</strong> ₱
-              {parseFloat(realTimeOrder.total || 0).toFixed(2)}
+              <strong>Total Price:</strong> ₱{parseFloat(realTimeOrder.total || 0).toFixed(2)}
             </Typography>
 
             <Typography variant="subtitle1" sx={{ mt: 2 }}>
@@ -696,12 +710,7 @@ const OrderDetailModal = ({ show, onClose, order, userEmail, updateParentOrders 
       </DialogContent>
       <DialogActions>
         {showCancelBtn && (
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleCancelRequest}
-            disabled={cancelling}
-          >
+          <Button variant="contained" color="error" onClick={handleCancelRequest} disabled={cancelling}>
             {cancelling ? "Requesting..." : "Request Order Cancellation"}
           </Button>
         )}
