@@ -15,7 +15,10 @@ import {
   Typography,
 } from "@mui/material";
 import OrderDetailModal from "./OrderDetailModal";
+import PurchaseHistory from "./PurchaseHistory";
+import HistoryIcon from '@mui/icons-material/History';
 import { useAuth } from "../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 // ---- Helpers ----
 function StatusChip({ value }) {
@@ -196,7 +199,10 @@ function OrderImageStrip({ urls = [] }) {
 
 const MyOrders = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
+  const [deliveredOrders, setDeliveredOrders] = useState([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -219,12 +225,19 @@ const MyOrders = () => {
       setLoading(true);
       try {
         const res = await axios.get(`${API_URL}/api/orders/user/${user._id}`);
-        const filtered = (res.data || []).filter((order) => {
+        const allOrders = res.data || [];
+        const filtered = allOrders.filter((order) => {
           const s = String(order?.status || "").toLowerCase();
           return s !== "delivered" && s !== "cancelled" && s !== "canceled";
         });
+        const delivered = allOrders.filter((order) => {
+          const s = String(order?.status || "").toLowerCase();
+          return s === "delivered";
+        });
         filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        delivered.sort((a, b) => new Date(b.deliveredAt || b.updatedAt || b.createdAt) - new Date(a.deliveredAt || a.updatedAt || a.createdAt));
         setOrders(filtered);
+        setDeliveredOrders(delivered);
         setError("");
       } catch (err) {
         console.error("Error fetching orders:", err);
@@ -251,13 +264,24 @@ const MyOrders = () => {
   return (
     <>
       <Container sx={{ pt: 14, pb: 6 }} maxWidth="lg">
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            My Orders
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Track your purchases and view order details.
-          </Typography>
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              My Orders
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Track your purchases and view order details.
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={() => setHistoryOpen(true)}
+            sx={{ ml: 2, display: 'flex', alignItems: 'center', gap: 1 }}
+            startIcon={<HistoryIcon />}
+          >
+            Purchase History
+          </Button>
         </Box>
 
         {loading ? (
@@ -276,6 +300,7 @@ const MyOrders = () => {
           <>
             <Grid container spacing={2}>
               {paginatedOrders.map((order) => {
+                // ...existing code...
                 const createdAt = order?.createdAt
                   ? new Date(order.createdAt).toLocaleString()
                   : "—";
@@ -286,9 +311,10 @@ const MyOrders = () => {
                 const orderId = pickOrderId(order);
                 const itemCount = Array.isArray(order?.items) ? order.items.length : null;
                 const imageUrls = getOrderImageUrls(order);
-
+                // ...existing code...
                 return (
                   <Grid key={order?._id || orderId} item xs={12} sm={6} md={4}>
+                    {/* ...existing code... */}
                     <Card
                       role="button"
                       onClick={() => handleSelectOrder(order)}
@@ -299,22 +325,20 @@ const MyOrders = () => {
                       }}
                     >
                       <CardContent>
-                        {/* Header row: Title + Status */}
+                        {/* ...existing code... */}
                         <Stack direction="row" justifyContent="space-between" alignItems="center">
                           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
                             Order {orderId}
                           </Typography>
                           <StatusChip value={status} />
                         </Stack>
-
-                        {/* Subheader: Items summary */}
+                        {/* ...existing code... */}
                         {itemCount != null && (
                           <Typography variant="body2" sx={{ mt: 0.5 }}>
                             {itemCount} item{itemCount === 1 ? "" : "s"}
                           </Typography>
                         )}
-
-                        {/* Meta row: Date + Total */}
+                        {/* ...existing code... */}
                         <Stack direction="row" spacing={2} sx={{ mt: 1.5 }} alignItems="center">
                           <Typography variant="body2" color="text.secondary">
                             {createdAt}
@@ -324,18 +348,15 @@ const MyOrders = () => {
                             Total: {currency(total)}
                           </Typography>
                         </Stack>
-
-                        {/* Address (if any) */}
+                        {/* ...existing code... */}
                         {address && (
                           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                             {address}
                           </Typography>
                         )}
-
-                        {/* Item images */}
+                        {/* ...existing code... */}
                         <OrderImageStrip urls={imageUrls} />
-
-                        {/* Custom Stepper (Pending → Shipped → Delivered) */}
+                        {/* ...existing code... */}
                         <div className="stepper-container">
                           {steps.map((step, index) => (
                             <div
@@ -350,8 +371,7 @@ const MyOrders = () => {
                             </div>
                           ))}
                         </div>
-
-                        {/* Actions */}
+                        {/* ...existing code... */}
                         <Stack direction="row" spacing={1.5} sx={{ mt: 1 }}>
                           <Button
                             size="small"
@@ -371,7 +391,6 @@ const MyOrders = () => {
                 );
               })}
             </Grid>
-
             {/* Pagination */}
             <Box display="flex" justifyContent="space-between" mt={2}>
               <Button
@@ -412,6 +431,13 @@ const MyOrders = () => {
           }
         />
       )}
+
+      {/* Purchase History Modal */}
+      <PurchaseHistory
+        deliveredOrders={deliveredOrders}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+      />
 
       {/* Stepper CSS */}
       <style jsx>{`

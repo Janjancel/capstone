@@ -85,6 +85,7 @@ import Home from "./components/Home/Home";
 import Admin from "./components/AdminDashboard/Admin/Admin";
 import Cart from "./components/Cart/Cart";
 import Buy from "./components/Buy";
+import BuyPage from "./pages/BuyPage";
 import Profile from "./components/Profile/Profile";
 import Sell from "./components/Sell/Sell";
 import Demolish from "./components/Demolish/Demolish";
@@ -94,6 +95,7 @@ import MyRequests from "./components/Requests/MyRequest";
 
 // NEW: My Orders as a PAGE route
 import MyOrders from "./components/MyOrder/MyOrders";
+import ProductRatingPage from "./pages/ProductRatingPage";
 
 import { Toaster } from "react-hot-toast";
 import { useAuth } from "./context/AuthContext";
@@ -124,6 +126,7 @@ function App() {
           {/* Authenticated (Client/User) */}
           <Route element={<PrivateRoute />}>
             <Route path="/buy" element={<Buy />} />
+            <Route path="/buy/:id" element={<BuyPage />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/sell" element={<Sell />} />
@@ -132,6 +135,8 @@ function App() {
             <Route path="/requests" element={<MyRequests />} />
             {/* NEW: My Orders as dedicated page */}
             <Route path="/orders" element={<MyOrders />} />
+            {/* Product Rating Page */}
+            <Route path="/rate/:orderId/:productId" element={<ProductRatingPage />} />
           </Route>
 
           {/* Admin */}
