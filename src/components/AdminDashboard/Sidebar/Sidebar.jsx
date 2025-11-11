@@ -18,7 +18,6 @@ import {
   ListItemText,
   Collapse,
   Typography,
-  Divider,
 } from "@mui/material";
 import logo from "../../images/logo.png";
 

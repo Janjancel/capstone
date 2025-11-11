@@ -157,7 +157,8 @@
 import React, { useState, useEffect } from "react";
 import { FaBell, FaSignOutAlt } from "react-icons/fa";
 import { Button, Badge } from "react-bootstrap";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+// import { useNavigate, useLocation } from "react-router-dom";
 import Swal from "sweetalert2";
 import toast from "react-hot-toast";
 import axios from "axios";
@@ -170,7 +171,7 @@ const DashboardNavbar = ({ onLogout, onToggleSidebar }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [userId, setUserId] = useState(null);
 
-  const location = useLocation();
+  // const location = useLocation();
   const navigate = useNavigate();
   const API_URL = process.env.REACT_APP_API_URL;
 
@@ -276,10 +277,10 @@ const DashboardNavbar = ({ onLogout, onToggleSidebar }) => {
     });
   };
 
-  const getPageName = () => {
-    const path = location.pathname.split("/").pop();
-    return path.charAt(0).toUpperCase() + path.slice(1);
-  };
+  // const getPageName = () => {
+  //   const path = location.pathname.split("/").pop();
+  //   return path.charAt(0).toUpperCase() + path.slice(1);
+  // };
 
   return (
     <div className="d-flex justify-content-between align-items-center p-3 bg-white sticky-top z-3">

@@ -1,17 +1,26 @@
 
-// import React, { useRef, useState, useEffect } from "react";
-// import {
-//   Modal,
-//   Form,
-//   Button,
-//   Image,
-//   Spinner,
-// } from "react-bootstrap";
+
+// import React, { useRef, useState, useEffect, useMemo } from "react";
+// import { Modal, Form, Button, Image, Spinner, Badge } from "react-bootstrap";
 // import Swal from "sweetalert2";
 // import axios from "axios";
 // import toast from "react-hot-toast";
 
+// const CATEGORIES = [
+//   "Table",
+//   "Chair",
+//   "Flooring",
+//   "Cabinet",
+//   "Post",
+//   "Scraps",
+//   "Stones",
+//   "Windows",
+//   "Bed",
+//   "Uncategorized",
+// ];
+
 // const EditItemModal = ({ show, onHide, item }) => {
+//   // ---- New: keep BOTH fields for backward compatibility ----
 //   const [updatedItem, setUpdatedItem] = useState({
 //     name: item.name || "",
 //     description: item.description || "",
@@ -19,28 +28,45 @@
 //     condition: item.condition ?? "",
 //     origin: item.origin || "",
 //     age: item.age || "",
-//     category: item.category || "Table",
-//     images: [], // newly added files (not existing URLs)
+//     // prefer array if present, else seed from legacy single
+//     categories: Array.isArray(item.categories)
+//       ? item.categories
+//       : item.category
+//       ? [item.category]
+//       : [],
+//     category:
+//       item.category ||
+//       (Array.isArray(item.categories) && item.categories[0]) ||
+//       "Table",
 //   });
 
-//   // previews contains both existing URLs and new blob: URLs
-//   const [preview, setPreview] = useState(item.images || []);
-//   const [removedExisting, setRemovedExisting] = useState([]); // URLs removed by user
+//   // Existing image URLs that come from the server
+//   const [existingUrls, setExistingUrls] = useState(Array.isArray(item.images) ? item.images : []);
+
+//   // Newly added images: [{ url: objectURL, file: File }]
+//   const [newPreviews, setNewPreviews] = useState([]);
+
+//   // Track which existing URLs were removed (for keepImages)
+//   const [removedExisting, setRemovedExisting] = useState([]);
+
 //   const [loading, setLoading] = useState(false);
 //   const [uploading, setUploading] = useState(false);
 
-//   // ===== file input (hidden) =====
 //   const fileInputRef = useRef(null);
 
 //   const resetFileInput = () => {
-//     if (fileInputRef.current) {
-//       fileInputRef.current.value = ""; // fully clear <input type="file">
-//     }
+//     if (fileInputRef.current) fileInputRef.current.value = "";
 //   };
 
-//   // reset state on modal open/close or when item changes
+//   // Reset state on open or when item changes
 //   useEffect(() => {
 //     if (show) {
+//       const nextCategories = Array.isArray(item.categories)
+//         ? item.categories
+//         : item.category
+//         ? [item.category]
+//         : [];
+
 //       setUpdatedItem({
 //         name: item.name || "",
 //         description: item.description || "",
@@ -48,34 +74,44 @@
 //         condition: item.condition ?? "",
 //         origin: item.origin || "",
 //         age: item.age || "",
-//         category: item.category || "Table",
-//         images: [],
+//         categories: nextCategories,
+//         category: item.category || nextCategories[0] || "Table",
 //       });
-//       setPreview(item.images || []);
-//       setRemovedExisting([]);
-//       resetFileInput(); // ensure input is empty on open
+
+//       setExistingUrls(Array.isArray(item.images) ? item.images : []);
+//       setNewPreviews([]);       // reset new files
+//       setRemovedExisting([]);   // reset removals
+//       resetFileInput();
 //     } else {
-//       // also clear when hidden
 //       resetFileInput();
 //     }
 //     // eslint-disable-next-line react-hooks/exhaustive-deps
 //   }, [show, item]);
 
-//   const categories = [
-//     "Table",
-//     "Chair",
-//     "Flooring",
-//     "Cabinet",
-//     "Post",
-//     "Scraps",
-//     "Stones",
-//     "Windows",
-//     "Bed",
-//   ];
+//   // Combined preview list for UI (existing first, then new)
+//   const combinedPreview = useMemo(
+//     () => [...existingUrls, ...newPreviews.map((p) => p.url)],
+//     [existingUrls, newPreviews]
+//   );
 
-//   const handleOpenFilePicker = () => {
-//     fileInputRef.current?.click();
+//   // ---- Categories helpers (multi-select via checkboxes) ----
+//   const selectedCategories = updatedItem.categories || [];
+//   const setCategories = (nextArr) => {
+//     setUpdatedItem((prev) => ({
+//       ...prev,
+//       categories: nextArr,
+//       category: nextArr[0] || "", // keep legacy field in sync
+//     }));
 //   };
+//   const toggleCategory = (cat) => {
+//     const set = new Set(selectedCategories);
+//     set.has(cat) ? set.delete(cat) : set.add(cat);
+//     setCategories(Array.from(set));
+//   };
+//   const clearCategories = () => setCategories([]);
+
+//   // ---- Files ----
+//   const handleOpenFilePicker = () => fileInputRef.current?.click();
 
 //   const handleFiles = (files) => {
 //     const incoming = Array.from(files || []);
@@ -83,18 +119,19 @@
 
 //     setUploading(true);
 
-//     // limit to 5 new images (matches backend upload.array("images", 5))
-//     const firstFive = incoming.slice(0, 5).filter((f) => f.type.startsWith("image/"));
+//     // Limit: up to 5 NEW files (does not touch existing)
+//     const remainingSlots = Math.max(0, 5 - newPreviews.length);
+//     const toAdd = incoming
+//       .filter((f) => f.type?.startsWith("image/"))
+//       .slice(0, remainingSlots);
 
-//     // create blob previews
-//     const newBlobPreviews = firstFive.map((file) => URL.createObjectURL(file));
+//     const newItems = toAdd.map((file) => ({
+//       file,
+//       url: URL.createObjectURL(file), // stable URL for remove
+//     }));
 
-//     // add to preview and to updatedItem.images
-//     setPreview((prev) => [...prev, ...newBlobPreviews]);
-//     setUpdatedItem((prev) => ({ ...prev, images: [...prev.images, ...firstFive] }));
-
+//     setNewPreviews((prev) => [...prev, ...newItems]);
 //     setUploading(false);
-//     // do NOT reset input here — user may add more; we’ll clear on save/close
 //   };
 
 //   const onDrop = (e) => {
@@ -108,50 +145,47 @@
 //     e.stopPropagation();
 //   };
 
-//   // Remove a specific preview (either existing URL or blob)
+//   // Remove preview: if it's an existing URL, mark for removal; if it's a blob, drop it & revoke URL
 //   const handleRemovePreview = (src) => {
-//     // If it's a blob URL, remove the corresponding File object from updatedItem.images
-//     if (src.startsWith("blob:")) {
-//       setUpdatedItem((prev) => {
-//         // Find the blob index by matching object URLs
-//         // Since order is consistent with preview push, we remove by index of src among blob previews
-//         let blobIndex = -1;
-//         let count = -1;
-//         // Build a map of current blob URLs to index in images
-//         const currentBlobURLs = prev.images.map((f) => URL.createObjectURL(f));
-//         // Find match
-//         for (let i = 0; i < currentBlobURLs.length; i++) {
-//           if (currentBlobURLs[i] === src) {
-//             blobIndex = i;
-//             break;
-//           }
-//         }
-//         // Revoke created object URLs to avoid memory leaks (best-effort)
-//         currentBlobURLs.forEach((u) => URL.revokeObjectURL(u));
-
-//         if (blobIndex > -1) {
-//           const newFiles = [...prev.images];
-//           newFiles.splice(blobIndex, 1);
-//           return { ...prev, images: newFiles };
-//         }
-//         return prev;
+//     // First check newPreviews
+//     const idx = newPreviews.findIndex((p) => p.url === src);
+//     if (idx > -1) {
+//       // revoke objectURL and remove
+//       URL.revokeObjectURL(newPreviews[idx].url);
+//       setNewPreviews((prev) => {
+//         const next = [...prev];
+//         next.splice(idx, 1);
+//         return next;
 //       });
-//     } else {
-//       // Existing server URL — mark as removed so we don't keep it
-//       setRemovedExisting((prev) => Array.from(new Set([...prev, src])));
+//       return;
 //     }
 
-//     // Remove from visual previews
-//     setPreview((prev) => prev.filter((p) => p !== src));
+//     // Otherwise it's an existing server URL
+//     if (existingUrls.includes(src)) {
+//       setRemovedExisting((prev) => Array.from(new Set([...prev, src])));
+//       setExistingUrls((prev) => prev.filter((u) => u !== src));
+//     }
 //   };
 
+//   // Cleanup object URLs on unmount/close
+//   useEffect(() => {
+//     return () => {
+//       newPreviews.forEach((p) => {
+//         try {
+//           URL.revokeObjectURL(p.url);
+//         } catch {}
+//       });
+//     };
+//   }, [newPreviews]);
+
 //   const handleSave = async () => {
-//     // validate condition
+//     // Validate condition
+//     const cond = updatedItem.condition;
 //     if (
-//       updatedItem.condition !== "" &&
-//       (Number.isNaN(Number(updatedItem.condition)) ||
-//         Number(updatedItem.condition) < 1 ||
-//         Number(updatedItem.condition) > 10)
+//       cond !== "" &&
+//       (Number.isNaN(Number(cond)) ||
+//         Number(cond) < 1 ||
+//         Number(cond) > 10)
 //     ) {
 //       toast.error("Condition must be a number between 1 and 10");
 //       return;
@@ -168,25 +202,30 @@
 
 //     setLoading(true);
 //     try {
-//       // Compute which existing images to keep (item.images minus removedExisting)
-//       const original = Array.isArray(item.images) ? item.images : [];
-//       const keepExisting = original.filter((url) => !removedExisting.includes(url));
+//       // existingUrls now already excludes removed ones; send it as keepImages
+//       const keepExisting = existingUrls;
 
 //       const formData = new FormData();
 //       formData.append("name", updatedItem.name);
 //       formData.append("description", updatedItem.description);
-//       formData.append("price", updatedItem.price);
-//       formData.append("condition", updatedItem.condition);
+//       formData.append("price", String(updatedItem.price ?? ""));
+//       formData.append("condition", String(updatedItem.condition ?? ""));
 //       formData.append("origin", updatedItem.origin);
 //       formData.append("age", updatedItem.age);
-//       formData.append("category", updatedItem.category);
 
-//       // Provide keepImages so the backend can overwrite with these + new uploads
+//       // ✅ Multi-category: send array AND keep legacy single
+//       const cats = (updatedItem.categories || []).length
+//         ? updatedItem.categories
+//         : ["Uncategorized"];
+//       formData.append("categories", JSON.stringify(cats));
+//       formData.append("category", cats[0] || ""); // legacy compatibility
+
+//       // For your API to overwrite images list: existing kept + new uploads
 //       formData.append("keepImages", JSON.stringify(keepExisting));
 
-//       // Append new images (files)
-//       if (updatedItem.images.length > 0) {
-//         updatedItem.images.forEach((file) => formData.append("images", file));
+//       // Append new images
+//       if (newPreviews.length) {
+//         newPreviews.forEach(({ file }) => formData.append("images", file));
 //       }
 
 //       await axios.put(
@@ -197,10 +236,9 @@
 
 //       toast.success("Item updated successfully!");
 
-//       // Reset file input & local new images (as requested)
-//       setUpdatedItem((prev) => ({ ...prev, images: [] }));
+//       // Reset new files and input
+//       setNewPreviews([]);
 //       resetFileInput();
-
 //       onHide();
 //     } catch (error) {
 //       console.error("Update error:", error);
@@ -239,12 +277,17 @@
 //                 min={field === "price" ? 0 : undefined}
 //                 step={field === "price" ? "0.01" : undefined}
 //                 placeholder={
-//                   field === "price" ? "e.g., 1500.00" :
-//                   field === "age" ? "e.g., 80" : undefined
+//                   field === "price"
+//                     ? "e.g., 1500.00"
+//                     : field === "age"
+//                     ? "e.g., 80"
+//                     : undefined
 //                 }
 //               />
 //               {field === "price" && (
-//                 <Form.Text muted>Enter a valid number (no currency symbols).</Form.Text>
+//                 <Form.Text muted>
+//                   Enter a valid number (no currency symbols).
+//                 </Form.Text>
 //               )}
 //             </Form.Group>
 //           ))}
@@ -269,21 +312,58 @@
 //             </Form.Text>
 //           </Form.Group>
 
-//           {/* Category */}
+//           {/* ✅ Multi-categories (checkbox grid) with legacy sync */}
 //           <Form.Group className="mb-3">
-//             <Form.Label>Category</Form.Label>
-//             <Form.Select
-//               value={updatedItem.category}
-//               onChange={(e) =>
-//                 setUpdatedItem({ ...updatedItem, category: e.target.value })
-//               }
+//             <Form.Label>Categories</Form.Label>
+
+//             {/* Selected summary */}
+//             <div className="mb-2" aria-live="polite">
+//               {selectedCategories.length ? (
+//                 <>
+//                   {selectedCategories.map((c) => (
+//                     <Badge key={c} bg="secondary" style={{ marginRight: 6, marginBottom: 6 }}>
+//                       {c}
+//                     </Badge>
+//                   ))}
+//                   <Button
+//                     variant="link"
+//                     size="sm"
+//                     onClick={clearCategories}
+//                     style={{ textDecoration: "none" }}
+//                   >
+//                     clear
+//                   </Button>
+//                 </>
+//               ) : (
+//                 <span style={{ color: "#6c757d" }}>No category selected yet.</span>
+//               )}
+//             </div>
+
+//             {/* Checkbox grid */}
+//             <div
+//               role="group"
+//               aria-label="Select one or more categories"
+//               style={{
+//                 display: "grid",
+//                 gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+//                 gap: 4,
+//               }}
 //             >
-//               {categories.map((cat) => (
-//                 <option key={cat} value={cat}>
-//                   {cat}
-//                 </option>
+//               {CATEGORIES.map((cat) => (
+//                 <Form.Check
+//                   key={cat}
+//                   type="checkbox"
+//                   id={`edit-cat-${cat}`}
+//                   label={cat}
+//                   checked={selectedCategories.includes(cat)}
+//                   onChange={() => toggleCategory(cat)}
+//                 />
 //               ))}
-//             </Form.Select>
+//             </div>
+
+//             <Form.Text muted>
+//               Select one or more categories. If none are selected, it will default to "Uncategorized" on save.
+//             </Form.Text>
 //           </Form.Group>
 
 //           {/* Enhanced dashed dropzone with removable thumbnails */}
@@ -316,7 +396,7 @@
 //                 padding: 12,
 //                 display: "flex",
 //                 alignItems: "center",
-//                 justifyContent: preview?.length ? "flex-start" : "center",
+//                 justifyContent: combinedPreview.length ? "flex-start" : "center",
 //                 gap: 8,
 //                 flexWrap: "wrap",
 //                 cursor: "pointer",
@@ -329,8 +409,8 @@
 //                 <div className="d-flex align-items-center gap-2">
 //                   <Spinner animation="border" size="sm" /> Preparing images...
 //                 </div>
-//               ) : preview?.length ? (
-//                 preview.map((src, idx) => (
+//               ) : combinedPreview.length ? (
+//                 combinedPreview.map((src, idx) => (
 //                   <div
 //                     key={`${src}-${idx}`}
 //                     style={{
@@ -398,21 +478,23 @@
 //             <Form.Text muted>
 //               Remove any existing image with the “×” button. New images you add here will be appended.
 //               <br />
-//               <strong>Note:</strong> The form sends <code>keepImages</code> so the server can overwrite the image list
-//               (existing kept + newly uploaded). Make sure your API uses it accordingly.
+//               <strong>Note:</strong> This form sends <code>keepImages</code> (the remaining existing URLs) so your API
+//               can overwrite the image list to: <em>kept existing</em> + <em>new uploads</em>.
 //             </Form.Text>
 //           </Form.Group>
 //         </Form>
 //       </Modal.Body>
 //       <Modal.Footer>
-//         <Button variant="secondary" onClick={() => { onHide(); resetFileInput(); }}>
+//         <Button
+//           variant="secondary"
+//           onClick={() => {
+//             onHide();
+//             resetFileInput();
+//           }}
+//         >
 //           Cancel
 //         </Button>
-//         <Button
-//           variant="primary"
-//           onClick={handleSave}
-//           disabled={loading || uploading}
-//         >
+//         <Button variant="primary" onClick={handleSave} disabled={loading || uploading}>
 //           {loading ? "Saving..." : "Save Changes"}
 //         </Button>
 //       </Modal.Footer>
@@ -421,6 +503,7 @@
 // };
 
 // export default EditItemModal;
+
 
 import React, { useRef, useState, useEffect, useMemo } from "react";
 import { Modal, Form, Button, Image, Spinner, Badge } from "react-bootstrap";
@@ -468,8 +551,7 @@ const EditItemModal = ({ show, onHide, item }) => {
   // Newly added images: [{ url: objectURL, file: File }]
   const [newPreviews, setNewPreviews] = useState([]);
 
-  // Track which existing URLs were removed (for keepImages)
-  const [removedExisting, setRemovedExisting] = useState([]);
+  // removedExisting state removed (existingUrls now reflects removals directly)
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -501,8 +583,7 @@ const EditItemModal = ({ show, onHide, item }) => {
       });
 
       setExistingUrls(Array.isArray(item.images) ? item.images : []);
-      setNewPreviews([]);       // reset new files
-      setRemovedExisting([]);   // reset removals
+      setNewPreviews([]); // reset new files
       resetFileInput();
     } else {
       resetFileInput();
@@ -567,7 +648,7 @@ const EditItemModal = ({ show, onHide, item }) => {
     e.stopPropagation();
   };
 
-  // Remove preview: if it's an existing URL, mark for removal; if it's a blob, drop it & revoke URL
+  // Remove preview: if it's an existing URL, remove it from existingUrls; if it's a blob, drop it & revoke URL
   const handleRemovePreview = (src) => {
     // First check newPreviews
     const idx = newPreviews.findIndex((p) => p.url === src);
@@ -584,7 +665,7 @@ const EditItemModal = ({ show, onHide, item }) => {
 
     // Otherwise it's an existing server URL
     if (existingUrls.includes(src)) {
-      setRemovedExisting((prev) => Array.from(new Set([...prev, src])));
+      // remove from existingUrls — we will send the remaining as keepImages
       setExistingUrls((prev) => prev.filter((u) => u !== src));
     }
   };
