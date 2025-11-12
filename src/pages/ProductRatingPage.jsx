@@ -81,7 +81,6 @@
 // export default ProductRatingPage;
 
 
-// src/pages/ProductRatingPage.jsx
 import React, { useState } from "react";
 import { Box, Typography, Button, Rating, TextField } from "@mui/material";
 import { useParams } from "react-router-dom";
@@ -89,55 +88,55 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import toast from "react-hot-toast";
 
+// ProductRatingPage
+// - Improved API base discovery (env, known host, relative)
+// - Tries both /api/product-ratings and /product-ratings endpoints
+// - Better validation, error handling & UX feedback
+// - Keeps original props (orderId, productId) from useParams
+
 const ProductRatingPage = () => {
   const { orderId, productId } = useParams();
-  // rating can be number or null for MUI Rating
-  const [rating, setRating] = useState(0);
+
+  // rating can be number (1-5) or null while the user hasn't chosen anything
+  const [rating, setRating] = useState(null);
   const [review, setReview] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Primary source for API URL is environment variable.
-  // Fallbacks: explicitly try the common backend hostname used in your logs,
-  // and finally default to empty string (which makes axios use relative URLs).
+  // API base candidates: env -> known deployed host seen in logs -> relative
   const ENV_API = process.env.REACT_APP_API_URL || null;
   const FALLBACK_HOST = "https://capstone-backend-k4uu.onrender.com";
-  const API_BASES = [
-    ENV_API, // might be undefined in some envs
-    FALLBACK_HOST,
-    "", // relative (for dev when proxy is used)
-  ].filter(Boolean);
+  const API_BASES = [ENV_API, FALLBACK_HOST, ""].filter((b) => b !== null && b !== undefined);
 
-  // Try to extract user id and token (if stored)
-  // Adjust keys if your app stores these under different names.
   const getStoredUserId = () => {
     try {
-      // common patterns: localStorage 'user' as JSON, or 'userData'
       const rawUser = localStorage.getItem("user") || localStorage.getItem("userData");
       if (!rawUser) return null;
       const parsed = JSON.parse(rawUser);
-      // if parsed is a plain id string:
+      if (!parsed) return null;
       if (typeof parsed === "string") return parsed;
-      // try common fields
-      return parsed?.id || parsed?._id || null;
+      return parsed?.id || parsed?._id || parsed?.userId || null;
     } catch (err) {
       return null;
     }
   };
 
   const getAuthToken = () => {
-    // common token keys
     return localStorage.getItem("token") || localStorage.getItem("authToken") || null;
   };
 
+  const buildCandidateUrls = (base) => {
+    const b = base.replace(/\/$/, "");
+    return [`${b}/api/product-ratings`, `${b}/product-ratings`].map((u) => (u.startsWith("https://") || u.startsWith("http://") || u.startsWith("/") ? u : u));
+  };
+
   const handleSubmit = async () => {
-    // Basic validation
+    // validation: require a rating
     if (rating === null || typeof rating !== "number" || rating < 0 || rating > 5) {
       toast.error("Please select a rating between 0 and 5.");
       return;
     }
 
-    // Confirm with the user
     const confirmation = await Swal.fire({
       title: "Submit Rating?",
       text: "Are you sure you want to submit this rating?",
@@ -151,7 +150,6 @@ const ProductRatingPage = () => {
 
     setSubmitting(true);
 
-    // Build payload
     const payload = {
       order: orderId,
       product: productId,
@@ -165,18 +163,14 @@ const ProductRatingPage = () => {
     const token = getAuthToken();
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-    // Attempt to post to likely endpoints. If first returns 404, try fallback.
-    // This avoids failing immediately when backend route has a slightly different base.
     let lastError = null;
+
+    // Try each base and each candidate endpoint until one succeeds or all fail
     for (const base of API_BASES) {
-      // prefer explicit /api path first as your backend logs show /api/product-ratings
-      const candidateUrls = [
-        `${base.replace(/\/$/, "")}/api/product-ratings`,
-        `${base.replace(/\/$/, "")}/product-ratings`,
-      ];
-      for (const url of candidateUrls) {
-        // if base is "", url becomes "/api/product-ratings" which is fine (relative)
+      const candidates = buildCandidateUrls(base);
+      for (const url of candidates) {
         try {
+          // Make a POST request. If base is empty and url begins with "/", axios will use relative URL.
           await axios.post(url, payload, { headers });
           setSuccess(true);
           toast.success("Rating submitted successfully!");
@@ -184,34 +178,32 @@ const ProductRatingPage = () => {
           return;
         } catch (err) {
           lastError = err;
-          // If 404, we'll try the next candidate; otherwise, break early for other errors.
           const status = err?.response?.status;
+          // If server returned a non-404 error, stop trying and surface the message
           if (status && status !== 404) {
-            // Non-404 -> likely validation/auth error. Show helpful message and stop trying.
-            const serverMessage =
-              err.response?.data?.error || err.response?.data?.message || err.response?.statusText;
-            toast.error(`Failed to submit rating: ${serverMessage || "Server error"}`);
+            const serverMessage = err.response?.data?.error || err.response?.data?.message || err.response?.statusText;
+            const friendly = serverMessage || `Server returned ${status}`;
+            toast.error(`Failed to submit rating: ${friendly}`);
+            console.error("Rating submit error (not 404)", { url, status, serverMessage, err });
             setSubmitting(false);
             return;
           }
-          // else status === 404 or no status (network) -> continue trying other endpoints
+
+          // if 404 or network-level error, try next candidate
+          console.warn("Rating endpoint candidate failed (will try next)", { url, status, message: err.message });
         }
       }
     }
 
-    // If we exhausted options:
+    // if we get here everything failed
     if (lastError) {
-      // If server responded, give a bit more info
       const status = lastError?.response?.status;
       const dataMsg = lastError?.response?.data?.error || lastError?.response?.data?.message;
       if (status === 404) {
-        toast.error(
-          "Rating endpoint not found (404). Please check the backend route or API base URL."
-        );
+        toast.error("Rating endpoint not found (404). Please verify the backend route or API URL.");
       } else if (status) {
         toast.error(`Server returned ${status}: ${dataMsg || lastError.message}`);
       } else {
-        // network / CORS / other
         toast.error(`Network error or server unreachable: ${lastError.message}`);
       }
     } else {
@@ -234,6 +226,7 @@ const ProductRatingPage = () => {
       <Typography variant="h4" gutterBottom>
         Rate Product
       </Typography>
+
       <Typography variant="body1" gutterBottom>
         How would you rate this product?
       </Typography>
