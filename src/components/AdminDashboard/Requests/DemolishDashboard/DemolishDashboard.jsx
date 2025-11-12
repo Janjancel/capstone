@@ -1,4 +1,5 @@
-// import React, { useEffect, useState } from "react";
+
+// import React, { useEffect, useState, useCallback } from "react";
 // import axios from "axios";
 // import Swal from "sweetalert2";
 // import toast, { Toaster } from "react-hot-toast";
@@ -61,14 +62,14 @@
 
 //   // NEW: Date range filter (by createdAt)
 //   const [dateFrom, setDateFrom] = useState(""); // "YYYY-MM-DD"
-//   const [dateTo, setDateTo] = useState("");     // "YYYY-MM-DD"
+//   const [dateTo, setDateTo] = useState(""); // "YYYY-MM-DD"
 
 //   // ===== Reverse Geocoding State & Helpers =====
 //   const [addressMap, setAddressMap] = useState({}); // { "lat,lng": "Pretty address" }
 
-//   const fmtKey = (lat, lng) => `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`;
+//   const fmtKey = useCallback((lat, lng) => `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`, []);
 
-//   const getCachedAddress = (key) => {
+//   const getCachedAddress = useCallback((key) => {
 //     try {
 //       const raw = localStorage.getItem("geo_address_cache");
 //       if (!raw) return null;
@@ -77,38 +78,41 @@
 //     } catch {
 //       return null;
 //     }
-//   };
+//   }, []);
 
-//   const setCachedAddress = (key, val) => {
+//   const setCachedAddress = useCallback((key, val) => {
 //     try {
 //       const raw = localStorage.getItem("geo_address_cache");
 //       const json = raw ? JSON.parse(raw) : {};
 //       json[key] = val;
 //       localStorage.setItem("geo_address_cache", JSON.stringify(json));
 //     } catch {}
-//   };
+//   }, []);
 
-//   const reverseGeocode = async (lat, lng) => {
-//     const key = fmtKey(lat, lng);
-//     const cached = getCachedAddress(key);
-//     if (cached) return cached;
+//   const reverseGeocode = useCallback(
+//     async (lat, lng) => {
+//       const key = fmtKey(lat, lng);
+//       const cached = getCachedAddress(key);
+//       if (cached) return cached;
 
-//     const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fil,en`;
-//     const res = await fetch(url, { headers: { Accept: "application/json" } });
-//     if (!res.ok) throw new Error("Reverse geocode failed");
+//       const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fil,en`;
+//       const res = await fetch(url, { headers: { Accept: "application/json" } });
+//       if (!res.ok) throw new Error("Reverse geocode failed");
 
-//     const data = await res.json();
-//     const a = data.address || {};
-//     const pretty =
-//       data.display_name ||
-//       [a.road, a.suburb || a.village || a.barangay, a.town || a.city || a.municipality, a.state, a.country]
-//         .filter(Boolean)
-//         .join(", ");
-//     const value = pretty || key;
+//       const data = await res.json();
+//       const a = data.address || {};
+//       const pretty =
+//         data.display_name ||
+//         [a.road, a.suburb || a.village || a.barangay, a.town || a.city || a.municipality, a.state, a.country]
+//           .filter(Boolean)
+//           .join(", ");
+//       const value = pretty || key;
 
-//     setCachedAddress(key, value);
-//     return value;
-//   };
+//       setCachedAddress(key, value);
+//       return value;
+//     },
+//     [fmtKey, getCachedAddress, setCachedAddress]
+//   );
 
 //   const renderLocation = (loc) => {
 //     if (!(loc?.lat && loc?.lng)) return "N/A";
@@ -170,7 +174,7 @@
 //       setAddressMap((prev) => ({ ...prev, ...results }));
 //     };
 //     run();
-//   }, [requests]);
+//   }, [requests, fmtKey, getCachedAddress, reverseGeocode]);
 
 //   // Helpers for date inputs / quick ranges
 //   const toInputDate = (d) => {
@@ -258,7 +262,7 @@
 //     }
 
 //     setFilteredRequests(filtered);
-//   }, [searchQuery, statusFilter, priceFilter, requests, addressMap, dateFrom, dateTo]);
+//   }, [searchQuery, statusFilter, priceFilter, requests, addressMap, dateFrom, dateTo, fmtKey]);
 
 //   // ===== Minimal notification helper (FOR: "demolish") =====
 //   const createDemolishNotification = async ({ userId, requestId, status, message }) => {
@@ -267,7 +271,7 @@
 //       await axios.post(`${API_URL}/api/notifications`, {
 //         userId,
 //         orderId: requestId, // storing the demolish request id here (same pattern as Sell)
-//         for: "demolish",     // ← important
+//         for: "demolish", // ← important
 //         role: "client",
 //         status,
 //         message,
@@ -373,8 +377,7 @@
 //     if (!id) return;
 
 //     // Allow proposing only after ocular or after a previous decline
-//     const canPropose =
-//       req.status === "ocular_scheduled" || req.status === "price_declined";
+//     const canPropose = req.status === "ocular_scheduled" || req.status === "price_declined";
 //     if (!canPropose) {
 //       Swal.fire(
 //         "Not allowed yet",
@@ -600,16 +603,7 @@
 //               </Tooltip>
 //               <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={handleFilterClose}>
 //                 <MenuItem disabled>Filter by Status</MenuItem>
-//                 {[
-//                   "",
-//                   "pending",
-//                   "scheduled",
-//                   "ocular_scheduled",
-//                   "awaiting_price_approval",
-//                   "price_accepted",
-//                   "price_declined",
-//                   "declined",
-//                 ].map((status) => (
+//                 {["", "pending", "scheduled", "ocular_scheduled", "awaiting_price_approval", "price_accepted", "price_declined", "declined"].map((status) => (
 //                   <MenuItem
 //                     key={status || "all"}
 //                     onClick={() => {
@@ -625,12 +619,7 @@
 //                 <Divider />
 
 //                 <MenuItem disabled>Filter by Price</MenuItem>
-//                 {[
-//                   { label: "All", value: "" },
-//                   { label: "Below ₱5,000", value: "low" },
-//                   { label: "₱5,000 – ₱20,000", value: "mid" },
-//                   { label: "Above ₱20,000", value: "high" },
-//                 ].map((price) => (
+//                 {[{ label: "All", value: "" }, { label: "Below ₱5,000", value: "low" }, { label: "₱5,000 – ₱20,000", value: "mid" }, { label: "Above ₱20,000", value: "high" }].map((price) => (
 //                   <MenuItem
 //                     key={price.value}
 //                     onClick={() => {
@@ -696,16 +685,7 @@
 //               <Table stickyHeader>
 //                 <TableHead>
 //                   <TableRow sx={{ bgcolor: "grey.900" }}>
-//                     {[
-//                       "ID",
-//                       "Name",
-//                       "Contact",
-//                       "Location",
-//                       "Price",
-//                       "Status",
-//                       "Scheduled Date",
-//                       "Actions",
-//                     ].map((head) => (
+//                     {["ID", "Name", "Contact", "Location", "Price", "Status", "Scheduled Date", "Actions"].map((head) => (
 //                       <TableCell
 //                         key={head}
 //                         sx={{
@@ -904,9 +884,7 @@
 //             </Button>
 //           </Box>
 
-//           {selectedRequest && (
-//             <ReqDetailModal request={selectedRequest} onClose={() => setSelectedRequest(null)} />
-//           )}
+//           {selectedRequest && <ReqDetailModal request={selectedRequest} onClose={() => setSelectedRequest(null)} />}
 //         </>
 //       )}
 //     </Box>
@@ -1457,6 +1435,40 @@ const DemolishDashboard = () => {
     }
   };
 
+  // compute disabled states based on status and fields
+  const computeActionDisabled = (request) => {
+    const status = request?.status || "pending";
+
+    // scheduleOcular disabled if ocular already scheduled OR has moved past ocular stage
+    const scheduleOcularDisabled = [
+      "ocular_scheduled",
+      "awaiting_price_approval",
+      "price_accepted",
+      "scheduled",
+      "completed",
+      "declined",
+    ].includes(status);
+
+    // propose price only allowed when ocular scheduled or after price_declined (re-propose)
+    // disabled while waiting for client approval or after schedule/completion/decline
+    const proposeAllowed = status === "ocular_scheduled" || status === "price_declined";
+    const proposeDisabled =
+      !proposeAllowed || ["awaiting_price_approval", "scheduled", "completed", "declined"].includes(status);
+
+    // schedule demolition (final accept) only allowed after price_accepted
+    const scheduleDemolitionDisabled = status !== "price_accepted";
+
+    // decline disabled when already declined or when final scheduled/completed/price_accepted
+    const declineDisabled = ["declined", "scheduled", "completed", "price_accepted"].includes(status);
+
+    return {
+      scheduleOcularDisabled,
+      proposeDisabled,
+      scheduleDemolitionDisabled,
+      declineDisabled,
+    };
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Toaster position="top-right" />
@@ -1520,7 +1532,16 @@ const DemolishDashboard = () => {
               </Tooltip>
               <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={handleFilterClose}>
                 <MenuItem disabled>Filter by Status</MenuItem>
-                {["", "pending", "scheduled", "ocular_scheduled", "awaiting_price_approval", "price_accepted", "price_declined", "declined"].map((status) => (
+                {[
+                  "",
+                  "pending",
+                  "scheduled",
+                  "ocular_scheduled",
+                  "awaiting_price_approval",
+                  "price_accepted",
+                  "price_declined",
+                  "declined",
+                ].map((status) => (
                   <MenuItem
                     key={status || "all"}
                     onClick={() => {
@@ -1628,6 +1649,14 @@ const DemolishDashboard = () => {
                       const proposed = Number(request.proposedPrice || 0);
                       const waiting = request.status === "awaiting_price_approval";
 
+                      // compute disabled states
+                      const {
+                        scheduleOcularDisabled,
+                        proposeDisabled,
+                        scheduleDemolitionDisabled,
+                        declineDisabled,
+                      } = computeActionDisabled(request);
+
                       return (
                         <TableRow
                           key={request._id}
@@ -1686,9 +1715,11 @@ const DemolishDashboard = () => {
                                   handleScheduleDemolition(request._id);
                                   handleMenuClose();
                                 }}
+                                disabled={scheduleDemolitionDisabled}
                                 sx={{
                                   color: "success.main",
                                   fontWeight: 500,
+                                  "&.Mui-disabled": { color: "success.light" },
                                   "&:hover": { bgcolor: "success.light", color: "white" },
                                 }}
                               >
@@ -1700,9 +1731,11 @@ const DemolishDashboard = () => {
                                   handleScheduleOcular(request._id);
                                   handleMenuClose();
                                 }}
+                                disabled={scheduleOcularDisabled}
                                 sx={{
                                   color: "info.main",
                                   fontWeight: 500,
+                                  "&.Mui-disabled": { color: "info.light" },
                                   "&:hover": { bgcolor: "info.light", color: "white" },
                                 }}
                               >
@@ -1715,16 +1748,7 @@ const DemolishDashboard = () => {
                                   handleProposePrice(request);
                                   handleMenuClose();
                                 }}
-                                disabled={
-                                  !(
-                                    request.status === "ocular_scheduled" ||
-                                    request.status === "price_declined"
-                                  ) ||
-                                  request.status === "awaiting_price_approval" ||
-                                  request.status === "scheduled" ||
-                                  request.status === "completed" ||
-                                  request.status === "declined"
-                                }
+                                disabled={proposeDisabled}
                                 sx={{
                                   color: "primary.main",
                                   fontWeight: 500,
@@ -1740,7 +1764,7 @@ const DemolishDashboard = () => {
                                   handleStatusUpdate(request._id, "declined");
                                   handleMenuClose();
                                 }}
-                                disabled={request.status === "declined"}
+                                disabled={declineDisabled}
                                 sx={{
                                   color: "warning.main",
                                   fontWeight: 500,

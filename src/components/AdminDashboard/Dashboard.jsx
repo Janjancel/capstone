@@ -1365,7 +1365,7 @@ const Dashboard = () => {
 
         {/* Sell vs Demolish Requests Trend */}
         <Card className="p-4 shadow-sm mb-4 bg-light">
-          <h5 className="mb-3">Sell vs Demolish Requests</h5>
+          <h5 className="mb-3">Sell vs Demolish Trend</h5>
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={requestTrendData}>
               <CartesianGrid strokeDasharray="3 3" />
