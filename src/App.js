@@ -114,7 +114,6 @@ import MyRequests from "./components/Requests/MyRequest";
 
 // NEW: My Orders as a PAGE route
 import MyOrders from "./components/MyOrder/MyOrders";
-import ProductRatingPage from "./pages/ProductRatingPage";
 
 import { Toaster } from "react-hot-toast";
 import ProtectedAdminRoute from "./ProtectedAdminRoute";
@@ -152,8 +151,6 @@ function App() {
             <Route path="/requests" element={<MyRequests />} />
             {/* NEW: My Orders as dedicated page */}
             <Route path="/orders" element={<MyOrders />} />
-            {/* Product Rating Page */}
-            <Route path="/rate/:orderId/:productId" element={<ProductRatingPage />} />
           </Route>
 
           {/* Admin */}
