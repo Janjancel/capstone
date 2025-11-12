@@ -88,25 +88,47 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import toast from "react-hot-toast";
 
-// ProductRatingPage
-// - Improved API base discovery (env, known host, relative)
-// - Tries both /api/product-ratings and /product-ratings endpoints
-// - Better validation, error handling & UX feedback
-// - Keeps original props (orderId, productId) from useParams
+/**
+ * ProductRatingPage
+ * - Tries absolute backend host first to avoid hitting frontend dev server (which can return 405).
+ * - Handles 404 and 405 specially with helpful messages.
+ * - Preserves original behavior (orderId/productId from useParams, optional auth/user id).
+ */
 
 const ProductRatingPage = () => {
   const { orderId, productId } = useParams();
 
-  // rating can be number (1-5) or null while the user hasn't chosen anything
+  // rating: null while not chosen, otherwise number 1-5
   const [rating, setRating] = useState(null);
   const [review, setReview] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // API base candidates: env -> known deployed host seen in logs -> relative
+  // Candidate API bases (order matters): env -> known deployed host -> browser origin -> relative (last resort)
   const ENV_API = process.env.REACT_APP_API_URL || null;
   const FALLBACK_HOST = "https://capstone-backend-k4uu.onrender.com";
-  const API_BASES = [ENV_API, FALLBACK_HOST, ""].filter((b) => b !== null && b !== undefined);
+  // browser origin is useful if backend is served from same host as frontend in some deployments
+  const ORIGIN = typeof window !== "undefined" ? window.location.origin : null;
+
+  // Build ordered list of bases, skip null/undefined
+  const API_BASES = [
+    ENV_API,          // if provided (e.g. https://api.example.com)
+    FALLBACK_HOST,    // explicit Render host you saw in logs
+    ORIGIN,           // same-origin deployments
+    ""                // empty -> relative paths; try last to avoid hitting frontend server
+  ].filter((b, i, arr) => b !== null && b !== undefined);
+
+  // Helper: for a given base, return candidate URLs.
+  // If base is empty string, produce relative paths (to try last).
+  const buildCandidateUrls = (base) => {
+    if (base === "") {
+      // relative paths (last-resort)
+      return ["/api/product-ratings", "/product-ratings"];
+    }
+    // ensure no trailing slash
+    const trimmed = base.replace(/\/$/, "");
+    return [`${trimmed}/api/product-ratings`, `${trimmed}/product-ratings`];
+  };
 
   const getStoredUserId = () => {
     try {
@@ -125,13 +147,7 @@ const ProductRatingPage = () => {
     return localStorage.getItem("token") || localStorage.getItem("authToken") || null;
   };
 
-  const buildCandidateUrls = (base) => {
-    const b = base.replace(/\/$/, "");
-    return [`${b}/api/product-ratings`, `${b}/product-ratings`].map((u) => (u.startsWith("https://") || u.startsWith("http://") || u.startsWith("/") ? u : u));
-  };
-
   const handleSubmit = async () => {
-    // validation: require a rating
     if (rating === null || typeof rating !== "number" || rating < 0 || rating > 5) {
       toast.error("Please select a rating between 0 and 5.");
       return;
@@ -165,12 +181,12 @@ const ProductRatingPage = () => {
 
     let lastError = null;
 
-    // Try each base and each candidate endpoint until one succeeds or all fail
+    // Try each base in order (absolute bases first), each with two candidate paths
     for (const base of API_BASES) {
       const candidates = buildCandidateUrls(base);
       for (const url of candidates) {
         try {
-          // Make a POST request. If base is empty and url begins with "/", axios will use relative URL.
+          // POST JSON (axios will set Content-Type: application/json)
           await axios.post(url, payload, { headers });
           setSuccess(true);
           toast.success("Rating submitted successfully!");
@@ -179,23 +195,44 @@ const ProductRatingPage = () => {
         } catch (err) {
           lastError = err;
           const status = err?.response?.status;
-          // If server returned a non-404 error, stop trying and surface the message
-          if (status && status !== 404) {
-            const serverMessage = err.response?.data?.error || err.response?.data?.message || err.response?.statusText;
-            const friendly = serverMessage || `Server returned ${status}`;
-            toast.error(`Failed to submit rating: ${friendly}`);
-            console.error("Rating submit error (not 404)", { url, status, serverMessage, err });
+
+          // Special handling for 405: method not allowed
+          if (status === 405) {
+            // 405 often means the route exists but doesn't accept POST (or CORS/preflight blocked)
+            toast.error(
+              "Method not allowed (405). The backend may not accept POST at this path — check the backend route and CORS settings."
+            );
+            console.error("Rating submit 405 — check backend route and CORS. Details:", {
+              triedUrl: url,
+              status,
+              serverData: err.response?.data,
+              err,
+            });
             setSubmitting(false);
             return;
           }
 
-          // if 404 or network-level error, try next candidate
-          console.warn("Rating endpoint candidate failed (will try next)", { url, status, message: err.message });
+          // If server returned a non-404 error (and not 405), stop trying and show message
+          if (status && status !== 404) {
+            const serverMessage = err.response?.data?.error || err.response?.data?.message || err.response?.statusText;
+            const friendly = serverMessage || `Server returned ${status}`;
+            toast.error(`Failed to submit rating: ${friendly}`);
+            console.error("Rating submit error (not 404/405)", { url, status, serverMessage, err });
+            setSubmitting(false);
+            return;
+          }
+
+          // else status === 404 or network-level error -> try next candidate
+          console.warn("Rating endpoint candidate failed (will try next)", {
+            triedUrl: url,
+            status,
+            message: err.message,
+          });
         }
       }
     }
 
-    // if we get here everything failed
+    // Exhausted all candidates
     if (lastError) {
       const status = lastError?.response?.status;
       const dataMsg = lastError?.response?.data?.error || lastError?.response?.data?.message;
