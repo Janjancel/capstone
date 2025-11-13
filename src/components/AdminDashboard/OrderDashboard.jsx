@@ -659,7 +659,7 @@ const OrderDashboard = () => {
         { headers: getAuthHeaders() }
       );
 
-      // 3) Sales record when delivered
+      // 3) Sales record and feedback notification when delivered
       if (apiStatus === "delivered") {
         await axios.post(
           `${API_URL}/api/sales`,
@@ -669,6 +669,21 @@ const OrderDashboard = () => {
             total: order.total,
             items: order.items,
             deliveredAt: new Date(),
+          },
+          { headers: getAuthHeaders() }
+        );
+
+        // Send feedback notification to client
+        await axios.post(
+          `${API_URL}/api/notifications`,
+          {
+            orderId: order._id,
+            userId: order.userId,
+            for: "order",
+            status: apiStatus,
+            role: "client",
+            message:
+              "We’re grateful you chose us. Your experience matters to us. Please take a moment to leave your feedback so we can serve you better.",
           },
           { headers: getAuthHeaders() }
         );
