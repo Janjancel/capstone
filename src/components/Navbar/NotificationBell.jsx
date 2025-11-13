@@ -568,6 +568,7 @@ import "animate.css";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import OrderDetailModal from "../MyOrder/OrderDetailModal";
+import ReviewModal from "./ReviewModal";
 
 export default function NotificationBell() {
   const [userId, setUserId] = useState(null);
@@ -583,6 +584,9 @@ export default function NotificationBell() {
   const [userEmail, setUserEmail] = useState("");
 
   const [loadingNotifs, setLoadingNotifs] = useState(false);
+  // Review modal state
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewOrderId, setReviewOrderId] = useState(null);
 
   // filter by `for`
   const [forFilter, setForFilter] = useState(""); // "", "order", "sell", "demolish"
@@ -973,6 +977,12 @@ export default function NotificationBell() {
           ) : (
             filteredNotifications.map((n) => {
               const kind = getKind(n);
+              // Check for feedback notification
+              const isFeedbackNotif =
+                kind === "order" &&
+                typeof n.message === "string" &&
+                n.message.trim().startsWith("We’re grateful you chose us. Your experience matters to us. Please take a moment to leave your feedback so we can serve you better.");
+
               return (
                 <Paper
                   key={n._id}
@@ -1031,7 +1041,22 @@ export default function NotificationBell() {
                         </Button>
                       )}
 
-                      {kind === "order" && n.orderId && (
+                      {kind === "order" && n.orderId && isFeedbackNotif && (
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          size="small"
+                          onClick={() => {
+                            setShowNotifModal(false);
+                            setReviewOrderId(n.orderId);
+                            setShowReviewModal(true);
+                          }}
+                        >
+                          Write Review
+                        </Button>
+                      )}
+
+                      {kind === "order" && n.orderId && !isFeedbackNotif && (
                         <Button
                           size="small"
                           variant="text"
@@ -1080,6 +1105,16 @@ export default function NotificationBell() {
           updateParentOrders={(updated) => setSelectedOrder(updated)}
         />
       )}
+
+      {/* Review Modal */}
+      <ReviewModal
+        open={showReviewModal}
+        onClose={() => {
+          setShowReviewModal(false);
+          setReviewOrderId(null);
+        }}
+        orderId={reviewOrderId}
+      />
 
       {/* Loading Overlay */}
       {orderLoading && (

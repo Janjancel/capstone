@@ -27,6 +27,7 @@ import FilterListIcon from "@mui/icons-material/FilterList";
 const Buy = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,9 +66,7 @@ const Buy = () => {
   const itemMatchesCategory = (item, selected) => {
     if (!selected) return true; // "All"
     const cats = getItemCategories(item);
-    return cats.some(
-      (c) => c && c.toLowerCase() === selected.toLowerCase()
-    );
+    return cats.some((c) => c && c.toLowerCase() === selected.toLowerCase());
   };
 
   // Fetch user address
@@ -125,7 +124,9 @@ const Buy = () => {
 
     // category filter (now supports both string + array)
     if (categoryFilter) {
-      filtered = filtered.filter((item) => itemMatchesCategory(item, categoryFilter));
+      filtered = filtered.filter((item) =>
+        itemMatchesCategory(item, categoryFilter)
+      );
     }
 
     setFilteredItems(filtered);
@@ -149,12 +150,23 @@ const Buy = () => {
     }
   };
 
-  const handleBuyNow = (item) => {
+  // Buy Now opens CartModal
+  const openCartModalForItem = (item) => {
     if (!user?._id) {
       toast.error("Please log in to proceed with purchase.");
       return;
     }
-    // Use React Router navigation
+    setSelectedItem(item);
+    setShowCartModal(true);
+  };
+
+  // Card click navigates to BuyPage (/buy/:id)
+  const handleCardClick = (item) => {
+    // If you want non-logged-in users to view the buy page, remove this check.
+    if (!user?._id) {
+      toast.error("Please log in to proceed to the buy page.");
+      return;
+    }
     navigate(`/buy/${item._id}`);
   };
 
@@ -190,6 +202,12 @@ const Buy = () => {
     const cats = getItemCategories(item);
     if (cats.length) return cats.join(", ");
     return item?.category || "Uncategorized";
+  };
+
+  // Close modal helper — clears selected item too
+  const closeCartModal = () => {
+    setShowCartModal(false);
+    setSelectedItem(null);
   };
 
   return (
@@ -278,7 +296,7 @@ const Buy = () => {
                   flexDirection: "column",
                   cursor: "pointer",
                 }}
-                onClick={() => handleBuyNow(item)}
+                onClick={() => handleCardClick(item)} // clicking card navigates to /buy/:id
               >
                 <CardMedia
                   component="img"
@@ -330,7 +348,7 @@ const Buy = () => {
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleBuyNow(item);
+                      openCartModalForItem(item); // Buy Now opens CartModal
                     }}
                   >
                     Buy Now
@@ -355,13 +373,11 @@ const Buy = () => {
         ) : null}
       </Grid>
 
-  {/* BuyPage is now the dedicated purchase page. */}
-
       {/* Cart Modal */}
       {selectedItem && (
         <CartModal
           show={showCartModal}
-          onClose={() => setShowCartModal(false)}
+          onClose={closeCartModal}
           onConfirm={handleOrderConfirm}
           user={user}
           totalPrice={selectedItem.price}
@@ -378,6 +394,7 @@ const Buy = () => {
 };
 
 export default Buy;
+
 
 
 
