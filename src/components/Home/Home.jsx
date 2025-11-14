@@ -952,7 +952,7 @@ function Section3({ title, description }) {
   );
 }
 
-/* -------------------- Section 4 (UPDATED) - Reviews List -------------------- */
+/* -------------------- Section 4 (UPDATED) - Reviews List with email resolution -------------------- */
 function Section4() {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -964,15 +964,45 @@ function Section4() {
 
   useEffect(() => {
     let mounted = true;
-    const fetchReviews = async () => {
+    const fetchReviewsAndUsers = async () => {
       try {
         setLoading(true);
+        // Fetch reviews
         const res = await axios.get(`${API_URL || ""}/api/reviews`);
         if (!mounted) return;
-        // ensure newest first and limit to a reasonable number
         const data = Array.isArray(res.data) ? res.data : [];
-        const sorted = data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        setReviews(sorted.slice(0, 6));
+
+        // Extract unique userIds
+        const userIds = Array.from(
+          new Set(data.map((r) => (r.userId ? String(r.userId) : null)).filter(Boolean))
+        );
+
+        let userMap = {};
+
+        // Try to fetch all users to resolve emails (some environments may require auth)
+        try {
+          const token = localStorage.getItem("token");
+          const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+          const usersRes = await axios.get(`${API_URL || ""}/api/users`, config);
+          const users = Array.isArray(usersRes.data) ? usersRes.data : [];
+          users.forEach((u) => {
+            if (u && u._id) userMap[String(u._id)] = u;
+          });
+        } catch (userErr) {
+          // If fetching users fails (no auth or endpoint not available), log and continue.
+          console.warn("Could not fetch users to resolve emails:", userErr?.message || userErr);
+          userMap = {};
+        }
+
+        // Attach userEmail where possible
+        const enriched = data.map((r) => ({
+          ...r,
+          userEmail: (r.userId && userMap[String(r.userId)] && userMap[String(r.userId)].email) || r.userEmail || null,
+        }));
+
+        // sort newest first, limit to 6
+        const sorted = enriched.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        if (mounted) setReviews(sorted.slice(0, 6));
       } catch (err) {
         console.error("Error fetching reviews:", err);
         if (mounted) setError("Failed to load reviews.");
@@ -981,7 +1011,7 @@ function Section4() {
       }
     };
 
-    fetchReviews();
+    fetchReviewsAndUsers();
 
     return () => {
       mounted = false;
@@ -1105,8 +1135,9 @@ function Section4() {
 
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ fontSize: 14, fontWeight: 700 }}>
-                          {r.userEmail || r.userId || "Anonymous"}
+                        <div style={{ fontSize: 13, color: "#555", fontWeight: 600 }}>
+                          {/* Display email above the stars */}
+                          {r.userEmail || "Anonymous"}
                         </div>
                         <div style={{ marginLeft: "auto", fontSize: 13, color: "#888" }}>
                           {formatDate(r.createdAt)}
