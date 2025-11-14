@@ -536,7 +536,12 @@ export default function Home() {
         title="Featured Antiques"
         description="Discover our handpicked treasures"
       />
-      <Section4
+
+      {/* NEW Section 4: Feedback Draft (static card) */}
+      <Section4 />
+
+      {/* RENAMED: previous Section4 is now Section5 */}
+      <Section5
         title="Educational Facts"
         description="Uncover the history behind antique masterpieces"
       />
@@ -910,8 +915,79 @@ function Section3({ title, description }) {
   );
 }
 
-/* -------------------- Section 4 (UPDATED) -------------------- */
-function Section4({ title, description }) {
+/* -------------------- Section 4 (NEW) - Static Feedback Draft -------------------- */
+function Section4() {
+  // Static content only (no placeholders)
+  const profileInitials = "UA"; // static initials for the circular profile
+  const email = "collector@unikaantika.com"; // static email shown under the circle
+  const feedbackText = "Thank you for choosing us — your feedback helps us improve.";
+
+  return (
+    <section className="py-5 bg-white" id="home-sec4">
+      <div className="container">
+        <div className="row justify-content-center">
+          <div className="col-md-8">
+            <div
+              className="card shadow-sm rounded-4 p-4"
+              style={{ overflow: "hidden", border: "1px solid rgba(0,0,0,0.04)" }}
+            >
+              <div className="d-flex">
+                {/* Left column: profile circle + email */}
+                <div style={{ width: 180 }}>
+                  <div
+                    style={{
+                      width: 84,
+                      height: 84,
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 800,
+                      fontSize: 24,
+                      background: "linear-gradient(135deg,#f0e6dd,#d9cbb1)",
+                      color: "#3b3b3b",
+                      boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+                      marginBottom: 12,
+                    }}
+                  >
+                    {profileInitials}
+                  </div>
+
+                  <div style={{ fontSize: 13, color: "#6c6c6c" }}>{email}</div>
+                </div>
+
+                {/* Right column: stars + feedback sentence */}
+                <div className="flex-grow-1 d-flex align-items-start" style={{ paddingLeft: 20 }}>
+                  <div>
+                    {/* 5 static stars */}
+                    <div style={{ fontSize: 20, marginBottom: 8 }} aria-hidden>
+                      {/* Use unicode stars so no external icons are required */}
+                      <span style={{ marginRight: 6 }}>★</span>
+                      <span style={{ marginRight: 6 }}>★</span>
+                      <span style={{ marginRight: 6 }}>★</span>
+                      <span style={{ marginRight: 6 }}>★</span>
+                      <span style={{ marginRight: 6 }}>★</span>
+                    </div>
+
+                    <p style={{ margin: 0, color: "#444", fontSize: 16 }}>{feedbackText}</p>
+
+                    {/* additional static metadata if desired */}
+                    <div style={{ marginTop: 10, fontSize: 13, color: "#9a9a9a" }}>
+                      <span>Posted on Nov 13, 2025</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------- Section 5 (RENAMED from previous Section4) -------------------- */
+function Section5({ title, description }) {
   const [inView, setInView] = useState(false);
   const sectionRef = useRef(null);
 
@@ -941,7 +1017,6 @@ function Section4({ title, description }) {
 
         {/* Direct Map Display (replaced image cards & explore button) */}
         <div>
-          {/* <h2 className="fs-4 text-center mt-3">Locations of Heritage Houses in Region IV-A</h2> */}
           <div className="w-100" style={{ height: "500px", minHeight: "400px" }}>
             <MapComponent />
           </div>
