@@ -239,58 +239,125 @@ const Buy = () => {
    * - Marks ordered item's availability=false (reservation finalized).
    * - Removes the item locally (so it no longer shows).
    */
+  // const handleOrderConfirm = async (address, notes) => {
+  //   if (!user?._id || !selectedItem) return;
+
+  //   try {
+  //     // 1) Create order
+  //     await axios.post(`${API_URL}/api/orders`, {
+  //       userId: user._id,
+  //       items: [selectedItem],
+  //       total: parseFloat(selectedItem.price),
+  //       address,
+  //       notes,
+  //     });
+
+  //     // 2) After order creation, set the item's availability to false on the item resource.
+  //     try {
+  //       await axios.put(`${API_URL}/api/items/${selectedItem._id}`, {
+  //         availability: false,
+  //       });
+  //     } catch (availErr) {
+  //       console.warn(
+  //         "Failed to update item availability to false after order:",
+  //         availErr
+  //       );
+  //     }
+
+  //     // 3) Remove the ordered item from local items/filter so UI stays consistent
+  //     setItems((prev) => prev.filter((it) => it._id !== selectedItem._id));
+  //     setFilteredItems((prev) => prev.filter((it) => it._id !== selectedItem._id));
+
+  //     // 4) Close modal and notify user
+  //     toast.success("Order placed successfully!");
+  //     setSelectedItem(null);
+  //     setShowCartModal(false);
+
+  //     // 5) Notify other parts of the app (e.g., cart badge) that cart changed
+  //     window.dispatchEvent(new CustomEvent("cartUpdated", { detail: -1 }));
+  //   } catch (err) {
+  //     console.error("Order failed:", err);
+
+  //     // If server says item was already unavailable / conflict
+  //     if (err?.response?.status === 409) {
+  //       toast.error("Order failed: item is no longer available.");
+  //       // remove locally to avoid showing unavailable item
+  //       setItems((prev) => prev.filter((it) => it._id !== selectedItem._id));
+  //       setFilteredItems((prev) => prev.filter((it) => it._id !== selectedItem._id));
+  //       setSelectedItem(null);
+  //       setShowCartModal(false);
+  //     } else {
+  //       toast.error("Failed to place order.");
+  //     }
+  //   }
+  // };
+
   const handleOrderConfirm = async (address, notes) => {
-    if (!user?._id || !selectedItem) return;
+  if (!user?._id || !selectedItem) return;
 
+  const itemId = selectedItem._id || selectedItem.id;
+
+  try {
+    // 1) Create order
+    await axios.post(`${API_URL}/api/orders`, {
+      userId: user._id,
+      items: [selectedItem],
+      total: parseFloat(selectedItem.price),
+      address,
+      notes,
+    });
+
+    // 2) After order creation, set the item's availability to false on the item resource.
     try {
-      // 1) Create order
-      await axios.post(`${API_URL}/api/orders`, {
-        userId: user._id,
-        items: [selectedItem],
-        total: parseFloat(selectedItem.price),
-        address,
-        notes,
+      await axios.put(`${API_URL}/api/items/${itemId}`, {
+        availability: false,
       });
+    } catch (availErr) {
+      console.warn(
+        "Failed to update item availability to false after order:",
+        availErr
+      );
+      // proceed — we'll still attempt to remove the item from carts and update UI
+    }
 
-      // 2) After order creation, set the item's availability to false on the item resource.
-      try {
-        await axios.put(`${API_URL}/api/items/${selectedItem._id}`, {
-          availability: false,
-        });
-      } catch (availErr) {
-        console.warn(
-          "Failed to update item availability to false after order:",
-          availErr
-        );
-      }
+    // 3) Remove the ordered item from ALL carts (so other users' carts no longer reference it)
+    try {
+      // Endpoint from your router: DELETE /api/carts/remove-item/:itemId
+      await axios.delete(`${API_URL}/api/carts/remove-item/${itemId}`);
+    } catch (removeErr) {
+      console.warn("Failed to remove ordered item from all carts:", removeErr);
+      // proceed — we still update local UI to hide the item
+    }
 
-      // 3) Remove the ordered item from local items/filter so UI stays consistent
-      setItems((prev) => prev.filter((it) => it._id !== selectedItem._id));
-      setFilteredItems((prev) => prev.filter((it) => it._id !== selectedItem._id));
+    // 4) Remove the ordered item from local items/filter so UI stays consistent
+    setItems((prev) => prev.filter((it) => (it._id || it.id) !== itemId));
+    setFilteredItems((prev) => prev.filter((it) => (it._id || it.id) !== itemId));
 
-      // 4) Close modal and notify user
-      toast.success("Order placed successfully!");
+    // 5) Close modal and notify user
+    toast.success("Order placed successfully!");
+    setSelectedItem(null);
+    setShowCartModal(false);
+
+    // 6) Notify other parts of the app (e.g., cart badge) that cart changed
+    // You may want to send a more explicit payload, but keeping your existing behavior.
+    window.dispatchEvent(new CustomEvent("cartUpdated", { detail: -1 }));
+  } catch (err) {
+    console.error("Order failed:", err);
+
+    // If server says item was already unavailable / conflict
+    if (err?.response?.status === 409) {
+      toast.error("Order failed: item is no longer available.");
+      // remove locally to avoid showing unavailable item
+      setItems((prev) => prev.filter((it) => (it._id || it.id) !== itemId));
+      setFilteredItems((prev) => prev.filter((it) => (it._id || it.id) !== itemId));
       setSelectedItem(null);
       setShowCartModal(false);
-
-      // 5) Notify other parts of the app (e.g., cart badge) that cart changed
-      window.dispatchEvent(new CustomEvent("cartUpdated", { detail: -1 }));
-    } catch (err) {
-      console.error("Order failed:", err);
-
-      // If server says item was already unavailable / conflict
-      if (err?.response?.status === 409) {
-        toast.error("Order failed: item is no longer available.");
-        // remove locally to avoid showing unavailable item
-        setItems((prev) => prev.filter((it) => it._id !== selectedItem._id));
-        setFilteredItems((prev) => prev.filter((it) => it._id !== selectedItem._id));
-        setSelectedItem(null);
-        setShowCartModal(false);
-      } else {
-        toast.error("Failed to place order.");
-      }
+    } else {
+      toast.error("Failed to place order.");
     }
-  };
+  }
+};
+
 
   const handleFilterOpen = (event) => {
     setFilterAnchor(event.currentTarget);
