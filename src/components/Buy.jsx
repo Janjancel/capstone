@@ -1,3 +1,24 @@
+
+  // const handleOrderConfirm = async (address, notes) => {
+  //   if (!user?._id || !selectedItem) return;
+  //   try {
+  //     await axios.post(`${API_URL}/api/orders`, {
+  //       userId: user._id,
+  //       items: [selectedItem],
+  //       total: parseFloat(selectedItem.price),
+  //       address,
+  //       notes,
+  //     });
+  //     toast.success("Order placed successfully!");
+  //     setSelectedItem(null);
+  //     setShowCartModal(false);
+  //   } catch (err) {
+  //     console.error("Order failed:", err);
+  //     toast.error("Failed to place order.");
+  //   }
+  // };
+
+
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -37,7 +58,6 @@ const Buy = () => {
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [showCartModal, setShowCartModal] = useState(false);
-  // const [showBuyModal, setShowBuyModal] = useState(false);
   const [userAddress, setUserAddress] = useState({});
   const [filterAnchor, setFilterAnchor] = useState(null);
 
@@ -53,7 +73,6 @@ const Buy = () => {
     "Stones",
     "Windows",
     "Bed",
-    // You can add "Uncategorized" if you want a visible option in the UI
   ];
 
   // ---- Helpers to support legacy + new category models ----
@@ -83,15 +102,21 @@ const Buy = () => {
     fetchUserAddress();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch items
+  // Fetch items — keep only availability === true
   useEffect(() => {
     const fetchItems = async () => {
       setLoading(true);
       try {
         const res = await axios.get(`${API_URL}/api/items`);
         const itemArray = Array.isArray(res.data) ? res.data : [];
-        setItems(itemArray);
-        setFilteredItems(itemArray);
+
+        // IMPORTANT: only include items with availability === true
+        const availableOnly = itemArray.filter(
+          (it) => it?.availability === true || it?.availability === "true"
+        );
+
+        setItems(availableOnly);
+        setFilteredItems(availableOnly);
         setError(null);
       } catch (err) {
         console.error("Failed to fetch items:", err);
@@ -103,7 +128,7 @@ const Buy = () => {
     fetchItems();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Filter items (search + price + category) — design intact
+  // Filter items (search + price + category) — ensure availability check preserved
   useEffect(() => {
     let filtered = items.filter(
       (item) =>
@@ -122,12 +147,17 @@ const Buy = () => {
       filtered = filtered.filter((item) => item.price > 20000);
     }
 
-    // category filter (now supports both string + array)
+    // category filter (supports both string + array)
     if (categoryFilter) {
       filtered = filtered.filter((item) =>
         itemMatchesCategory(item, categoryFilter)
       );
     }
+
+    // Final safety: enforce availability === true
+    filtered = filtered.filter(
+      (it) => it?.availability === true || it?.availability === "true"
+    );
 
     setFilteredItems(filtered);
   }, [searchQuery, priceFilter, categoryFilter, items]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -140,13 +170,31 @@ const Buy = () => {
       toast.error("Please log in to add items to cart.");
       return;
     }
+
+    // extra guard: confirm item is still available locally
+    const item = items.find((it) => it._id === itemId);
+    if (!item || (item.availability !== true && item.availability !== "true")) {
+      toast.error("Item is no longer available.");
+      // remove stale locally
+      setItems((prev) => prev.filter((it) => it._id !== itemId));
+      setFilteredItems((prev) => prev.filter((it) => it._id !== itemId));
+      return;
+    }
+
     try {
       await axios.post(`${API_URL}/api/cart/${user._id}/add`, { itemId });
       toast.success("Item added to cart!");
       window.dispatchEvent(new CustomEvent("cartUpdated", { detail: 1 }));
+      // do NOT set availability to false here — reservation happens on order confirm
     } catch (err) {
       console.error("Add to cart error:", err);
-      toast.error("Could not add item to cart.");
+      if (err?.response?.status === 409) {
+        toast.error("Item is no longer available.");
+        setItems((prev) => prev.filter((it) => it._id !== itemId));
+        setFilteredItems((prev) => prev.filter((it) => it._id !== itemId));
+      } else {
+        toast.error("Could not add item to cart.");
+      }
     }
   };
 
@@ -156,40 +204,42 @@ const Buy = () => {
       toast.error("Please log in to proceed with purchase.");
       return;
     }
+
+    // guard availability
+    if (item?.availability !== true && item?.availability !== "true") {
+      toast.error("This item is no longer available.");
+      setItems((prev) => prev.filter((it) => it._id !== item._id));
+      setFilteredItems((prev) => prev.filter((it) => it._id !== item._id));
+      return;
+    }
+
     setSelectedItem(item);
     setShowCartModal(true);
   };
 
   // Card click navigates to BuyPage (/buy/:id)
   const handleCardClick = (item) => {
-    // If you want non-logged-in users to view the buy page, remove this check.
     if (!user?._id) {
       toast.error("Please log in to proceed to the buy page.");
+      return;
+    }
+    // guard availability before navigating
+    if (item?.availability !== true && item?.availability !== "true") {
+      toast.error("This item is no longer available.");
+      setItems((prev) => prev.filter((it) => it._id !== item._id));
+      setFilteredItems((prev) => prev.filter((it) => it._id !== item._id));
       return;
     }
     navigate(`/buy/${item._id}`);
   };
 
-  // const handleOrderConfirm = async (address, notes) => {
-  //   if (!user?._id || !selectedItem) return;
-  //   try {
-  //     await axios.post(`${API_URL}/api/orders`, {
-  //       userId: user._id,
-  //       items: [selectedItem],
-  //       total: parseFloat(selectedItem.price),
-  //       address,
-  //       notes,
-  //     });
-  //     toast.success("Order placed successfully!");
-  //     setSelectedItem(null);
-  //     setShowCartModal(false);
-  //   } catch (err) {
-  //     console.error("Order failed:", err);
-  //     toast.error("Failed to place order.");
-  //   }
-  // };
-
-    const handleOrderConfirm = async (address, notes) => {
+  /**
+   * handleOrderConfirm
+   * - Creates the order on the server.
+   * - Marks ordered item's availability=false (reservation finalized).
+   * - Removes the item locally (so it no longer shows).
+   */
+  const handleOrderConfirm = async (address, notes) => {
     if (!user?._id || !selectedItem) return;
 
     try {
@@ -203,13 +253,11 @@ const Buy = () => {
       });
 
       // 2) After order creation, set the item's availability to false on the item resource.
-      //    If your backend already sets availability=false during order creation, this is harmless.
       try {
         await axios.put(`${API_URL}/api/items/${selectedItem._id}`, {
           availability: false,
         });
       } catch (availErr) {
-        // Log but don't block the success flow
         console.warn(
           "Failed to update item availability to false after order:",
           availErr
@@ -351,7 +399,7 @@ const Buy = () => {
                   flexDirection: "column",
                   cursor: "pointer",
                 }}
-                onClick={() => handleCardClick(item)} // clicking card navigates to /buy/:id
+                onClick={() => handleCardClick(item)}
               >
                 <CardMedia
                   component="img"
@@ -403,8 +451,9 @@ const Buy = () => {
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      openCartModalForItem(item); // Buy Now opens CartModal
+                      openCartModalForItem(item);
                     }}
+                    disabled={item?.availability !== true && item?.availability !== "true"}
                   >
                     Buy Now
                   </Button>
@@ -416,6 +465,7 @@ const Buy = () => {
                       e.stopPropagation();
                       handleAddToCart(item._id);
                     }}
+                    disabled={item?.availability !== true && item?.availability !== "true"}
                   >
                     Add to Cart
                   </Button>

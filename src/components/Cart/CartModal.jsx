@@ -1,5 +1,6 @@
 
-// // src/components/Cart/CartModal.jsx
+
+// src/components/Cart/CartModal.jsx
 // import React, { useState, useEffect } from "react";
 // import { Modal, Button, Spinner, Form, Alert } from "react-bootstrap";
 // import toast from "react-hot-toast";
@@ -9,6 +10,13 @@
 
 // // Use PUBLIC_URL so it works whether hosted at "/" or a subpath
 // const PLACEHOLDER_IMG = `${process.env.PUBLIC_URL || ""}/placeholder.jpg`;
+
+// /** ------------------------------- ID helper ------------------------------- */
+// function getItemId(candidate) {
+//   // Normalize possible keys coming from Cart flow vs Buy-Now flow
+//   // Cart items usually: { id }, direct item objects: { _id }, sometimes { itemId }
+//   return candidate?.id || candidate?.itemId || candidate?._id || null;
+// }
 
 // /** -------------------------------- Image helpers -------------------------------- */
 // function getFirstUrl(candidate) {
@@ -53,11 +61,7 @@
 // // ----- Shared image-display logic used in Cart + CartModal -----
 // export function getItemImage(item) {
 //   // Try the flexible shapes you use across the app
-//   return (
-//     getFirstUrl(item?.images) ||
-//     getFirstUrl(item?.image) ||
-//     PLACEHOLDER_IMG
-//   );
+//   return getFirstUrl(item?.images) || getFirstUrl(item?.image) || PLACEHOLDER_IMG;
 // }
 
 // /** One-time-fallback <img/> to avoid onError loops / flicker */
@@ -74,7 +78,7 @@
 //       alt={alt}
 //       style={style}
 //       className={className}
-//       onError={(e) => {
+//       onError={() => {
 //         if (finalSrc !== PLACEHOLDER_IMG) setFinalSrc(PLACEHOLDER_IMG);
 //       }}
 //     />
@@ -114,10 +118,10 @@
 //     barangays: [],
 //   });
 
-//   // Auth header helper
+//   // Safer auth header helper (always returns object)
 //   const authHeaders = () => {
 //     const token = localStorage.getItem("token");
-//     return token ? { Authorization: `Bearer ${token}` } : undefined;
+//     return token ? { Authorization: `Bearer ${token}` } : {};
 //   };
 
 //   const handleInputChange = (e) => {
@@ -260,10 +264,11 @@
 //     }
 //   };
 
-//   /** Build the clean JSON payload the backend likely expects (no multipart). */
+//   /** Build the clean JSON payload the backend expects (no multipart). */
 //   const buildOrderPayload = () => {
 //     const items = (selectedItems || []).map((i) => {
-//       const priceNum = Number(i.price) || 0;
+//       const itemId = getItemId(i); // <-- FIX: normalize id for Buy Now
+//       const priceNum = Number(i.price) || Number(i.unitPrice) || 0;
 //       const qtyNum = Number(i.quantity) || 1;
 
 //       // Normalize images to an array of strings (if present)
@@ -274,13 +279,16 @@
 //           .filter((u) => typeof u === "string" && u.trim().length > 0);
 //       } else if (typeof i.images === "string") {
 //         imagesArr = [i.images];
+//       } else if (i.image) {
+//         const one = getFirstUrl(i.image);
+//         if (one) imagesArr = [one];
 //       }
 
 //       return {
-//         id: i.id, // should match Cart.cartItems[].id
+//         id: itemId, // must exist for backend validation
 //         quantity: qtyNum,
 //         // snapshot fields
-//         name: i.name,
+//         name: i.name || i.title || i.itemName || `Item ${itemId || ""}`,
 //         price: priceNum,
 //         image: getItemImage(i), // primary image (fallback handled)
 //         images: imagesArr, // optional
@@ -315,7 +323,13 @@
 //     try {
 //       const payload = buildOrderPayload();
 
-//       // Prefer JSON submission (cleaner, avoids server-side multer requirements)
+//       // Validate we have IDs (preempt 500s caused by undefined id)
+//       const missingIds = payload.items.filter((it) => !it.id).length;
+//       if (missingIds > 0) {
+//         throw new Error("One or more items are missing an ID. Please retry.");
+//       }
+
+//       // Prefer JSON submission
 //       const orderRes = await axios.post(`${API_URL}/api/orders`, payload, {
 //         headers: { "Content-Type": "application/json", ...authHeaders() },
 //       });
@@ -343,24 +357,30 @@
 //         }
 //       }
 
-//       // 🔹 Remove ordered items from cart
+//       // 🔹 Remove ordered items from cart (only if we actually have cart item ids)
 //       try {
-//         await axios.put(
-//           `${API_URL}/api/cart/${user._id}/remove`,
-//           { removeItems: selectedItems.map((i) => i.id) },
-//           { headers: { "Content-Type": "application/json", ...authHeaders() } }
-//         );
+//         const removeIds = (selectedItems || [])
+//           .map((i) => getItemId(i))
+//           .filter(Boolean);
+//         if (removeIds.length > 0) {
+//           await axios.put(
+//             `${API_URL}/api/cart/${user._id}/remove`,
+//             { removeItems: removeIds },
+//             { headers: { "Content-Type": "application/json", ...authHeaders() } }
+//           );
+//         }
 //       } catch (rmErr) {
 //         console.warn("Cart cleanup failed (non-blocking):", rmErr);
 //       }
 
 //       // 🔹 Reset UI state
-//       setCartItems([]);
-//       setSelectedItems([]);
-//       setCartCount(0);
-//       setShowModal(false);
+//       try { setCartItems && setCartItems([]); } catch {}
+//       try { setSelectedItems && setSelectedItems([]); } catch {}
+//       try { setCartCount && setCartCount(0); } catch {}
+//       try { setShowModal && setShowModal(false); } catch {}
+
 //       toast.success("Order placed successfully!");
-//       onClose();
+//       onClose && onClose();
 //     } catch (err) {
 //       // Robust error extraction
 //       const serverMsg =
@@ -384,7 +404,7 @@
 //           type="button"
 //           className="btn btn-sm btn-outline-primary"
 //           onClick={() => {
-//             setShowModal(false);
+//             setShowModal && setShowModal(false);
 //             setIsEditing(true);
 //           }}
 //         >
@@ -408,6 +428,13 @@
 //       minimumFractionDigits: 2,
 //       maximumFractionDigits: 2,
 //     })}`;
+
+//   // Compute live total from selectedItems to stay consistent even if totalPrice prop is stale
+//   const computedTotal = (selectedItems || []).reduce((sum, it) => {
+//     const qty = Number(it.quantity) || 1;
+//     const price = Number(it.price) || Number(it.unitPrice) || 0;
+//     return sum + qty * price;
+//   }, 0);
 
 //   return (
 //     <>
@@ -465,7 +492,7 @@
 //                 </Form>
 
 //                 <h5 className="mt-4">Order Summary</h5>
-//                 {selectedItems.length > 0 ? (
+//                 {selectedItems && selectedItems.length > 0 ? (
 //                   <div
 //                     className="table-responsive"
 //                     style={{ maxHeight: "200px", overflowY: "auto" }}
@@ -482,15 +509,16 @@
 //                       </thead>
 //                       <tbody>
 //                         {selectedItems.map((item) => {
+//                           const id = getItemId(item) || item.name || Math.random();
 //                           const imgSrc = getItemImage(item);
-//                           const qty = Number(item.quantity) || 0;
-//                           const price = Number(item.price) || 0;
+//                           const qty = Number(item.quantity) || 1;
+//                           const price = Number(item.price) || Number(item.unitPrice) || 0;
 //                           return (
-//                             <tr key={item.id}>
+//                             <tr key={id}>
 //                               <td>
 //                                 <SafeImg
 //                                   src={imgSrc}
-//                                   alt={item.name}
+//                                   alt={item.name || "Item"}
 //                                   style={{
 //                                     width: "60px",
 //                                     height: "50px",
@@ -499,7 +527,7 @@
 //                                   className="img-thumbnail"
 //                                 />
 //                               </td>
-//                               <td>{item.name}</td>
+//                               <td>{item.name || item.title || `Item ${getItemId(item) || ""}`}</td>
 //                               <td>{qty}</td>
 //                               <td>{formatPHP(price)}</td>
 //                               <td>{formatPHP(qty * price)}</td>
@@ -517,13 +545,13 @@
 //                   <h4>
 //                     Total:{" "}
 //                     <span className="text-success">
-//                       {formatPHP(Number(totalPrice) || 0)}
+//                       {formatPHP(computedTotal || totalPrice || 0)}
 //                     </span>
 //                   </h4>
 //                   <Button
 //                     variant="success"
 //                     onClick={handleOrderConfirmation}
-//                     disabled={!isAddressComplete() || loading || selectedItems.length === 0}
+//                     disabled={!isAddressComplete() || loading || !selectedItems || selectedItems.length === 0}
 //                   >
 //                     {loading ? (
 //                       <>
@@ -563,8 +591,6 @@
 
 // export default CartModal;
 
-
-// src/components/Cart/CartModal.jsx
 import React, { useState, useEffect } from "react";
 import { Modal, Button, Spinner, Form, Alert } from "react-bootstrap";
 import toast from "react-hot-toast";
@@ -901,6 +927,24 @@ const CartModal = ({
       const created = orderRes.data;
       const orderId = created?._id || created?.order?._id || created?.orderId;
 
+      // 🔹 After order creation: mark each ordered item as unavailable (availability: false)
+      // Best-effort: attempt to update each item individually; log but don't block on failures.
+      const orderedIds = payload.items.map((it) => it.id).filter(Boolean);
+      let availabilityFailures = 0;
+      for (const id of orderedIds) {
+        try {
+          await axios.put(
+            `${API_URL}/api/items/${id}`,
+            { availability: false },
+            { headers: { "Content-Type": "application/json", ...authHeaders() } }
+          );
+        } catch (availErr) {
+          // If item already sold/unavailable, backend might return 409 or 400 — handle gracefully
+          availabilityFailures += 1;
+          console.warn(`Failed to update availability for item ${id}:`, availErr);
+        }
+      }
+
       // 🔹 Create notification for admin (best-effort)
       if (orderId) {
         try {
@@ -933,17 +977,34 @@ const CartModal = ({
             { headers: { "Content-Type": "application/json", ...authHeaders() } }
           );
         }
+
+        // Locally remove from UI state as well
+        try {
+          setCartItems && setCartItems((prev = []) => prev.filter((it) => !removeIds.includes(getItemId(it))));
+        } catch (e) {}
+        try {
+          setSelectedItems && setSelectedItems([]);
+        } catch (e) {}
       } catch (rmErr) {
         console.warn("Cart cleanup failed (non-blocking):", rmErr);
       }
 
       // 🔹 Reset UI state
-      try { setCartItems && setCartItems([]); } catch {}
-      try { setSelectedItems && setSelectedItems([]); } catch {}
       try { setCartCount && setCartCount(0); } catch {}
       try { setShowModal && setShowModal(false); } catch {}
 
-      toast.success("Order placed successfully!");
+      // Notify other parts of the app that cart changed.
+      // Use number of removed items as detail so listeners can update badges incrementally.
+      const removedCount = (selectedItems || []).length;
+      window.dispatchEvent(new CustomEvent("cartUpdated", { detail: removedCount }));
+
+      // Provide user feedback
+      if (availabilityFailures > 0) {
+        toast.success(`Order placed (but ${availabilityFailures} item(s) failed to update availability).`);
+      } else {
+        toast.success("Order placed successfully!");
+      }
+
       onClose && onClose();
     } catch (err) {
       // Robust error extraction
@@ -953,6 +1014,31 @@ const CartModal = ({
         err?.message ||
         "Failed to place the order. Please try again.";
       console.error("Order failed:", err);
+
+      // If server says item was already unavailable / conflict (409),
+      // remove the unavailable items locally and inform the user.
+      if (err?.response?.status === 409) {
+        toast.error("Order failed: one or more items are no longer available.");
+        // remove locally to avoid showing unavailable item
+        try {
+          const unavailableIds = (err?.response?.data?.unavailable || []).map(String);
+          if (unavailableIds.length > 0) {
+            setCartItems && setCartItems((prev = []) => prev.filter((it) => !unavailableIds.includes(String(getItemId(it)))));
+            setSelectedItems && setSelectedItems([]);
+            setCartCount && setCartCount((prev = 0) => Math.max(0, prev - unavailableIds.length));
+            window.dispatchEvent(new CustomEvent("cartUpdated", { detail: -unavailableIds.length }));
+          } else {
+            // fallback: remove all selected items
+            setCartItems && setCartItems((prev = []) => prev.filter((it) => !((selectedItems || []).map(getItemId).includes(getItemId(it)))));
+            setSelectedItems && setSelectedItems([]);
+            setCartCount && setCartCount(0);
+            window.dispatchEvent(new CustomEvent("cartUpdated", { detail: - (selectedItems || []).length }));
+          }
+        } catch (cleanupErr) {
+          console.warn("Cleanup after 409 failed:", cleanupErr);
+        }
+      }
+
       setError(serverMsg);
       toast.error(serverMsg);
     } finally {
