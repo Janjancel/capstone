@@ -1,22 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Auth from "../Auth/Auth";
-import "./Home.css";
-import "animate.css";
-import bgVideo from "../images/ninja.mp4";
-import { useAuth } from "../../context/AuthContext"; // ✅ auth context
+import { useAuth } from "../../context/AuthContext";
 
 export default function Section2() {
   const sectionRef = useRef(null);
-  const navigate = useNavigate();
-  const { user } = useAuth(); // ✅ pull user from context
+  const { user } = useAuth();
   const [animationClass, setAnimationClass] = useState("");
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
-    const sectionEl = sectionRef.current;
-
+    const el = sectionRef.current;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -25,37 +19,32 @@ export default function Section2() {
       },
       { threshold: 0.3 }
     );
-
-    if (sectionEl) observer.observe(sectionEl);
+    if (el) observer.observe(el);
     return () => {
-      if (sectionEl) observer.unobserve(sectionEl);
+      if (el) observer.unobserve(el);
     };
   }, []);
 
   const handleLearnMore = async (path) => {
     if (user) {
-      navigate(path); // ✅ user already exists
+      window.location.href = path;
       return;
     }
-
     const token = localStorage.getItem("token");
     if (!token) {
-      setShowAuthModal(true); // ✅ no token, show auth
+      setShowAuthModal(true);
       return;
     }
-
     try {
       await axios.get(`${process.env.REACT_APP_API_URL}/api/users/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-      navigate(path); // ✅ verified via token
+      window.location.href = path;
     } catch (err) {
       console.warn("User not authenticated");
       localStorage.removeItem("token");
       localStorage.removeItem("userId");
-      setShowAuthModal(true); // ✅ failed token check, fallback
+      setShowAuthModal(true);
     }
   };
 
@@ -65,61 +54,78 @@ export default function Section2() {
       icon: "bi-cart-check",
       description: "Browse and buy rare collectibles from our trusted antique sellers.",
       path: "/buy",
+      color: "#ff4d6d",
     },
     {
       title: "Sell Antiques",
       icon: "bi-box-arrow-up",
       description: "List your antique items and reach collectors around the world.",
       path: "/sell",
+      color: "#2ecc71",
     },
     {
       title: "Demolish Items",
       icon: "bi-trash",
       description: "Request safe and responsible removal of unusable antique items.",
       path: "/demolish",
+      color: "#3498db",
     },
   ];
 
   return (
-    <section id="services" ref={sectionRef} className="position-relative text-white py-5 overflow-hidden">
-      {/* Background Video */}
-      <video
-        className="position-absolute top-0 start-0 w-100 h-100 object-fit-cover"
-        autoPlay
-        muted
-        loop
-        playsInline
-        style={{ zIndex: 0, objectFit: "cover" }}
-      >
-        <source src={bgVideo} type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
-
-      {/* Dark overlay */}
-      <div
-        className="position-absolute top-0 start-0 w-100 h-100"
-        style={{ backgroundColor: "rgba(0, 0, 0, 0.5)", zIndex: 1 }}
-      ></div>
-
-      {/* Foreground content */}
+    <section
+      id="services"
+      ref={sectionRef}
+      className="position-relative py-5 overflow-hidden"
+      style={{ background: "#f8f9fb" }}
+    >
       <div className={`container position-relative ${animationClass}`} style={{ zIndex: 2 }}>
-        <h2 className="fw-bold text-center mb-5">Our Services</h2>
+        <div className="text-center mb-5">
+          <h2 className="fw-bold fs-1">
+            <span style={{ color: "#111" }}>Our </span>
+            <span style={{ color: "#393939ff" }}>Services</span>
+          </h2>
+          <p className="text-muted mt-3" style={{ maxWidth: "600px", margin: "0 auto" }}>
+            Our mission is to drive progress and enhance the lives of our customers by delivering
+            superior products and services that exceed expectations.
+          </p>
+        </div>
+
         <div className="row g-4">
           {services.map((service, index) => (
             <div key={index} className="col-md-4">
               <div
-                className="card h-100 text-center border-0 bg-white bg-opacity-25 text-white shadow-lg"
-                style={{ backdropFilter: "blur(10px)" }}
+                className="card border-0 shadow-sm h-100 rounded-4 p-4 position-relative"
+                style={{
+                  background: "#fff",
+                  transition: "all 0.3s ease",
+                }}
               >
-                <div className="card-body">
-                  <i className={`bi ${service.icon} display-4 text-white mb-3`}></i>
-                  <h5 className="card-title fw-bold">{service.title}</h5>
-                  <p className="card-text">{service.description}</p>
+                <div
+                  className="d-flex align-items-center justify-content-center rounded-circle shadow-sm mb-3"
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    background: service.color,
+                    color: "#fff",
+                    fontSize: "1.25rem",
+                    position: "absolute",
+                    top: "-20px",
+                    left: "20px",
+                  }}
+                >
+                  <i className={`bi ${service.icon}`}></i>
+                </div>
+
+                <div className="mt-4">
+                  <h5 className="fw-bold">{service.title}</h5>
+                  <p className="text-muted mb-4">{service.description}</p>
                   <button
-                    className="btn btn-outline-light mt-2"
+                    className="btn p-0 fw-semibold text-decoration-none"
+                    style={{ color: service.color }}
                     onClick={() => handleLearnMore(service.path)}
                   >
-                    Learn More
+                    Read more →
                   </button>
                 </div>
               </div>
@@ -128,7 +134,6 @@ export default function Section2() {
         </div>
       </div>
 
-      {/* Auth Modal */}
       <Auth show={showAuthModal} onHide={() => setShowAuthModal(false)} />
     </section>
   );

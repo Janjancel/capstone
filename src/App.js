@@ -97,6 +97,7 @@ import "./App.css";
 
 import About from "./components/About/About";
 import Contact from "./components/Contact/Contact";
+import FAQs from "./components/FAQs";
 import PrivateRoute from "./components/PrivateRoute";
 import Navbar from "./components/Navbar/Navbar";
 import Footer from "./components/Footer";
@@ -138,6 +139,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/faqs" element={<FAQs />} />
 
           {/* Authenticated (Client/User) */}
           <Route element={<PrivateRoute />}>
