@@ -208,7 +208,7 @@ const EditAddressModal = ({
     zipCode: "",
   };
 
-  // Utility: build fallback query from address fields
+  // Utility: build fallback query from address fields (full address fallback)
   const buildGeocodeQuery = () => {
     const parts = [];
     if (safeAddress.houseNo) parts.push(safeAddress.houseNo);
@@ -217,6 +217,16 @@ const EditAddressModal = ({
     if (safeAddress.city) parts.push(safeAddress.city);
     if (safeAddress.province) parts.push(safeAddress.province);
     if (safeAddress.region) parts.push(safeAddress.region);
+    parts.push("Philippines");
+    return parts.filter(Boolean).join(", ");
+  };
+
+  // New helper: build query using only barangay, city, province (what Use Address should use)
+  const buildBarangayCityProvinceQuery = () => {
+    const parts = [];
+    if (safeAddress.barangay) parts.push(safeAddress.barangay);
+    if (safeAddress.city) parts.push(safeAddress.city);
+    if (safeAddress.province) parts.push(safeAddress.province);
     parts.push("Philippines");
     return parts.filter(Boolean).join(", ");
   };
@@ -373,9 +383,10 @@ const EditAddressModal = ({
                       variant="text"
                       size="small"
                       onClick={() => {
-                        const q = buildGeocodeQuery();
+                        // Use only barangay, city, province when "Use Address" is pressed
+                        const q = buildBarangayCityProvinceQuery();
                         if (!q) {
-                          toast.error("Please fill more address fields or type a query.");
+                          toast.error("Please select barangay, city, and province first.");
                           return;
                         }
                         setSearchQuery(q);
@@ -413,12 +424,17 @@ const EditAddressModal = ({
                     to geocode from the fields above.
                   </li>
                   <li style={{ fontSize: 13, color: "#6c757d" }}>
+                    <strong>Use Address:</strong> will use <em>only</em> Barangay, City,
+                    and Province (plus "Philippines") when resolving coordinates.
+                  </li>
+                  <li style={{ fontSize: 13, color: "#6c757d" }}>
                     After coordinates appear as "Pinned", press <strong>Save</strong> to
                     persist them to the server. Once saved, the search bar will be hidden
                     and the saved coordinates will be displayed.
                   </li>
                   <li style={{ fontSize: 13, color: "#6c757d" }}>
-                    If coordinates can't be resolved, try adding more address detail.
+                    If coordinates can't be resolved, try adding more address detail or use
+                    the manual search field to enter a different query.
                   </li>
                 </ul>
               </Box>

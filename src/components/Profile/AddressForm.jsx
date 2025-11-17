@@ -1014,12 +1014,17 @@ const AddressForm = () => {
               coordsRes.data.lat !== null &&
               coordsRes.data.lng !== null
             ) {
-              setCoordinates({
-                lat: coordsRes.data.lat,
-                lng: coordsRes.data.lng,
-              });
-              setIsCoordinatesFound(true);
-              setCoordsSaved(true); // coordinates exist on server
+              // Use Number coercion and check finite to be robust
+              const latNum = Number(coordsRes.data.lat);
+              const lngNum = Number(coordsRes.data.lng);
+              if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+                setCoordinates({
+                  lat: latNum,
+                  lng: lngNum,
+                });
+                setIsCoordinatesFound(true);
+                setCoordsSaved(true); // coordinates exist on server
+              }
             }
           } catch (err) {
             // ignore — will geocode locally if needed
@@ -1155,6 +1160,7 @@ const AddressForm = () => {
       const data = await res.json();
       if (data && data.length > 0) {
         const { lat, lon } = data[0];
+        // Return floats exactly
         return { lat: parseFloat(lat), lng: parseFloat(lon) };
       }
       return null;
@@ -1317,7 +1323,13 @@ const AddressForm = () => {
 
       // 2) Ensure we have coordinates; if not, attempt one more instant geocode
       let coordsToSave = coordinates;
-      if (!coordsToSave || !coordsToSave.lat || !coordsToSave.lng) {
+      if (
+        !coordsToSave ||
+        coordsToSave.lat === null ||
+        coordsToSave.lng === null ||
+        coordsToSave.lat === undefined ||
+        coordsToSave.lng === undefined
+      ) {
         const q = buildGeocodeQuery();
         if (q) {
           const toastId = toast.loading("Trying to resolve coordinates...");
@@ -1336,15 +1348,21 @@ const AddressForm = () => {
       }
 
       // 3) Save coordinates if available
-      if (coordsToSave && coordsToSave.lat && coordsToSave.lng) {
-        // Your router currently expects integer lat/lng; round here.
-        const latInt = Math.round(Number(coordsToSave.lat));
-        const lngInt = Math.round(Number(coordsToSave.lng));
+      if (
+        coordsToSave &&
+        coordsToSave.lat !== undefined &&
+        coordsToSave.lng !== undefined &&
+        Number.isFinite(Number(coordsToSave.lat)) &&
+        Number.isFinite(Number(coordsToSave.lng))
+      ) {
+        // Send exact numeric values (floats) to the backend — DO NOT round.
+        const latNum = Number(coordsToSave.lat);
+        const lngNum = Number(coordsToSave.lng);
 
         try {
           await trySaveCoordinatesWithFallback({
             userId: user._id,
-            coordinates: { lat: latInt, lng: lngInt },
+            coordinates: { lat: latNum, lng: lngNum },
           });
 
           toast.success("Coordinates saved successfully!");
@@ -1355,10 +1373,9 @@ const AddressForm = () => {
           if (err && (err.code === "ALL_404" || (err.response && err.response.status === 404))) {
             toast.error("Failed to save coordinates (404). Check backend route and dev proxy.");
           } else if (err && err.response && err.response.data) {
-            // If server sent a useful message, show it (be careful with HTML bodies)
             const msg =
               typeof err.response.data === "string"
-                ? err.response.data.substring(0, 300) // don't dump huge HTML
+                ? err.response.data.substring(0, 300)
                 : JSON.stringify(err.response.data);
             toast.error(`Failed to save coordinates: ${msg}`);
           } else {
