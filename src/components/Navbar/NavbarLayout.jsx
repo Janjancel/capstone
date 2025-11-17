@@ -167,6 +167,7 @@ export default function NavbarLayout() {
 
                 <CustomLink to="/about">About</CustomLink>
                 <CustomLink to="/contact">Contact</CustomLink>
+                <CustomLink to="/faqs">FAQs</CustomLink>
               </Box>
 
               {/* Right Side */}
