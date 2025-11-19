@@ -1,5 +1,4 @@
 
-
 // import React, { useState, useEffect } from "react";
 // import { Modal, Button, Spinner, Form, Alert } from "react-bootstrap";
 // import toast from "react-hot-toast";
@@ -116,6 +115,10 @@
 //     cities: [],
 //     barangays: [],
 //   });
+
+//   // Delivery preview states
+//   const [deliveryFeePreview, setDeliveryFeePreview] = useState(null); // null => unknown/TBD
+//   const [grandTotalPreview, setGrandTotalPreview] = useState(null);
 
 //   // Safer auth header helper (always returns object)
 //   const authHeaders = () => {
@@ -334,6 +337,32 @@
 //       });
 
 //       const created = orderRes.data;
+
+//       // Try multiple shapes for deliveryFee/grandTotal returned from server
+//       const serverDeliveryFee =
+//         created?.meta?.computed?.deliveryFee ??
+//         created?.deliveryFee ??
+//         created?.order?.deliveryFee ??
+//         created?.order?.deliveryFee ??
+//         null;
+//       const serverGrandTotal =
+//         created?.meta?.computed?.grandTotal ??
+//         created?.grandTotal ??
+//         created?.order?.grandTotal ??
+//         created?.order?.grandTotal ??
+//         null;
+
+//       if (serverDeliveryFee != null && serverGrandTotal != null) {
+//         toast.success(
+//           `Order created. Delivery fee: ${formatPHP(
+//             serverDeliveryFee
+//           )}. Grand total: ${formatPHP(serverGrandTotal)}.`
+//         );
+//       } else {
+//         // fallback success message
+//         toast.success("Order placed successfully!");
+//       }
+
 //       const orderId = created?._id || created?.order?._id || created?.orderId;
 
 //       // 🔹 After order creation: mark each ordered item as unavailable (availability: false)
@@ -410,8 +439,6 @@
 //       // Provide user feedback
 //       if (availabilityFailures > 0) {
 //         toast.success(`Order placed (but ${availabilityFailures} item(s) failed to update availability).`);
-//       } else {
-//         toast.success("Order placed successfully!");
 //       }
 
 //       onClose && onClose();
@@ -494,6 +521,51 @@
 //     const price = Number(it.price) || Number(it.unitPrice) || 0;
 //     return sum + qty * price;
 //   }, 0);
+
+//   // ---------------- Delivery fee preview (client-side) ----------------
+//   // Haversine and fee constants (mirror server logic)
+//   const toRad = (deg) => (deg * Math.PI) / 180;
+//   const haversineKm = (lat1, lon1, lat2, lon2) => {
+//     const R = 6371;
+//     const dLat = toRad(lat2 - lat1);
+//     const dLon = toRad(lon2 - lon1);
+//     const a =
+//       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+//       Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+//       Math.sin(dLon / 2) * Math.sin(dLon / 2);
+//     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+//     return R * c;
+//   };
+
+//   // Pivot - Lucena City Hall
+//   const PIVOT = { lat: 13.9365569, lng: 121.6115341 };
+//   const FREE_RADIUS_KM = 15;
+//   const STEP_KM = 3;
+//   const STEP_FEE_PHP = 1000;
+//   const computeDeliveryFee = (distanceKm) => {
+//     if (!distanceKm || distanceKm <= FREE_RADIUS_KM) return 0;
+//     const extra = distanceKm - FREE_RADIUS_KM;
+//     const steps = Math.ceil(extra / STEP_KM);
+//     return steps * STEP_FEE_PHP;
+//   };
+
+//   useEffect(() => {
+//     // compute preview delivery fee if we have user coords
+//     const lat = user?.coordinates?.lat ?? user?.coordinates?.latitude ?? null;
+//     const lng = user?.coordinates?.lng ?? user?.coordinates?.longitude ?? null;
+
+//     if (lat != null && lng != null && isFinite(Number(lat)) && isFinite(Number(lng))) {
+//       const distanceKm = haversineKm(PIVOT.lat, PIVOT.lng, Number(lat), Number(lng));
+//       const fee = computeDeliveryFee(distanceKm);
+//       setDeliveryFeePreview(fee);
+//       setGrandTotalPreview(Number((computedTotal + fee).toFixed(2)));
+//     } else {
+//       // coordinates missing -> unknown fee
+//       setDeliveryFeePreview(null);
+//       setGrandTotalPreview(null);
+//     }
+//     // recompute when selectedItems/user change
+//   }, [user, computedTotal]);
 
 //   return (
 //     <>
@@ -601,12 +673,40 @@
 //                 )}
 
 //                 <div className="d-flex justify-content-between align-items-center mt-3">
-//                   <h4>
-//                     Total:{" "}
-//                     <span className="text-success">
-//                       {formatPHP(computedTotal || totalPrice || 0)}
-//                     </span>
-//                   </h4>
+//                   <div>
+//                     <h4>
+//                       Total:{" "}
+//                       <span className="text-success">
+//                         {formatPHP(computedTotal || totalPrice || 0)}
+//                       </span>
+//                     </h4>
+
+//                     <div className="mt-2">
+//                       <div>
+//                         <strong>Delivery Fee: </strong>
+//                         {deliveryFeePreview == null ? (
+//                           <span className="text-muted">TBD (coordinates not found)</span>
+//                         ) : (
+//                           <span>{formatPHP(deliveryFeePreview)}</span>
+//                         )}
+//                       </div>
+//                       <div>
+//                         <strong>Grand Total: </strong>
+//                         {grandTotalPreview == null ? (
+//                           <span className="text-muted">TBD</span>
+//                         ) : (
+//                           <span className="fw-bold">{formatPHP(grandTotalPreview)}</span>
+//                         )}
+//                       </div>
+//                       {deliveryFeePreview == null && (
+//                         <small className="text-muted d-block">
+//                           We couldn't find your saved coordinates. The final delivery fee will be
+//                           calculated on the server when you place the order.
+//                         </small>
+//                       )}
+//                     </div>
+//                   </div>
+
 //                   <Button
 //                     variant="success"
 //                     onClick={handleOrderConfirmation}
@@ -649,7 +749,6 @@
 // };
 
 // export default CartModal;
-
 
 
 import React, { useState, useEffect } from "react";
@@ -737,6 +836,16 @@ function SafeImg({ src, alt, style, className }) {
 }
 
 /** -------------------------------- Component -------------------------------- */
+/**
+ * Props:
+ * - show, onClose
+ * - user
+ * - totalPrice
+ * - selectedItems (array)
+ * - setCartItems, setSelectedItems, setCartCount, setShowModal (optional callbacks for UI updates)
+ * - onConfirm(address, notes, selectedItems) => optional function; if provided CartModal delegates order submission to it (must return a Promise)
+ * - defaultAddress => optional address object to prefill the form
+ */
 const CartModal = ({
   show,
   onClose,
@@ -747,6 +856,8 @@ const CartModal = ({
   setSelectedItems,
   setCartCount,
   setShowModal,
+  onConfirm, // optional: parent-provided submit function
+  defaultAddress,
 }) => {
   const API_URL = process.env.REACT_APP_API_URL;
 
@@ -823,8 +934,15 @@ const CartModal = ({
       setOptions((prev) => ({ ...prev, regions: regionList }));
     };
 
+    loadRegions();
+
+    // prefer defaultAddress if provided
+    if (defaultAddress && Object.keys(defaultAddress).length > 0) {
+      setAddress(defaultAddress);
+      return;
+    }
+
     if (show && user) {
-      loadRegions();
       const fetchAddress = async () => {
         try {
           const res = await axios.get(`${API_URL}/api/address/${user._id}`, {
@@ -843,7 +961,7 @@ const CartModal = ({
       fetchAddress();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [show, user, API_URL]);
+  }, [show, user, API_URL, defaultAddress]);
 
   useEffect(() => {
     if (!address.region) return;
@@ -912,7 +1030,7 @@ const CartModal = ({
       );
       toast.success("Address saved!");
       setIsEditing(false);
-      setShowModal(true);
+      setShowModal && setShowModal(true);
     } catch (err) {
       console.error("Save error:", err);
       toast.error("Failed to save address.");
@@ -965,7 +1083,7 @@ const CartModal = ({
     };
   };
 
-  // --- Order confirmation ---
+  // --- Order confirmation (internal default) ---
   const handleOrderConfirmation = async () => {
     if (!user) return toast.error("User not found.");
     if (!isAddressComplete())
@@ -996,12 +1114,10 @@ const CartModal = ({
         created?.meta?.computed?.deliveryFee ??
         created?.deliveryFee ??
         created?.order?.deliveryFee ??
-        created?.order?.deliveryFee ??
         null;
       const serverGrandTotal =
         created?.meta?.computed?.grandTotal ??
         created?.grandTotal ??
-        created?.order?.grandTotal ??
         created?.order?.grandTotal ??
         null;
 
@@ -1132,6 +1248,42 @@ const CartModal = ({
       toast.error(serverMsg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // When Confirm button is clicked: if parent provided onConfirm => delegate to it.
+  // Otherwise run the internal order confirmation above.
+  const handleConfirmClick = async () => {
+    if (onConfirm && typeof onConfirm === "function") {
+      setLoading(true);
+      setError("");
+      try {
+        // parent onConfirm may accept (address, notes, selectedItems)
+        // ensure it returns a Promise so we can await it
+        await onConfirm(address, "", selectedItems);
+
+        // after success, run the same UI cleanup we normally do (best-effort)
+        try {
+          const removeIds = (selectedItems || []).map((i) => getItemId(i)).filter(Boolean);
+          setCartItems && setCartItems((prev = []) => prev.filter((it) => !removeIds.includes(getItemId(it))));
+        } catch (e) {}
+        try { setSelectedItems && setSelectedItems([]); } catch (e) {}
+        try { setCartCount && setCartCount(0); } catch (e) {}
+        try { setShowModal && setShowModal(false); } catch (e) {}
+        window.dispatchEvent(new CustomEvent("cartUpdated", { detail: (selectedItems || []).length }));
+
+        toast.success("Order placed successfully!");
+        onClose && onClose();
+      } catch (err) {
+        console.error("Parent onConfirm failed:", err);
+        const msg = err?.response?.data?.message || err?.message || "Failed to place order.";
+        setError(msg);
+        toast.error(msg);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      await handleOrderConfirmation();
     }
   };
 
@@ -1362,7 +1514,7 @@ const CartModal = ({
 
                   <Button
                     variant="success"
-                    onClick={handleOrderConfirmation}
+                    onClick={handleConfirmClick}
                     disabled={!isAddressComplete() || loading || !selectedItems || selectedItems.length === 0}
                   >
                     {loading ? (
