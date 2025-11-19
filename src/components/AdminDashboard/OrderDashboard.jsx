@@ -44,12 +44,39 @@
 //     shipped: "shipped",
 //     delivered: "delivered",
 //     "cancellation requested": "cancellation_requested",
+//     "cancellation request": "cancellation_requested",
 //     "cancel requested": "cancellation_requested",
+//     "cancel request": "cancellation_requested",
 //     cancelled: "cancelled",
+//     cancelled_: "cancelled",
 //   };
 //   const toApiStatus = (label) => {
 //     const key = String(label || "").trim().toLowerCase();
-//     return STATUS_API_MAP[key] || key;
+//     return STATUS_API_MAP[key] || key.replace(/\s+/g, "_");
+//   };
+
+//   // Map API statuses (snake_case) -> friendly UI label
+//   const apiToUi = (apiStatus) => {
+//     if (!apiStatus) return "Pending";
+//     const s = String(apiStatus).toLowerCase();
+//     switch (s) {
+//       case "pending":
+//         return "Pending";
+//       case "processing":
+//         return "Processing";
+//       case "shipped":
+//         return "Shipped";
+//       case "delivered":
+//         return "Delivered";
+//       case "cancellation_requested":
+//       case "cancel_requested":
+//         return "Cancellation Request";
+//       case "cancelled":
+//         return "Cancelled";
+//       default:
+//         // fallback: convert snake_case to Title Case
+//         return s.replace(/_/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
+//     }
 //   };
 
 //   const getAuthHeaders = () => {
@@ -189,7 +216,7 @@
 //         { headers: getAuthHeaders() }
 //       );
 
-//       // 3) Sales record when delivered
+//       // 3) Sales record and feedback notification when delivered
 //       if (apiStatus === "delivered") {
 //         await axios.post(
 //           `${API_URL}/api/sales`,
@@ -199,6 +226,21 @@
 //             total: order.total,
 //             items: order.items,
 //             deliveredAt: new Date(),
+//           },
+//           { headers: getAuthHeaders() }
+//         );
+
+//         // Send feedback notification to client
+//         await axios.post(
+//           `${API_URL}/api/notifications`,
+//           {
+//             orderId: order._id,
+//             userId: order.userId,
+//             for: "order",
+//             status: apiStatus,
+//             role: "client",
+//             message:
+//               "We’re grateful you chose us. Your experience matters to us. Please take a moment to leave your feedback so we can serve you better.",
 //           },
 //           { headers: getAuthHeaders() }
 //         );
@@ -216,8 +258,9 @@
 //     handleStatusChange(order, "Cancelled");
 //   };
 
-//   const getStatusColor = (status) => {
-//     switch ((status || "").toLowerCase()) {
+//   const getStatusColor = (apiStatus) => {
+//     const s = String(apiStatus || "").toLowerCase();
+//     switch (s) {
 //       case "pending":
 //         return "default";
 //       case "processing":
@@ -226,8 +269,8 @@
 //         return "info";
 //       case "delivered":
 //         return "success";
-//       case "cancel requested":
-//       case "cancellation requested":
+//       case "cancellation_requested":
+//       case "cancel_requested":
 //         return "warning";
 //       case "cancelled":
 //         return "error";
@@ -236,13 +279,13 @@
 //     }
 //   };
 
-//   // Filter + paginate ---------------------------------------------------------
+//   // compute UI label for filtering and comparison
 //   const filteredOrders = orders.filter((o) => {
 //     const emailValue = (o.userEmail || "").toLowerCase();
 //     const emailMatch = emailValue.includes(searchEmail.toLowerCase());
+//     const uiStatus = apiToUi(o.status).toLowerCase();
 //     const statusMatch =
-//       statusTab === "All" ||
-//       String(o.status || "Pending").toLowerCase() === statusTab.toLowerCase();
+//       statusTab === "All" || uiStatus === statusTab.toLowerCase();
 //     return emailMatch && statusMatch;
 //   });
 
@@ -251,6 +294,42 @@
 //     (currentPage - 1) * pageSize,
 //     currentPage * pageSize
 //   );
+
+//   // compute disabled states for action buttons
+//   const computeActionDisabled = (order) => {
+//     const apiStatus = String(order.status || "pending").toLowerCase();
+
+//     const isDelivered = apiStatus === "delivered";
+//     const isCancelled = apiStatus === "cancelled";
+//     const isFinal = isDelivered || isCancelled;
+
+//     const isCancellationRequested =
+//       apiStatus === "cancellation_requested" || apiStatus === "cancel_requested";
+
+//     // Mark Shipped:
+//     // - disabled if final
+//     // - disabled if already shipped or delivered or cancellation requested
+//     const shippedDisabled = isFinal || apiStatus === "shipped" || isCancellationRequested;
+
+//     // Mark Delivered:
+//     // - disabled if final
+//     // - disabled when order is currently Pending (cannot deliver a pending order)
+//     // - disabled if already delivered
+//     const deliveredDisabled =
+//       isFinal || apiStatus === "delivered" || apiStatus === "pending";
+
+//     // Approve Cancellation:
+//     // - only enabled when cancellation requested
+//     const approveCancellationDisabled = !isCancellationRequested;
+
+//     return {
+//       shippedDisabled,
+//       deliveredDisabled,
+//       approveCancellationDisabled,
+//       isFinal,
+//       isCancellationRequested,
+//     };
+//   };
 
 //   return (
 //     <Box className="mt-4 container">
@@ -266,7 +345,8 @@
 //         indicatorColor="primary"
 //         sx={{ mb: 2 }}
 //       >
-//         {["All", "Pending", "Cancelled", "Cancellation Requested", "Shipped", "Delivered"].map(
+//         {/* Reordered as requested: Cancellation Request before Cancelled */}
+//         {["All", "Pending", "Cancellation Request", "Cancelled", "Shipped", "Delivered"].map(
 //           (status) => (
 //             <Tab key={status} label={status} value={status} />
 //           )
@@ -293,7 +373,7 @@
 //               o.userEmail || "Unknown",
 //               new Date(o.createdAt).toLocaleString(),
 //               o.total,
-//               o.status || "Pending",
+//               apiToUi(o.status),
 //             ]);
 //             const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
 //             const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -321,9 +401,17 @@
 //       ) : (
 //         <>
 //           {currentOrders.map((order) => {
-//             const status = (order.status || "Pending").toLowerCase();
-//             const isFinal = ["delivered", "cancelled"].includes(status);
-//             const isCancelable = ["cancellation requested", "cancel requested"].includes(status);
+//             const apiStatus = String(order.status || "pending").toLowerCase();
+//             const uiStatusLabel = apiToUi(apiStatus);
+//             const statusColor = getStatusColor(apiStatus);
+
+//             const {
+//               shippedDisabled,
+//               deliveredDisabled,
+//               approveCancellationDisabled,
+//               isFinal,
+//               isCancellationRequested,
+//             } = computeActionDisabled(order);
 
 //             return (
 //               <Card key={order._id} variant="outlined" sx={{ mb: 2, p: 2 }}>
@@ -368,8 +456,8 @@
 //                           <strong>Status:</strong>
 //                         </Typography>
 //                         <Chip
-//                           label={order.status || "Pending"}
-//                           color={getStatusColor(order.status)}
+//                           label={uiStatusLabel}
+//                           color={statusColor}
 //                         />
 //                       </Box>
 
@@ -380,6 +468,7 @@
 //                             color="info"
 //                             size="small"
 //                             onClick={() => handleStatusChange(order, "Shipped")}
+//                             disabled={shippedDisabled}
 //                           >
 //                             Mark Shipped
 //                           </Button>
@@ -388,19 +477,20 @@
 //                             color="success"
 //                             size="small"
 //                             onClick={() => handleStatusChange(order, "Delivered")}
+//                             disabled={deliveredDisabled}
 //                           >
 //                             Mark Delivered
 //                           </Button>
-//                           {isCancelable && (
-//                             <Button
-//                               variant="contained"
-//                               color="error"
-//                               size="small"
-//                               onClick={() => handleApproveCancellation(order)}
-//                             >
-//                               Approve Cancellation
-//                             </Button>
-//                           )}
+//                           <Button
+//                             variant="contained"
+//                             color="error"
+//                             size="small"
+//                             onClick={() => handleApproveCancellation(order)}
+//                             disabled={approveCancellationDisabled}
+//                             sx={{ display: isCancellationRequested ? "inline-flex" : "none" }}
+//                           >
+//                             Approve Cancellation
+//                           </Button>
 //                         </Box>
 //                       )}
 //                     </Box>
@@ -441,7 +531,6 @@
 
 // export default OrderDashboard;
 
-
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import Swal from "sweetalert2";
@@ -479,6 +568,10 @@ const OrderDashboard = () => {
   const pageSize = 5;
   const intervalRef = useRef(null);
   const API_URL = process.env.REACT_APP_API_URL;
+
+  // NEW: date range filter for orders
+  const [dateFrom, setDateFrom] = useState(""); // "YYYY-MM-DD"
+  const [dateTo, setDateTo] = useState(""); // "YYYY-MM-DD"
 
   // --- Helpers ---------------------------------------------------------------
   const STATUS_API_MAP = {
@@ -729,7 +822,19 @@ const OrderDashboard = () => {
     const uiStatus = apiToUi(o.status).toLowerCase();
     const statusMatch =
       statusTab === "All" || uiStatus === statusTab.toLowerCase();
-    return emailMatch && statusMatch;
+
+    // Date range filter
+    let dateMatch = true;
+    if (dateFrom || dateTo) {
+      if (!o.createdAt) return false;
+      const created = new Date(o.createdAt);
+      const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+      const toDate = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
+      if (fromDate && created < fromDate) dateMatch = false;
+      if (toDate && created > toDate) dateMatch = false;
+    }
+
+    return emailMatch && statusMatch && dateMatch;
   });
 
   const totalPages = Math.ceil(filteredOrders.length / pageSize);
@@ -774,6 +879,11 @@ const OrderDashboard = () => {
     };
   };
 
+  // Helper to reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchEmail, statusTab, dateFrom, dateTo]);
+
   return (
     <Box className="mt-4 container">
       <Typography variant="h5" gutterBottom>
@@ -796,39 +906,75 @@ const OrderDashboard = () => {
         )}
       </Tabs>
 
-      {/* Search + Export */}
-      <Box display="flex" justifyContent="space-between" mb={2}>
-        <TextField
-          label="Search by email"
-          variant="outlined"
-          size="small"
-          value={searchEmail}
-          onChange={(e) => setSearchEmail(e.target.value)}
-          sx={{ width: 300 }}
-        />
-        <Button
-          variant="contained"
-          color="success"
-          onClick={() => {
-            const headers = ["Order ID", "Email", "Order Date", "Total", "Status"];
-            const rows = filteredOrders.map((o) => [
-              o.orderId || o._id, // show human-readable ID if available
-              o.userEmail || "Unknown",
-              new Date(o.createdAt).toLocaleString(),
-              o.total,
-              apiToUi(o.status),
-            ]);
-            const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "orders.csv";
-            link.click();
-          }}
-        >
-          Export to CSV
-        </Button>
+      {/* Search + Date Range + Export (inline with header) */}
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
+        <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+          <TextField
+            label="Search by email"
+            variant="outlined"
+            size="small"
+            value={searchEmail}
+            onChange={(e) => setSearchEmail(e.target.value)}
+            sx={{ width: 300 }}
+          />
+
+          {/* Date inputs inline */}
+          <TextField
+            size="small"
+            type="date"
+            label="From"
+            InputLabelProps={{ shrink: true }}
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+          <TextField
+            size="small"
+            type="date"
+            label="To"
+            InputLabelProps={{ shrink: true }}
+            value={dateTo}
+            inputProps={{ min: dateFrom || undefined }}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+          {(dateFrom || dateTo) && (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+              }}
+            >
+              Reset Dates
+            </Button>
+          )}
+        </Box>
+
+        <Box display="flex" alignItems="center" gap={1}>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={() => {
+              const headers = ["Order ID", "Email", "Order Date", "Total", "Status"];
+              const rows = filteredOrders.map((o) => [
+                o.orderId || o._id, // show human-readable ID if available
+                o.userEmail || "Unknown",
+                new Date(o.createdAt).toLocaleString(),
+                o.total,
+                apiToUi(o.status),
+              ]);
+              const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = "orders.csv";
+              link.click();
+            }}
+          >
+            Export to CSV
+          </Button>
+        </Box>
       </Box>
 
       {loading ? (
