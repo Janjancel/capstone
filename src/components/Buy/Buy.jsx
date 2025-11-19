@@ -1008,8 +1008,8 @@ import {
 } from "@mui/material";
 import toast from "react-hot-toast";
 import axios from "axios";
-import CartModal from "./Cart/CartModal";
-import { useAuth } from "../context/AuthContext";
+import CartModal from "../Cart/CartModal";
+import { useAuth } from "../../context/AuthContext";
 import FilterListIcon from "@mui/icons-material/FilterList";
 
 const Buy = () => {
