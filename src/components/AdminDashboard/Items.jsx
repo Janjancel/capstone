@@ -1,4 +1,5 @@
 
+
 // import React, { useState, useEffect, useCallback } from "react";
 // import {
 //   Button,
@@ -18,6 +19,7 @@
 //   Select,
 //   FormControl,
 //   InputLabel,
+//   Chip,
 // } from "@mui/material";
 // import { MoreVert } from "@mui/icons-material";
 // import axios from "axios";
@@ -58,12 +60,11 @@
 //     "Stones",
 //     "Windows",
 //     "Bed",
-//     // (Uncategorized exists server-side as default; add here if you want to filter it explicitly)
 //   ];
 
-//   // UI filters (design unchanged: single dropdown)
+//   // UI filters
 //   const [categoryFilter, setCategoryFilter] = useState("");
-//   // Track search term so search + category filter combine cleanly
+//   const [availabilityFilter, setAvailabilityFilter] = useState("available"); // default to available
 //   const [searchTerm, setSearchTerm] = useState("");
 
 //   // ----- Fetch items (memoized so effects can safely depend on it) -----
@@ -73,18 +74,46 @@
 //       const response = await axios.get(
 //         `${process.env.REACT_APP_API_URL}/api/items`
 //       );
-//       setAllItems(response.data || []);
-//       setItems(response.data || []);
+//       const data = Array.isArray(response.data) ? response.data : [];
+//       setAllItems(data);
+//       // apply current filters immediately
+//       const filtered = data.filter((it) =>
+//         matchesSearch(it, searchTerm) &&
+//         matchesCategory(it, categoryFilter) &&
+//         matchesAvailability(it, availabilityFilter)
+//       );
+//       setItems(filtered);
 //     } catch (error) {
 //       toast.error("Failed to fetch items");
 //     } finally {
 //       setFetching(false);
 //     }
-//   }, []);
+//   }, [
+//     searchTerm,
+//     categoryFilter,
+//     availabilityFilter, // included so fetchItems applied filters instantly
+//   ]);
 
 //   useEffect(() => {
 //     fetchItems();
-//   }, [fetchItems]);
+//     // subscribe to global cart updates so admin list reflects items added to cart
+//     const cartHandler = () => {
+//       // Re-fetch to get authoritative availability state from server
+//       fetchItems();
+//     };
+//     window.addEventListener("cartUpdated", cartHandler);
+//     // also listen for item changes from other admin panels if you dispatch 'itemUpdated' with detail { itemId }
+//     const itemUpdatedHandler = () => {
+//       fetchItems();
+//     };
+//     window.addEventListener("itemUpdated", itemUpdatedHandler);
+
+//     return () => {
+//       window.removeEventListener("cartUpdated", cartHandler);
+//       window.removeEventListener("itemUpdated", itemUpdatedHandler);
+//     };
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
+//   }, []); // run once on mount
 
 //   // ----- Helpers for mixed category model (string vs array) -----
 //   const itemCategories = useCallback((it) => {
@@ -98,7 +127,8 @@
 //     (it, selected) => {
 //       if (!selected) return true; // "All"
 //       const cats = itemCategories(it);
-//       return cats.includes(selected);
+//       // normalize case
+//       return cats.some((c) => String(c).toLowerCase() === String(selected).toLowerCase());
 //     },
 //     [itemCategories]
 //   );
@@ -106,16 +136,37 @@
 //   const matchesSearch = useCallback((it, term) => {
 //     if (!term) return true;
 //     const name = (it?.name || "").toLowerCase();
-//     return name.includes(term.toLowerCase());
+//     const desc = (it?.description || "").toLowerCase();
+//     return name.includes(term.toLowerCase()) || desc.includes(term.toLowerCase());
+//   }, []);
+
+//   const matchesAvailability = useCallback((it, filter) => {
+//     // treat undefined availability as true (server default true)
+//     const isAvailable = it?.availability === undefined ? true : Boolean(it.availability);
+//     if (!filter || filter === "all") return true;
+//     if (filter === "available") return isAvailable === true;
+//     if (filter === "unavailable") return isAvailable === false;
+//     return true;
 //   }, []);
 
 //   // Recompute visible items whenever data or filters change
 //   useEffect(() => {
 //     const filtered = (allItems || []).filter(
-//       (it) => matchesSearch(it, searchTerm) && matchesCategory(it, categoryFilter)
+//       (it) =>
+//         matchesSearch(it, searchTerm) &&
+//         matchesCategory(it, categoryFilter) &&
+//         matchesAvailability(it, availabilityFilter)
 //     );
 //     setItems(filtered);
-//   }, [allItems, searchTerm, categoryFilter, matchesCategory, matchesSearch]);
+//   }, [
+//     allItems,
+//     searchTerm,
+//     categoryFilter,
+//     availabilityFilter,
+//     matchesCategory,
+//     matchesSearch,
+//     matchesAvailability,
+//   ]);
 
 //   const handleDeleteItem = (itemId) => {
 //     Swal.fire({
@@ -132,6 +183,7 @@
 //           );
 //           toast.success("Item deleted successfully");
 //           fetchItems();
+//           window.dispatchEvent(new CustomEvent("itemUpdated", { detail: { itemId } }));
 //         } catch (error) {
 //           toast.error("Issue deleting the item");
 //         }
@@ -193,6 +245,7 @@
 //       });
 //       setShowAddModal(false);
 //       fetchItems();
+//       window.dispatchEvent(new CustomEvent("itemUpdated"));
 //     } catch (error) {
 //       toast.error(
 //         error?.response?.data?.error || "There was an issue adding the item"
@@ -223,12 +276,56 @@
 //     handleMenuClose();
 //   };
 
+//   // toggle availability on server and update UI immediately
+//   const toggleAvailability = async (item) => {
+//     const itemId = item._id;
+//     const newAvailability = !(item?.availability === undefined ? true : Boolean(item.availability));
+//     try {
+//       // optimistic UI update
+//       setAllItems((prev) =>
+//         prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: newAvailability } : it))
+//       );
+//       setItems((prev) =>
+//         prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: newAvailability } : it))
+//       );
+
+//       // persist change
+//       // Expect server to accept PATCH { availability: boolean }
+//       await axios.patch(`${process.env.REACT_APP_API_URL}/api/items/${itemId}`, {
+//         availability: newAvailability,
+//       });
+
+//       toast.success(newAvailability ? "Item marked available" : "Item marked unavailable");
+//       window.dispatchEvent(new CustomEvent("itemUpdated", { detail: { itemId } }));
+//     } catch (err) {
+//       // revert optimistic update on failure
+//       setAllItems((prev) =>
+//         prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: item.availability } : it))
+//       );
+//       setItems((prev) =>
+//         prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: item.availability } : it))
+//       );
+//       toast.error("Failed to update availability");
+//     } finally {
+//       handleMenuClose();
+//     }
+//   };
+
 //   // Render helper: readable category cell (keeps same column; shows comma list when array)
 //   const renderCategoryCell = (it) => {
 //     const cats = itemCategories(it);
 //     if (cats.length) return cats.join(", ");
 //     // fallback for truly empty/uncategorized
 //     return it?.category || "Uncategorized";
+//   };
+
+//   const renderAvailabilityChip = (it) => {
+//     const isAvailable = it?.availability === undefined ? true : Boolean(it.availability);
+//     return isAvailable ? (
+//       <Chip label="Available" size="small" color="success" />
+//     ) : (
+//       <Chip label="Unavailable" size="small" color="default" sx={{ bgcolor: "grey.300" }} />
+//     );
 //   };
 
 //   return (
@@ -284,6 +381,23 @@
 //                 <TableCell>Price</TableCell>
 //                 <TableCell>Condition (1–10)</TableCell>
 //                 <TableCell>Images</TableCell>
+
+//                 {/* NEW: Availability filter dropdown placed between Images and Actions */}
+//                 <TableCell>
+//                   <FormControl size="small" fullWidth>
+//                     <InputLabel>Availability</InputLabel>
+//                     <Select
+//                       value={availabilityFilter}
+//                       label="Availability"
+//                       onChange={(e) => setAvailabilityFilter(e.target.value)}
+//                     >
+//                       <MenuItem value="available">Available</MenuItem>
+//                       <MenuItem value="unavailable">Unavailable</MenuItem>
+//                       <MenuItem value="all">All</MenuItem>
+//                     </Select>
+//                   </FormControl>
+//                 </TableCell>
+
 //                 <TableCell align="center">Actions</TableCell>
 //               </TableRow>
 //             </TableHead>
@@ -317,6 +431,10 @@
 //                         "No images"
 //                       )}
 //                     </TableCell>
+
+//                     {/* Availability display cell */}
+//                     <TableCell>{renderAvailabilityChip(item)}</TableCell>
+
 //                     <TableCell align="center">
 //                       <IconButton onClick={(e) => handleMenuOpen(e, item._id)}>
 //                         <MoreVert />
@@ -330,6 +448,7 @@
 //                         <MenuItem onClick={() => handleDelete(item._id)}>
 //                           Delete
 //                         </MenuItem>
+
 //                         <MenuItem
 //                           onClick={async () => {
 //                             try {
@@ -348,13 +467,22 @@
 //                         >
 //                           Add as Featured Item
 //                         </MenuItem>
+
+//                         {/* Toggle availability quickly */}
+//                         <MenuItem
+//                           onClick={() => {
+//                             toggleAvailability(item);
+//                           }}
+//                         >
+//                           {item?.availability === false ? "Mark Available" : "Mark Unavailable"}
+//                         </MenuItem>
 //                       </Menu>
 //                     </TableCell>
 //                   </TableRow>
 //                 ))
 //               ) : (
 //                 <TableRow>
-//                   <TableCell colSpan={6} align="center">
+//                   <TableCell colSpan={7} align="center">
 //                     No items available.
 //                   </TableCell>
 //                 </TableRow>
@@ -382,6 +510,7 @@
 //           onHide={() => {
 //             setShowEditModal(false);
 //             setSelectedItem(null);
+//             fetchItems();
 //           }}
 //           item={selectedItem}
 //         />
@@ -672,7 +801,13 @@ const Items = () => {
   // toggle availability on server and update UI immediately
   const toggleAvailability = async (item) => {
     const itemId = item._id;
-    const newAvailability = !(item?.availability === undefined ? true : Boolean(item.availability));
+    // treat undefined availability as true (same logic as matcher)
+    const currentAvailability = item?.availability === undefined ? true : Boolean(item.availability);
+    const newAvailability = !currentAvailability;
+
+    // keep a copy to revert on failure
+    const originalAvailability = currentAvailability;
+
     try {
       // optimistic UI update
       setAllItems((prev) =>
@@ -682,21 +817,43 @@ const Items = () => {
         prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: newAvailability } : it))
       );
 
-      // persist change
-      // Expect server to accept PATCH { availability: boolean }
-      await axios.patch(`${process.env.REACT_APP_API_URL}/api/items/${itemId}`, {
-        availability: newAvailability,
-      });
+      // persist change via the availability endpoint you added
+      const resp = await axios.patch(
+        `${process.env.REACT_APP_API_URL}/api/items/${itemId}/availability`,
+        { available: newAvailability }
+      );
 
-      toast.success(newAvailability ? "Item marked available" : "Item marked unavailable");
+      // prefer server's returned document to update local state (merge safely)
+      const serverItem = resp.data || {};
+      const mergedItem = {
+        ...item,
+        ...serverItem,
+        // keep "availability" prop for UI logic; prefer server's 'available' if present,
+        // else server might already return 'availability' or none (then keep newAvailability)
+        availability:
+          serverItem.available !== undefined
+            ? Boolean(serverItem.available)
+            : serverItem.availability !== undefined
+            ? Boolean(serverItem.availability)
+            : newAvailability,
+      };
+
+      setAllItems((prev) =>
+        prev.map((it) => (String(it._id) === String(itemId) ? mergedItem : it))
+      );
+      setItems((prev) =>
+        prev.map((it) => (String(it._id) === String(itemId) ? mergedItem : it))
+      );
+
+      toast.success(mergedItem.availability ? "Item marked available" : "Item marked unavailable");
       window.dispatchEvent(new CustomEvent("itemUpdated", { detail: { itemId } }));
     } catch (err) {
       // revert optimistic update on failure
       setAllItems((prev) =>
-        prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: item.availability } : it))
+        prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: originalAvailability } : it))
       );
       setItems((prev) =>
-        prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: item.availability } : it))
+        prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: originalAvailability } : it))
       );
       toast.error("Failed to update availability");
     } finally {
