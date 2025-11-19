@@ -540,6 +540,40 @@
 //     }
 //   };
 
+//   // compute disabled states based on status and fields
+//   const computeActionDisabled = (request) => {
+//     const status = request?.status || "pending";
+
+//     // scheduleOcular disabled if ocular already scheduled OR has moved past ocular stage
+//     const scheduleOcularDisabled = [
+//       "ocular_scheduled",
+//       "awaiting_price_approval",
+//       "price_accepted",
+//       "scheduled",
+//       "completed",
+//       "declined",
+//     ].includes(status);
+
+//     // propose price only allowed when ocular scheduled or after price_declined (re-propose)
+//     // disabled while waiting for client approval or after schedule/completion/decline
+//     const proposeAllowed = status === "ocular_scheduled" || status === "price_declined";
+//     const proposeDisabled =
+//       !proposeAllowed || ["awaiting_price_approval", "scheduled", "completed", "declined"].includes(status);
+
+//     // schedule demolition (final accept) only allowed after price_accepted
+//     const scheduleDemolitionDisabled = status !== "price_accepted";
+
+//     // decline disabled when already declined or when final scheduled/completed/price_accepted
+//     const declineDisabled = ["declined", "scheduled", "completed", "price_accepted"].includes(status);
+
+//     return {
+//       scheduleOcularDisabled,
+//       proposeDisabled,
+//       scheduleDemolitionDisabled,
+//       declineDisabled,
+//     };
+//   };
+
 //   return (
 //     <Box sx={{ p: 3 }}>
 //       <Toaster position="top-right" />
@@ -603,7 +637,16 @@
 //               </Tooltip>
 //               <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={handleFilterClose}>
 //                 <MenuItem disabled>Filter by Status</MenuItem>
-//                 {["", "pending", "scheduled", "ocular_scheduled", "awaiting_price_approval", "price_accepted", "price_declined", "declined"].map((status) => (
+//                 {[
+//                   "",
+//                   "pending",
+//                   "scheduled",
+//                   "ocular_scheduled",
+//                   "awaiting_price_approval",
+//                   "price_accepted",
+//                   "price_declined",
+//                   "declined",
+//                 ].map((status) => (
 //                   <MenuItem
 //                     key={status || "all"}
 //                     onClick={() => {
@@ -711,6 +754,14 @@
 //                       const proposed = Number(request.proposedPrice || 0);
 //                       const waiting = request.status === "awaiting_price_approval";
 
+//                       // compute disabled states
+//                       const {
+//                         scheduleOcularDisabled,
+//                         proposeDisabled,
+//                         scheduleDemolitionDisabled,
+//                         declineDisabled,
+//                       } = computeActionDisabled(request);
+
 //                       return (
 //                         <TableRow
 //                           key={request._id}
@@ -769,9 +820,11 @@
 //                                   handleScheduleDemolition(request._id);
 //                                   handleMenuClose();
 //                                 }}
+//                                 disabled={scheduleDemolitionDisabled}
 //                                 sx={{
 //                                   color: "success.main",
 //                                   fontWeight: 500,
+//                                   "&.Mui-disabled": { color: "success.light" },
 //                                   "&:hover": { bgcolor: "success.light", color: "white" },
 //                                 }}
 //                               >
@@ -783,9 +836,11 @@
 //                                   handleScheduleOcular(request._id);
 //                                   handleMenuClose();
 //                                 }}
+//                                 disabled={scheduleOcularDisabled}
 //                                 sx={{
 //                                   color: "info.main",
 //                                   fontWeight: 500,
+//                                   "&.Mui-disabled": { color: "info.light" },
 //                                   "&:hover": { bgcolor: "info.light", color: "white" },
 //                                 }}
 //                               >
@@ -798,16 +853,7 @@
 //                                   handleProposePrice(request);
 //                                   handleMenuClose();
 //                                 }}
-//                                 disabled={
-//                                   !(
-//                                     request.status === "ocular_scheduled" ||
-//                                     request.status === "price_declined"
-//                                   ) ||
-//                                   request.status === "awaiting_price_approval" ||
-//                                   request.status === "scheduled" ||
-//                                   request.status === "completed" ||
-//                                   request.status === "declined"
-//                                 }
+//                                 disabled={proposeDisabled}
 //                                 sx={{
 //                                   color: "primary.main",
 //                                   fontWeight: 500,
@@ -823,7 +869,7 @@
 //                                   handleStatusUpdate(request._id, "declined");
 //                                   handleMenuClose();
 //                                 }}
-//                                 disabled={request.status === "declined"}
+//                                 disabled={declineDisabled}
 //                                 sx={{
 //                                   color: "warning.main",
 //                                   fontWeight: 500,
@@ -983,6 +1029,17 @@ const DemolishDashboard = () => {
       localStorage.setItem("geo_address_cache", JSON.stringify(json));
     } catch {}
   }, []);
+
+  // simple HTML-escape helper used when showing decline reason in a Swal html confirm
+  const escapeHtml = useCallback((unsafe) =>
+    String(unsafe || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;")
+      .replace(/`/g, "&#96;"),
+  []);
 
   const reverseGeocode = useCallback(
     async (lat, lng) => {
@@ -1331,28 +1388,87 @@ const DemolishDashboard = () => {
     }
   };
 
+  // UPDATED: handleStatusUpdate with decline reason support
   const handleStatusUpdate = async (id, newStatus) => {
-    const confirm = await Swal.fire({
-      title: `Update status to "${newStatus}"?`,
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonText: "Yes, update it!",
-      cancelButtonText: "Cancel",
-    });
-    if (!confirm.isConfirmed) return;
+    // If declining, prompt for reason first (required)
+    let declineReason = null;
+
+    if (newStatus === "declined") {
+      const { value: reason } = await Swal.fire({
+        title: "Reason for decline",
+        input: "textarea",
+        inputLabel: "Please provide a reason for declining this demolition request.",
+        inputPlaceholder: "Type the reason here...",
+        inputAttributes: {
+          "aria-label": "Reason for decline",
+        },
+        showCancelButton: true,
+        confirmButtonText: "Decline request",
+        cancelButtonText: "Cancel",
+        preConfirm: (val) => {
+          if (!val || !val.trim()) {
+            Swal.showValidationMessage("Reason is required to decline the request.");
+            return false;
+          }
+          return val.trim();
+        },
+      });
+
+      if (!reason) {
+        return; // user cancelled or validation failed
+      }
+      declineReason = reason.trim();
+
+      // final confirmation showing escaped reason
+      const confirmDecline = await Swal.fire({
+        title: "Confirm decline",
+        html: `Are you sure you want to decline this request with the reason:<br/><em>${escapeHtml(declineReason)}</em>`,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes, decline",
+        cancelButtonText: "Cancel",
+      });
+
+      if (!confirmDecline.isConfirmed) return;
+    } else {
+      const confirm = await Swal.fire({
+        title: `Update status to "${newStatus}"?`,
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Yes, update it!",
+        cancelButtonText: "Cancel",
+      });
+      if (!confirm.isConfirmed) return;
+    }
 
     try {
-      const res = await axios.patch(`${API_URL}/api/demolish/${id}`, {
-        status: newStatus,
-      });
-      setRequests((prev) => prev.map((req) => (req._id === id ? { ...req, status: res.data.status } : req)));
-      toast.success(`Request ${newStatus}`);
+      const payload = { status: newStatus };
+      if (declineReason) payload.declineReason = declineReason;
 
-      // Notify client on key status changes
-      const targetUserId = res?.data?.userId || requests.find((r) => r._id === id)?.userId;
+      const res = await axios.patch(`${API_URL}/api/demolish/${id}`, payload);
+
+      // Update local state: include declineReason if present
+      setRequests((prev) =>
+        prev.map((req) =>
+          req._id === id
+            ? {
+                ...req,
+                status: res.data.status || newStatus,
+                declineReason: res.data.declineReason !== undefined ? res.data.declineReason : declineReason || null,
+              }
+            : req
+        )
+      );
+
+      toast.success(newStatus === "declined" ? "Request declined" : `Request ${newStatus}`);
+
+      // Notify client when possible (include reason if declined)
+      const reqObj = requests.find((r) => r._id === id);
+      const targetUserId = res?.data?.userId || reqObj?.userId;
+
       if (targetUserId) {
         let msg = "Your demolition request has been updated.";
-        if (newStatus === "declined") msg = "Your demolition request was declined.";
+        if (newStatus === "declined") msg = `Your demolition request was declined. Reason: ${declineReason}`;
         if (newStatus === "price_accepted") msg = "Price accepted. We will proceed with next steps.";
         if (newStatus === "price_declined") msg = "Price declined. Please contact support if needed.";
         if (newStatus === "completed") msg = "Your demolition request has been completed.";
@@ -1623,7 +1739,16 @@ const DemolishDashboard = () => {
               <Table stickyHeader>
                 <TableHead>
                   <TableRow sx={{ bgcolor: "grey.900" }}>
-                    {["ID", "Name", "Contact", "Location", "Price", "Status", "Scheduled Date", "Actions"].map((head) => (
+                    {[
+                      "ID",
+                      "Name",
+                      "Contact",
+                      "Location",
+                      "Price",
+                      "Status",
+                      "Scheduled Date",
+                      "Actions",
+                    ].map((head) => (
                       <TableCell
                         key={head}
                         sx={{
