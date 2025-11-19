@@ -1,5 +1,4 @@
 
-
 // import React, { useEffect, useState } from "react";
 // import axios from "axios";
 // import Swal from "sweetalert2";
@@ -105,14 +104,12 @@
 //   // --- Kick off reverse-geocoding when requests change ---
 //   useEffect(() => {
 //     const run = async () => {
-//       // gather coords from requests
 //       const coords = requests
 //         .filter((r) => r?.location?.lat && r?.location?.lng)
 //         .map((r) => fmtKey(r.location.lat, r.location.lng));
 //       const unique = Array.from(new Set(coords));
 //       if (!unique.length) return;
 
-//       // Seed from localStorage
 //       const seed = {};
 //       unique.forEach((k) => {
 //         const cached = getCachedAddress(k);
@@ -125,7 +122,6 @@
 
 //       const results = {};
 
-//       // Inline reverse-geocode function to avoid dependency issues
 //       const reverseGeocodeInline = async (lat, lng) => {
 //         const key = fmtKey(lat, lng);
 //         const cached = getCachedAddress(key);
@@ -146,7 +142,6 @@
 //           setCachedAddress(key, value);
 //           return value;
 //         } catch (e) {
-//           // If anything fails, just return the key
 //           return key;
 //         }
 //       };
@@ -154,25 +149,23 @@
 //       for (const k of missing) {
 //         const [lat, lng] = k.split(",").map(Number);
 //         try {
-//           // be polite to the API
+//           // polite delay
 //           // eslint-disable-next-line no-await-in-loop
 //           await new Promise((r) => setTimeout(r, 150));
 //           // eslint-disable-next-line no-await-in-loop
 //           const addr = await reverseGeocodeInline(lat, lng);
 //           results[k] = addr;
 //         } catch {
-//           results[k] = k; // fallback to coords if error
+//           results[k] = k;
 //         }
 //       }
 //       setAddressMap((prev) => ({ ...prev, ...results }));
 //     };
 //     run();
-//     // Only depends on 'requests' because we inlined reverse geocode and use local helper functions.
 //   }, [requests]);
 
 //   // --- Helpers for date inputs / quick ranges ---
 //   const toInputDate = (d) => {
-//     // Convert Date -> "YYYY-MM-DD" in local time
 //     const tzOffset = d.getTimezoneOffset() * 60000;
 //     return new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
 //   };
@@ -188,7 +181,7 @@
 //     }
 //     if (range === "last7") {
 //       const from = new Date(now);
-//       from.setDate(from.getDate() - 6); // inclusive: today and previous 6 days
+//       from.setDate(from.getDate() - 6);
 //       setDateFrom(toInputDate(from));
 //       setDateTo(today);
 //       return;
@@ -210,10 +203,8 @@
 //   useEffect(() => {
 //     let filtered = requests.filter((request) => {
 //       const q = searchQuery.toLowerCase();
-//       // Include selId in search as well (fallback to _id)
 //       const idText = (request.selId || request._id || "").toString().toLowerCase();
 
-//       // Also search by human-readable address when available
 //       let addressText = "";
 //       if (request?.location?.lat && request?.location?.lng) {
 //         const key = fmtKey(request.location.lat, request.location.lng);
@@ -241,13 +232,12 @@
 //       filtered = filtered.filter((req) => req.price > 20000);
 //     }
 
-//     // NEW: Date range filter (by createdAt)
 //     if (dateFrom || dateTo) {
 //       const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
 //       const toDate = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
 
 //       filtered = filtered.filter((req) => {
-//         if (!req?.createdAt) return false; // if no createdAt, exclude when date filters are applied
+//         if (!req?.createdAt) return false;
 //         const created = new Date(req.createdAt);
 //         if (fromDate && created < fromDate) return false;
 //         if (toDate && created > toDate) return false;
@@ -280,14 +270,14 @@
 //       );
 //       toast.success(`Request ${newStatus}`);
 
-//       // === Minimal notification (FOR: "sell") ===
+//       // Notification handling (best-effort)
 //       const reqObj = requests.find((r) => r._id === id);
 //       const targetUserId = res?.data?.userId || reqObj?.userId;
 //       if (targetUserId) {
 //         try {
 //           await axios.post(`${API_URL}/api/notifications`, {
 //             userId: targetUserId,
-//             orderId: id, // reuse field to store the request id
+//             orderId: id,
 //             for: "sell",
 //             role: "client",
 //             status: newStatus,
@@ -327,18 +317,29 @@
 //         ocularVisit: date,
 //       });
 
-//       // Update UI
-//       setRequests((prev) => prev.map((req) => (req._id === id ? { ...req, ...res.data } : req)));
+//       // Update UI: ensure status becomes ocular_scheduled if API doesn't return it
+//       setRequests((prev) =>
+//         prev.map((req) =>
+//           req._id === id
+//             ? {
+//                 ...req,
+//                 ...res.data,
+//                 status: res.data.status || "ocular_scheduled",
+//                 ocularVisit: res.data.ocularVisit || date,
+//               }
+//             : req
+//         )
+//       );
 //       toast.success("Ocular visit scheduled successfully");
 
-//       // === Minimal notification (FOR: "sell") ===
+//       // Notification
 //       const reqObj = requests.find((r) => r._id === id);
 //       const targetUserId = res?.data?.userId || reqObj?.userId;
 //       if (targetUserId) {
 //         try {
 //           await axios.post(`${API_URL}/api/notifications`, {
 //             userId: targetUserId,
-//             orderId: id, // reuse field to store the request id
+//             orderId: id,
 //             for: "sell",
 //             role: "client",
 //             status: "ocular_scheduled",
@@ -376,7 +377,6 @@
 
 //   // --- Download Excel (kept) ---
 //   const handleDownloadExcel = () => {
-//     // Include a human-readable address column in export
 //     const exportData = filteredRequests.map(({ images, location, ...rest }) => {
 //       let address = "N/A";
 //       if (location?.lat && location?.lng) {
@@ -402,6 +402,23 @@
 
 //   const handleFilterOpen = (event) => setFilterAnchor(event.currentTarget);
 //   const handleFilterClose = () => setFilterAnchor(null);
+
+//   // Helper: compute UI-disabled states for a request
+//   const computeActionDisabled = (request) => {
+//     const status = request?.status || "pending";
+//     const ocularScheduled = Boolean(request?.ocularVisit) || status === "ocular_scheduled";
+
+//     const acceptDisabled =
+//       status === "accepted" || // already accepted
+//       status === "declined" || // declined already
+//       (!ocularScheduled && status === "pending"); // pending without ocular -> must schedule first
+
+//     const declineDisabled = status === "declined" || status === "accepted"; // cannot decline if already decided
+//     // scheduleDisabled now also true when ocular is already scheduled
+//     const scheduleDisabled = status === "accepted" || status === "declined" || ocularScheduled; // cannot schedule after accept/decline or if already scheduled
+
+//     return { acceptDisabled, declineDisabled, scheduleDisabled };
+//   };
 
 //   // ====== UI ======
 //   return (
@@ -573,12 +590,13 @@
 //                   {filteredRequests.length > 0 ? (
 //                     filteredRequests.map((request) => {
 //                       const displayId = request.selId || request._id;
+//                       const { acceptDisabled, declineDisabled, scheduleDisabled } = computeActionDisabled(request);
 //                       return (
 //                         <TableRow
 //                           key={request._id}
 //                           hover
 //                           sx={{ cursor: "pointer" }}
-//                           onClick={() => setSelectedRequest(request)} // open modal on row click
+//                           onClick={() => setSelectedRequest(request)}
 //                         >
 //                           <TableCell>{displayId}</TableCell>
 //                           <TableCell>{request.name}</TableCell>
@@ -633,7 +651,7 @@
 //                                   handleStatusUpdate(request._id, "accepted");
 //                                   handleMenuClose();
 //                                 }}
-//                                 disabled={request.status === "accepted"}
+//                                 disabled={acceptDisabled}
 //                                 sx={{
 //                                   color: "success.main",
 //                                   fontWeight: 500,
@@ -648,7 +666,7 @@
 //                                   handleStatusUpdate(request._id, "declined");
 //                                   handleMenuClose();
 //                                 }}
-//                                 disabled={request.status === "declined"}
+//                                 disabled={declineDisabled}
 //                                 sx={{
 //                                   color: "warning.main",
 //                                   fontWeight: 500,
@@ -663,9 +681,11 @@
 //                                   handleScheduleOcular(request._id);
 //                                   handleMenuClose();
 //                                 }}
+//                                 disabled={scheduleDisabled}
 //                                 sx={{
 //                                   color: "info.main",
 //                                   fontWeight: 500,
+//                                   "&.Mui-disabled": { color: "info.light" },
 //                                   "&:hover": { bgcolor: "info.light", color: "white" },
 //                                 }}
 //                               >
@@ -686,7 +706,6 @@
 //                               </MenuItem>
 //                               <MenuItem
 //                                 onClick={() => {
-//                                   // Open modal where the PDF download lives now
 //                                   setSelectedRequest(request);
 //                                   handleMenuClose();
 //                                 }}
@@ -731,6 +750,7 @@
 // };
 
 // export default SellDashboard;
+
 
 import React, { useEffect, useState } from "react";
 import axios from "axios";
@@ -789,6 +809,16 @@ const SellDashboard = () => {
   const [addressMap, setAddressMap] = useState({}); // { "lat,lng": "Pretty address" }
 
   const fmtKey = (lat, lng) => `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`;
+
+  // simple HTML-escape helper to avoid using non-public Swal helpers
+  const escapeHtml = (unsafe) =>
+    String(unsafe || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;")
+      .replace(/`/g, "&#96;");
 
   const getCachedAddress = (key) => {
     try {
@@ -983,43 +1013,106 @@ const SellDashboard = () => {
 
   // --- Action Handlers ---
   const handleStatusUpdate = async (id, newStatus) => {
-    const confirm = await Swal.fire({
-      title: `Update status to "${newStatus}"?`,
-      icon: "question",
-      showCancelButton: true,
-      confirmButtonText: "Yes, update it!",
-      cancelButtonText: "Cancel",
-    });
-    if (!confirm.isConfirmed) return;
+    // If declining, ask for reason first
+    let declineReason = null;
 
-    try {
-      const res = await axios.patch(`${API_URL}/api/sell/${id}/status`, {
-        status: newStatus,
+    if (newStatus === "declined") {
+      const { value: reason } = await Swal.fire({
+        title: "Reason for decline",
+        input: "textarea",
+        inputLabel: "Please provide a reason for declining this sell request.",
+        inputPlaceholder: "Type the reason here...",
+        inputAttributes: {
+          "aria-label": "Reason for decline",
+        },
+        showCancelButton: true,
+        confirmButtonText: "Decline request",
+        cancelButtonText: "Cancel",
+        preConfirm: (val) => {
+          if (!val || !val.trim()) {
+            Swal.showValidationMessage("Reason is required to decline the request.");
+            return false;
+          }
+          return val.trim();
+        },
       });
 
-      // Update local state
+      if (!reason) {
+        // user cancelled or validation failed -> don't proceed
+        return;
+      }
+      declineReason = reason.trim();
+
+      // Optional: confirm final
+      const confirmDecline = await Swal.fire({
+        title: "Confirm decline",
+        html: `Are you sure you want to decline this request with the reason:<br/><em>${escapeHtml(
+          declineReason
+        )}</em>`,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Yes, decline",
+        cancelButtonText: "Cancel",
+      });
+
+      if (!confirmDecline.isConfirmed) return;
+    } else {
+      // For non-decline transitions, ask confirmation (existing behavior)
+      const confirm = await Swal.fire({
+        title: `Update status to "${newStatus}"?`,
+        icon: "question",
+        showCancelButton: true,
+        confirmButtonText: "Yes, update it!",
+        cancelButtonText: "Cancel",
+      });
+      if (!confirm.isConfirmed) return;
+    }
+
+    try {
+      const payload = { status: newStatus };
+      if (declineReason) payload.declineReason = declineReason;
+
+      const res = await axios.patch(`${API_URL}/api/sell/${id}/status`, payload);
+
+      // Update local state: include declineReason if present, or clear it otherwise
       setRequests((prev) =>
-        prev.map((req) => (req._id === id ? { ...req, status: res.data.status } : req))
+        prev.map((req) =>
+          req._id === id
+            ? {
+                ...req,
+                status: res.data.status || newStatus,
+                declineReason: res.data.declineReason !== undefined ? res.data.declineReason : declineReason || null,
+              }
+            : req
+        )
       );
-      toast.success(`Request ${newStatus}`);
+
+      toast.success(
+        newStatus === "declined"
+          ? "Request declined"
+          : `Request status updated to ${newStatus}`
+      );
 
       // Notification handling (best-effort)
       const reqObj = requests.find((r) => r._id === id);
       const targetUserId = res?.data?.userId || reqObj?.userId;
       if (targetUserId) {
         try {
+          // Build message including reason if declined
+          const message =
+            newStatus === "accepted"
+              ? "Your sell request has been accepted."
+              : newStatus === "declined"
+              ? `Your sell request has been declined. Reason: ${declineReason}`
+              : `Your sell request status was updated to "${newStatus.replace(/_/g, " ")}".`;
+
           await axios.post(`${API_URL}/api/notifications`, {
             userId: targetUserId,
             orderId: id,
             for: "sell",
             role: "client",
             status: newStatus,
-            message:
-              newStatus === "accepted"
-                ? "Your sell request has been accepted."
-                : newStatus === "declined"
-                ? "Your sell request has been declined."
-                : `Your sell request status was updated to "${newStatus.replace(/_/g, " ")}".`,
+            message,
           });
         } catch (e) {
           console.error("Failed to create sell notification:", e);
