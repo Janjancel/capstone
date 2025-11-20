@@ -84,6 +84,16 @@
 // }
 
 // /** -------------------------------- Component -------------------------------- */
+// /**
+//  * Props:
+//  * - show, onClose
+//  * - user
+//  * - totalPrice
+//  * - selectedItems (array)
+//  * - setCartItems, setSelectedItems, setCartCount, setShowModal (optional callbacks for UI updates)
+//  * - onConfirm(address, notes, selectedItems) => optional function; if provided CartModal delegates order submission to it (must return a Promise)
+//  * - defaultAddress => optional address object to prefill the form
+//  */
 // const CartModal = ({
 //   show,
 //   onClose,
@@ -94,6 +104,8 @@
 //   setSelectedItems,
 //   setCartCount,
 //   setShowModal,
+//   onConfirm, // optional: parent-provided submit function
+//   defaultAddress,
 // }) => {
 //   const API_URL = process.env.REACT_APP_API_URL;
 
@@ -170,8 +182,15 @@
 //       setOptions((prev) => ({ ...prev, regions: regionList }));
 //     };
 
+//     loadRegions();
+
+//     // prefer defaultAddress if provided
+//     if (defaultAddress && Object.keys(defaultAddress).length > 0) {
+//       setAddress(defaultAddress);
+//       return;
+//     }
+
 //     if (show && user) {
-//       loadRegions();
 //       const fetchAddress = async () => {
 //         try {
 //           const res = await axios.get(`${API_URL}/api/address/${user._id}`, {
@@ -190,7 +209,7 @@
 //       fetchAddress();
 //     }
 //     // eslint-disable-next-line react-hooks/exhaustive-deps
-//   }, [show, user, API_URL]);
+//   }, [show, user, API_URL, defaultAddress]);
 
 //   useEffect(() => {
 //     if (!address.region) return;
@@ -259,7 +278,7 @@
 //       );
 //       toast.success("Address saved!");
 //       setIsEditing(false);
-//       setShowModal(true);
+//       setShowModal && setShowModal(true);
 //     } catch (err) {
 //       console.error("Save error:", err);
 //       toast.error("Failed to save address.");
@@ -312,7 +331,7 @@
 //     };
 //   };
 
-//   // --- Order confirmation ---
+//   // --- Order confirmation (internal default) ---
 //   const handleOrderConfirmation = async () => {
 //     if (!user) return toast.error("User not found.");
 //     if (!isAddressComplete())
@@ -343,12 +362,10 @@
 //         created?.meta?.computed?.deliveryFee ??
 //         created?.deliveryFee ??
 //         created?.order?.deliveryFee ??
-//         created?.order?.deliveryFee ??
 //         null;
 //       const serverGrandTotal =
 //         created?.meta?.computed?.grandTotal ??
 //         created?.grandTotal ??
-//         created?.order?.grandTotal ??
 //         created?.order?.grandTotal ??
 //         null;
 
@@ -479,6 +496,42 @@
 //       toast.error(serverMsg);
 //     } finally {
 //       setLoading(false);
+//     }
+//   };
+
+//   // When Confirm button is clicked: if parent provided onConfirm => delegate to it.
+//   // Otherwise run the internal order confirmation above.
+//   const handleConfirmClick = async () => {
+//     if (onConfirm && typeof onConfirm === "function") {
+//       setLoading(true);
+//       setError("");
+//       try {
+//         // parent onConfirm may accept (address, notes, selectedItems)
+//         // ensure it returns a Promise so we can await it
+//         await onConfirm(address, "", selectedItems);
+
+//         // after success, run the same UI cleanup we normally do (best-effort)
+//         try {
+//           const removeIds = (selectedItems || []).map((i) => getItemId(i)).filter(Boolean);
+//           setCartItems && setCartItems((prev = []) => prev.filter((it) => !removeIds.includes(getItemId(it))));
+//         } catch (e) {}
+//         try { setSelectedItems && setSelectedItems([]); } catch (e) {}
+//         try { setCartCount && setCartCount(0); } catch (e) {}
+//         try { setShowModal && setShowModal(false); } catch (e) {}
+//         window.dispatchEvent(new CustomEvent("cartUpdated", { detail: (selectedItems || []).length }));
+
+//         toast.success("Order placed successfully!");
+//         onClose && onClose();
+//       } catch (err) {
+//         console.error("Parent onConfirm failed:", err);
+//         const msg = err?.response?.data?.message || err?.message || "Failed to place order.";
+//         setError(msg);
+//         toast.error(msg);
+//       } finally {
+//         setLoading(false);
+//       }
+//     } else {
+//       await handleOrderConfirmation();
 //     }
 //   };
 
@@ -709,7 +762,7 @@
 
 //                   <Button
 //                     variant="success"
-//                     onClick={handleOrderConfirmation}
+//                     onClick={handleConfirmClick}
 //                     disabled={!isAddressComplete() || loading || !selectedItems || selectedItems.length === 0}
 //                   >
 //                     {loading ? (
@@ -883,6 +936,10 @@ const CartModal = ({
   // Delivery preview states
   const [deliveryFeePreview, setDeliveryFeePreview] = useState(null); // null => unknown/TBD
   const [grandTotalPreview, setGrandTotalPreview] = useState(null);
+
+  // Discount preview states
+  const [discountPercentPreview, setDiscountPercentPreview] = useState(null);
+  const [discountAmountPreview, setDiscountAmountPreview] = useState(null);
 
   // Safer auth header helper (always returns object)
   const authHeaders = () => {
@@ -1083,6 +1140,27 @@ const CartModal = ({
     };
   };
 
+  // ---------- Client-side discount rules (mirror server) ----------
+  // - total >= 50,000 and < 100,000 => 5%
+  // - total >= 100,000 and <= 199,999.99 => 8%
+  // - total >= 200,000 => 10%
+  function computeDiscount(total) {
+    if (!isFinite(total) || total <= 0) return { percent: null, amount: null };
+    let percent = null;
+    if (total >= 200000) {
+      percent = 10;
+    } else if (total >= 100000) {
+      percent = 8;
+    } else if (total >= 50000) {
+      percent = 5;
+    } else {
+      percent = null;
+    }
+    if (percent == null) return { percent: null, amount: null };
+    const amount = parseFloat(((percent / 100) * total).toFixed(2));
+    return { percent, amount };
+  }
+
   // --- Order confirmation (internal default) ---
   const handleOrderConfirmation = async () => {
     if (!user) return toast.error("User not found.");
@@ -1109,7 +1187,7 @@ const CartModal = ({
 
       const created = orderRes.data;
 
-      // Try multiple shapes for deliveryFee/grandTotal returned from server
+      // Try multiple shapes for deliveryFee/grandTotal/discount returned from server
       const serverDeliveryFee =
         created?.meta?.computed?.deliveryFee ??
         created?.deliveryFee ??
@@ -1121,15 +1199,35 @@ const CartModal = ({
         created?.order?.grandTotal ??
         null;
 
+      const serverDiscountAmount =
+        created?.meta?.computed?.discountAmount ??
+        created?.discount ??
+        created?.order?.discount ??
+        null;
+      const serverDiscountPercent =
+        created?.meta?.computed?.discountPercent ?? null;
+
       if (serverDeliveryFee != null && serverGrandTotal != null) {
-        toast.success(
-          `Order created. Delivery fee: ${formatPHP(
-            serverDeliveryFee
-          )}. Grand total: ${formatPHP(serverGrandTotal)}.`
-        );
+        let message = `Order created. Delivery fee: ${formatPHP(
+          serverDeliveryFee
+        )}. Grand total: ${formatPHP(serverGrandTotal)}.`;
+        if (serverDiscountAmount != null) {
+          message = `Order created. Discount applied: ${serverDiscountPercent ?? ""}${
+            serverDiscountPercent ? "%" : ""
+          } (${formatPHP(serverDiscountAmount)}). ` + message;
+        }
+        toast.success(message);
       } else {
-        // fallback success message
-        toast.success("Order placed successfully!");
+        // fallback success message; include discount if server returned it
+        if (serverDiscountAmount != null) {
+          toast.success(
+            `Order created. Discount: ${serverDiscountPercent ?? ""}${
+              serverDiscountPercent ? "%" : ""
+            } (${formatPHP(serverDiscountAmount)}).`
+          );
+        } else {
+          toast.success("Order placed successfully!");
+        }
       }
 
       const orderId = created?._id || created?.order?._id || created?.orderId;
@@ -1327,7 +1425,7 @@ const CartModal = ({
     return sum + qty * price;
   }, 0);
 
-  // ---------------- Delivery fee preview (client-side) ----------------
+  // ---------------- Delivery fee & discount preview (client-side) ----------------
   // Haversine and fee constants (mirror server logic)
   const toRad = (deg) => (deg * Math.PI) / 180;
   const haversineKm = (lat1, lon1, lat2, lon2) => {
@@ -1359,15 +1457,22 @@ const CartModal = ({
     const lat = user?.coordinates?.lat ?? user?.coordinates?.latitude ?? null;
     const lng = user?.coordinates?.lng ?? user?.coordinates?.longitude ?? null;
 
+    // compute discount based on computedTotal (before delivery)
+    const discount = computeDiscount(computedTotal);
+    setDiscountPercentPreview(discount.percent);
+    setDiscountAmountPreview(discount.amount);
+
     if (lat != null && lng != null && isFinite(Number(lat)) && isFinite(Number(lng))) {
       const distanceKm = haversineKm(PIVOT.lat, PIVOT.lng, Number(lat), Number(lng));
       const fee = computeDeliveryFee(distanceKm);
       setDeliveryFeePreview(fee);
-      setGrandTotalPreview(Number((computedTotal + fee).toFixed(2)));
+      const gt = Number((computedTotal - (discount.amount || 0) + fee).toFixed(2));
+      setGrandTotalPreview(gt);
     } else {
-      // coordinates missing -> unknown fee
+      // coordinates missing -> unknown fee; still compute grand total without delivery (mark delivery TBD)
       setDeliveryFeePreview(null);
-      setGrandTotalPreview(null);
+      const gt = Number((computedTotal - (discount.amount || 0)).toFixed(2));
+      setGrandTotalPreview(gt);
     }
     // recompute when selectedItems/user change
   }, [user, computedTotal]);
@@ -1488,6 +1593,18 @@ const CartModal = ({
 
                     <div className="mt-2">
                       <div>
+                        <strong>Discount: </strong>
+                        {discountAmountPreview == null ? (
+                          <span className="text-muted">No discount</span>
+                        ) : (
+                          <span>
+                            {discountPercentPreview ? `${discountPercentPreview}% ` : ""}
+                            ({formatPHP(discountAmountPreview)})
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
                         <strong>Delivery Fee: </strong>
                         {deliveryFeePreview == null ? (
                           <span className="text-muted">TBD (coordinates not found)</span>
@@ -1495,6 +1612,7 @@ const CartModal = ({
                           <span>{formatPHP(deliveryFeePreview)}</span>
                         )}
                       </div>
+
                       <div>
                         <strong>Grand Total: </strong>
                         {grandTotalPreview == null ? (
@@ -1503,10 +1621,11 @@ const CartModal = ({
                           <span className="fw-bold">{formatPHP(grandTotalPreview)}</span>
                         )}
                       </div>
+
                       {deliveryFeePreview == null && (
                         <small className="text-muted d-block">
-                          We couldn't find your saved coordinates. The final delivery fee will be
-                          calculated on the server when you place the order.
+                          We couldn't find your saved coordinates. The final delivery fee (and grand total)
+                          will be calculated on the server when you place the order.
                         </small>
                       )}
                     </div>
