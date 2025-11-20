@@ -616,7 +616,7 @@ export default function NavbarLayout() {
 
   // Keep a ref to timer so we can clear it if user closes early or component unmounts
   const purchaseTimerRef = useRef(null);
-  // Prevent double navigation
+  // Prevent double navigation (keeps previous pattern safe)
   const purchaseNavigatedRef = useRef(false);
 
   // NOTE: kept these two to preserve MobileView props shape; they are no longer used for desktop.
@@ -697,8 +697,7 @@ export default function NavbarLayout() {
 
   if (location.pathname.startsWith("/admin")) return null;
 
-  // Show the purchase pre-modal (with image and top-right X). After 3s (auto) or when user closes,
-  // navigate to /buy (but avoid double navigation).
+  // Navigate to /buy first, then show the popup modal on the Buy page.
   const openPurchaseModalAndProceed = () => {
     if (!user) {
       // if not logged in, show signin modal as before
@@ -710,18 +709,23 @@ export default function NavbarLayout() {
     // Reset nav guard
     purchaseNavigatedRef.current = false;
 
+    // Navigate first
+    navigate("/buy");
+
+    // then open the preview modal (so it appears on the /buy page)
     setPurchaseModalOpen(true);
 
     // clear any previous timer
     if (purchaseTimerRef.current) clearTimeout(purchaseTimerRef.current);
 
-    // set auto-close timer to close and navigate after 3 seconds
+    // set auto-close timer to close after 5 seconds (5000ms)
     purchaseTimerRef.current = setTimeout(() => {
-      handleClosePurchaseModal(true);
-    }, 3000);
+      // just close the modal; no need to navigate because we already navigated
+      handleClosePurchaseModal(false);
+    }, 5000);
   };
 
-  // close the modal; optionally navigate after close
+  // close the modal; optionally navigate after close (default: don't navigate)
   const handleClosePurchaseModal = (navigateAfter = false) => {
     // clear timer
     if (purchaseTimerRef.current) {
@@ -746,7 +750,7 @@ export default function NavbarLayout() {
       return;
     }
 
-    // If buy, show the pre-buy modal
+    // If buy, navigate first then show popup
     if (service === "buy") {
       openPurchaseModalAndProceed();
     } else {
@@ -933,7 +937,7 @@ export default function NavbarLayout() {
       {/* Purchase confirmation modal (pre-buy) */}
       <Dialog
         open={purchaseModalOpen}
-        onClose={() => handleClosePurchaseModal(false)} // if closed via backdrop or escape, don't auto-navigate; only X or timer navigates
+        onClose={() => handleClosePurchaseModal(false)} // just close; navigation already happened earlier
         maxWidth="xs"
         fullWidth
         PaperProps={{
@@ -949,7 +953,7 @@ export default function NavbarLayout() {
           <Typography variant="h6">Ready to Buy?</Typography>
           <IconButton
             aria-label="close"
-            onClick={() => handleClosePurchaseModal(true)}
+            onClick={() => handleClosePurchaseModal(false)} // close only, no extra navigation
             sx={{
               position: "absolute",
               right: 8,
