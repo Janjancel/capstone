@@ -1,6 +1,4 @@
 
-
-
 // import React, { useRef } from "react";
 // import { Modal, Button } from "react-bootstrap";
 // import html2pdf from "html2pdf.js";
@@ -27,10 +25,23 @@
 //     ? new Date(order.createdAt).toLocaleString()
 //     : "N/A";
 //   const items = order?.items || [];
-//   const total = order?.total || 0;
+//   const total = Number(order?.total || 0);
+
+//   // deliveryFee may be stored on the order; fallback to 0
+//   const deliveryFee = Number(order?.deliveryFee ?? order?.meta?.computed?.deliveryFee ?? 0);
 
 //   // Prefer human-readable orderId if present, else fallback to _id/id
 //   const displayOrderId = order?.orderId || order?._id || order?.id || "N/A";
+
+//   // Grand total: prefer stored grandTotal, otherwise compute as total + deliveryFee
+//   const grandTotal =
+//     Number(order?.grandTotal ?? order?.meta?.computed?.grandTotal ?? (total + deliveryFee));
+
+//   const formatPHP = (n) =>
+//     `₱${Number(n || 0).toLocaleString("en-PH", {
+//       minimumFractionDigits: 2,
+//       maximumFractionDigits: 2,
+//     })}`;
 
 //   return (
 //     <Modal show={show} onHide={handleClose} size="lg" centered>
@@ -96,10 +107,10 @@
 //                 <tr key={item.id || index}>
 //                   <td>{index + 1}</td>
 //                   <td>{item.name}</td>
-//                   <td>₱{parseFloat(item.price).toFixed(2)}</td>
+//                   <td>{formatPHP(parseFloat(item.price || 0))}</td>
 //                   <td>{item.quantity}</td>
 //                   <td>
-//                     ₱{(item.quantity * parseFloat(item.price)).toFixed(2)}
+//                     {formatPHP(Number(item.quantity || 0) * Number(parseFloat(item.price || 0)))}
 //                   </td>
 //                 </tr>
 //               ))}
@@ -114,23 +125,24 @@
 //                   <td>
 //                     <strong>Sub Total:</strong>
 //                   </td>
-//                   <td>₱{parseFloat(total).toFixed(2)}</td>
+//                   <td>{formatPHP(total)}</td>
 //                 </tr>
+
+//                 {/* Replace tax row with delivery fee row */}
 //                 <tr>
 //                   <td>
-//                     <strong>Tax:</strong>
+//                     <strong>Delivery Fee:</strong>
 //                   </td>
-//                   <td>₱0.00</td>
+//                   <td>{formatPHP(deliveryFee)}</td>
 //                 </tr>
+
 //                 <tr className="table-light">
 //                   <th>Total:</th>
-//                   <th>₱{parseFloat(total).toFixed(2)}</th>
+//                   <th>{formatPHP(grandTotal)}</th>
 //                 </tr>
 //               </tbody>
 //             </table>
 //           </div>
-
-//           {/* Removed Payment Method section as requested */}
 
 //           <div className="text-end mt-4">
 //             <p className="border-top pt-2">Authorised Sign</p>
@@ -187,12 +199,29 @@ const InVoice = ({ show, handleClose, order }) => {
   // deliveryFee may be stored on the order; fallback to 0
   const deliveryFee = Number(order?.deliveryFee ?? order?.meta?.computed?.deliveryFee ?? 0);
 
-  // Prefer human-readable orderId if present, else fallback to _id/id
-  const displayOrderId = order?.orderId || order?._id || order?.id || "N/A";
+  // Discount: numeric amount (stored) and optional percent
+  // Accept either order.discount (number|null) or meta.computed.discountAmount
+  const discountAmount =
+    order?.discount != null
+      ? Number(order.discount)
+      : Number(order?.meta?.computed?.discountAmount ?? 0) || 0;
 
-  // Grand total: prefer stored grandTotal, otherwise compute as total + deliveryFee
+  // If discountAmount is 0 treat as no discount (keep null for display)
+  const discountValue = discountAmount > 0 ? discountAmount : null;
+
+  const discountPercent =
+    order?.meta?.computed?.discountPercent ??
+    order?.discountPercent ??
+    order?.meta?.computed?.percent ??
+    null;
+
+  // Prefer stored grandTotal, otherwise compute as total - discount + deliveryFee
   const grandTotal =
-    Number(order?.grandTotal ?? order?.meta?.computed?.grandTotal ?? (total + deliveryFee));
+    Number(
+      order?.grandTotal ??
+        order?.meta?.computed?.grandTotal ??
+        (total - (discountValue || 0) + deliveryFee)
+    ) || 0;
 
   const formatPHP = (n) =>
     `₱${Number(n || 0).toLocaleString("en-PH", {
@@ -222,13 +251,9 @@ const InVoice = ({ show, handleClose, order }) => {
               <p className="mb-1">
                 <strong>Invoice to:</strong> {userEmail}
               </p>
-              {address?.houseNo && (
-                <p className="mb-0">House No: {address.houseNo}</p>
-              )}
+              {address?.houseNo && <p className="mb-0">House No: {address.houseNo}</p>}
               {address?.street && <p className="mb-0">{address.street}</p>}
-              {address?.barangay && (
-                <p className="mb-0">Brgy. {address.barangay}</p>
-              )}
+              {address?.barangay && <p className="mb-0">Brgy. {address.barangay}</p>}
               {address?.city && <p className="mb-0">{address.city}</p>}
               {address?.province && <p className="mb-0">{address.province}</p>}
               {address?.zipCode && <p className="mb-0">{address.zipCode}</p>}
@@ -239,7 +264,7 @@ const InVoice = ({ show, handleClose, order }) => {
               </p>
               {/* Order ID directly below Invoice# */}
               <p className="mb-1">
-                <strong>Order ID:</strong> {displayOrderId}
+                <strong>Order ID:</strong> {order?.orderId || order?._id || order?.id || "N/A"}
               </p>
               <p className="mb-0">
                 <strong>Date:</strong> {orderDate}
@@ -267,14 +292,16 @@ const InVoice = ({ show, handleClose, order }) => {
                   <td>{formatPHP(parseFloat(item.price || 0))}</td>
                   <td>{item.quantity}</td>
                   <td>
-                    {formatPHP(Number(item.quantity || 0) * Number(parseFloat(item.price || 0)))}
+                    {formatPHP(
+                      Number(item.quantity || 0) * Number(parseFloat(item.price || 0))
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          {/* Total */}
+          {/* Totals (Sub Total, Discount, Delivery Fee, Grand Total) */}
           <div className="d-flex justify-content-end">
             <table className="table w-auto">
               <tbody>
@@ -283,6 +310,22 @@ const InVoice = ({ show, handleClose, order }) => {
                     <strong>Sub Total:</strong>
                   </td>
                   <td>{formatPHP(total)}</td>
+                </tr>
+
+                <tr>
+                  <td>
+                    <strong>Discount:</strong>
+                  </td>
+                  <td>
+                    {discountValue == null ? (
+                      <span>-</span>
+                    ) : (
+                      <span>
+                        {discountPercent ? `${discountPercent}% ` : ""}
+                        ({formatPHP(discountValue)})
+                      </span>
+                    )}
+                  </td>
                 </tr>
 
                 {/* Replace tax row with delivery fee row */}
