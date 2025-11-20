@@ -1,4 +1,5 @@
 
+
 // import React, { useState, useEffect, useRef } from "react";
 // import axios from "axios";
 // import Swal from "sweetalert2";
@@ -36,6 +37,10 @@
 //   const pageSize = 5;
 //   const intervalRef = useRef(null);
 //   const API_URL = process.env.REACT_APP_API_URL;
+
+//   // NEW: date range filter for orders
+//   const [dateFrom, setDateFrom] = useState(""); // "YYYY-MM-DD"
+//   const [dateTo, setDateTo] = useState(""); // "YYYY-MM-DD"
 
 //   // --- Helpers ---------------------------------------------------------------
 //   const STATUS_API_MAP = {
@@ -286,7 +291,19 @@
 //     const uiStatus = apiToUi(o.status).toLowerCase();
 //     const statusMatch =
 //       statusTab === "All" || uiStatus === statusTab.toLowerCase();
-//     return emailMatch && statusMatch;
+
+//     // Date range filter
+//     let dateMatch = true;
+//     if (dateFrom || dateTo) {
+//       if (!o.createdAt) return false;
+//       const created = new Date(o.createdAt);
+//       const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+//       const toDate = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
+//       if (fromDate && created < fromDate) dateMatch = false;
+//       if (toDate && created > toDate) dateMatch = false;
+//     }
+
+//     return emailMatch && statusMatch && dateMatch;
 //   });
 
 //   const totalPages = Math.ceil(filteredOrders.length / pageSize);
@@ -331,6 +348,11 @@
 //     };
 //   };
 
+//   // Helper to reset pagination when filters change
+//   useEffect(() => {
+//     setCurrentPage(1);
+//   }, [searchEmail, statusTab, dateFrom, dateTo]);
+
 //   return (
 //     <Box className="mt-4 container">
 //       <Typography variant="h5" gutterBottom>
@@ -353,39 +375,75 @@
 //         )}
 //       </Tabs>
 
-//       {/* Search + Export */}
-//       <Box display="flex" justifyContent="space-between" mb={2}>
-//         <TextField
-//           label="Search by email"
-//           variant="outlined"
-//           size="small"
-//           value={searchEmail}
-//           onChange={(e) => setSearchEmail(e.target.value)}
-//           sx={{ width: 300 }}
-//         />
-//         <Button
-//           variant="contained"
-//           color="success"
-//           onClick={() => {
-//             const headers = ["Order ID", "Email", "Order Date", "Total", "Status"];
-//             const rows = filteredOrders.map((o) => [
-//               o.orderId || o._id, // show human-readable ID if available
-//               o.userEmail || "Unknown",
-//               new Date(o.createdAt).toLocaleString(),
-//               o.total,
-//               apiToUi(o.status),
-//             ]);
-//             const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-//             const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-//             const url = URL.createObjectURL(blob);
-//             const link = document.createElement("a");
-//             link.href = url;
-//             link.download = "orders.csv";
-//             link.click();
-//           }}
-//         >
-//           Export to CSV
-//         </Button>
+//       {/* Search + Date Range + Export (inline with header) */}
+//       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
+//         <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+//           <TextField
+//             label="Search by email"
+//             variant="outlined"
+//             size="small"
+//             value={searchEmail}
+//             onChange={(e) => setSearchEmail(e.target.value)}
+//             sx={{ width: 300 }}
+//           />
+
+//           {/* Date inputs inline */}
+//           <TextField
+//             size="small"
+//             type="date"
+//             label="From"
+//             InputLabelProps={{ shrink: true }}
+//             value={dateFrom}
+//             onChange={(e) => setDateFrom(e.target.value)}
+//           />
+//           <TextField
+//             size="small"
+//             type="date"
+//             label="To"
+//             InputLabelProps={{ shrink: true }}
+//             value={dateTo}
+//             inputProps={{ min: dateFrom || undefined }}
+//             onChange={(e) => setDateTo(e.target.value)}
+//           />
+//           {(dateFrom || dateTo) && (
+//             <Button
+//               size="small"
+//               variant="outlined"
+//               onClick={() => {
+//                 setDateFrom("");
+//                 setDateTo("");
+//               }}
+//             >
+//               Reset Dates
+//             </Button>
+//           )}
+//         </Box>
+
+//         <Box display="flex" alignItems="center" gap={1}>
+//           <Button
+//             variant="contained"
+//             color="success"
+//             onClick={() => {
+//               const headers = ["Order ID", "Email", "Order Date", "Total", "Status"];
+//               const rows = filteredOrders.map((o) => [
+//                 o.orderId || o._id, // show human-readable ID if available
+//                 o.userEmail || "Unknown",
+//                 new Date(o.createdAt).toLocaleString(),
+//                 o.total,
+//                 apiToUi(o.status),
+//               ]);
+//               const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+//               const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+//               const url = URL.createObjectURL(blob);
+//               const link = document.createElement("a");
+//               link.href = url;
+//               link.download = "orders.csv";
+//               link.click();
+//             }}
+//           >
+//             Export to CSV
+//           </Button>
+//         </Box>
 //       </Box>
 
 //       {loading ? (
@@ -530,6 +588,7 @@
 // };
 
 // export default OrderDashboard;
+
 
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
@@ -884,6 +943,55 @@ const OrderDashboard = () => {
     setCurrentPage(1);
   }, [searchEmail, statusTab, dateFrom, dateTo]);
 
+  // ---------- small helpers to pick fee/discount/grandTotal defensively ----------
+  const pickTotal = (order) =>
+    order?.total ??
+    order?.totalAmount ??
+    order?.totalPrice ??
+    (Array.isArray(order?.items)
+      ? order.items.reduce(
+          (sum, it) =>
+            sum + Number(it?.price || it?.amount || 0) * Number(it?.quantity || 1),
+          0
+        )
+      : 0);
+
+  const pickDiscount = (order) => {
+    if (!order) return 0;
+    // prefer numeric discount field, then meta.computed.discountAmount
+    const d =
+      order?.discount != null
+        ? Number(order.discount)
+        : Number(order?.meta?.computed?.discountAmount ?? order?.meta?.computed?.discount ?? 0);
+    return isNaN(d) ? 0 : d;
+  };
+
+  const pickDeliveryFee = (order) =>
+    Number(order?.deliveryFee ?? order?.meta?.computed?.deliveryFee ?? 0) || 0;
+
+  const pickGrandTotal = (order) => {
+    if (!order) return 0;
+    const explicit =
+      order?.grandTotal ??
+      order?.finalTotal ??
+      order?.totalAfterDiscount ??
+      order?.meta?.computed?.grandTotal;
+    if (explicit != null) return Number(explicit);
+
+    // fallback compute
+    const base = Number(pickTotal(order) || 0);
+    const discount = Number(pickDiscount(order) || 0);
+    const delivery = Number(pickDeliveryFee(order) || 0);
+    return Number((base - discount + delivery).toFixed(2));
+  };
+
+  // format helper
+  const formatPHP = (n) =>
+    `₱${Number(n || 0).toLocaleString("en-PH", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+
   return (
     <Box className="mt-4 container">
       <Typography variant="h5" gutterBottom>
@@ -1002,6 +1110,11 @@ const OrderDashboard = () => {
               isCancellationRequested,
             } = computeActionDisabled(order);
 
+            const total = pickTotal(order);
+            const discount = pickDiscount(order);
+            const delivery = pickDeliveryFee(order);
+            const grandTotal = pickGrandTotal(order);
+
             return (
               <Card key={order._id} variant="outlined" sx={{ mb: 2, p: 2 }}>
                 <CardContent>
@@ -1037,10 +1150,24 @@ const OrderDashboard = () => {
                   >
                     <Box>
                       <Typography>
-                        <strong>Total:</strong> ₱
-                        {parseFloat(order.total || 0).toFixed(2)}
+                        <strong>Subtotal:</strong> {formatPHP(total)}
                       </Typography>
-                      <Box display="flex" alignItems="center" gap={1}>
+
+                      <Typography>
+                        <strong>Discount:</strong>{" "}
+                        {discount ? formatPHP(discount) : <span>-</span>}
+                      </Typography>
+
+                      <Typography>
+                        <strong>Delivery Fee:</strong> {formatPHP(delivery)}
+                      </Typography>
+
+                      <Typography sx={{ mt: 1 }}>
+                        <strong>Grand Total:</strong>{" "}
+                        <span style={{ fontWeight: 700 }}>{formatPHP(grandTotal)}</span>
+                      </Typography>
+
+                      <Box display="flex" alignItems="center" gap={1} mt={1}>
                         <Typography>
                           <strong>Status:</strong>
                         </Typography>
