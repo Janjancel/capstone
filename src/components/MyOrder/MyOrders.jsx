@@ -1,3 +1,4 @@
+
 // // src/components/MyOrder/MyOrders.jsx
 // import React, { useState, useEffect, useMemo } from "react";
 // import axios from "axios";
@@ -18,7 +19,6 @@
 // import PurchaseHistory from "./PurchaseHistory";
 // import HistoryIcon from '@mui/icons-material/History';
 // import { useAuth } from "../../context/AuthContext";
-// import { useNavigate } from "react-router-dom";
 
 // // ---- Helpers ----
 // function StatusChip({ value }) {
@@ -199,7 +199,6 @@
 
 // const MyOrders = () => {
 //   const { user } = useAuth();
-//   const navigate = useNavigate();
 //   const [orders, setOrders] = useState([]);
 //   const [deliveredOrders, setDeliveredOrders] = useState([]);
 //   const [historyOpen, setHistoryOpen] = useState(false);
@@ -300,7 +299,6 @@
 //           <>
 //             <Grid container spacing={2}>
 //               {paginatedOrders.map((order) => {
-//                 // ...existing code...
 //                 const createdAt = order?.createdAt
 //                   ? new Date(order.createdAt).toLocaleString()
 //                   : "—";
@@ -311,10 +309,9 @@
 //                 const orderId = pickOrderId(order);
 //                 const itemCount = Array.isArray(order?.items) ? order.items.length : null;
 //                 const imageUrls = getOrderImageUrls(order);
-//                 // ...existing code...
+
 //                 return (
 //                   <Grid key={order?._id || orderId} item xs={12} sm={6} md={4}>
-//                     {/* ...existing code... */}
 //                     <Card
 //                       role="button"
 //                       onClick={() => handleSelectOrder(order)}
@@ -325,20 +322,19 @@
 //                       }}
 //                     >
 //                       <CardContent>
-//                         {/* ...existing code... */}
 //                         <Stack direction="row" justifyContent="space-between" alignItems="center">
 //                           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
 //                             Order {orderId}
 //                           </Typography>
 //                           <StatusChip value={status} />
 //                         </Stack>
-//                         {/* ...existing code... */}
+
 //                         {itemCount != null && (
 //                           <Typography variant="body2" sx={{ mt: 0.5 }}>
 //                             {itemCount} item{itemCount === 1 ? "" : "s"}
 //                           </Typography>
 //                         )}
-//                         {/* ...existing code... */}
+
 //                         <Stack direction="row" spacing={2} sx={{ mt: 1.5 }} alignItems="center">
 //                           <Typography variant="body2" color="text.secondary">
 //                             {createdAt}
@@ -348,15 +344,15 @@
 //                             Total: {currency(total)}
 //                           </Typography>
 //                         </Stack>
-//                         {/* ...existing code... */}
+
 //                         {address && (
 //                           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
 //                             {address}
 //                           </Typography>
 //                         )}
-//                         {/* ...existing code... */}
+
 //                         <OrderImageStrip urls={imageUrls} />
-//                         {/* ...existing code... */}
+
 //                         <div className="stepper-container">
 //                           {steps.map((step, index) => (
 //                             <div
@@ -371,7 +367,7 @@
 //                             </div>
 //                           ))}
 //                         </div>
-//                         {/* ...existing code... */}
+
 //                         <Stack direction="row" spacing={1.5} sx={{ mt: 1 }}>
 //                           <Button
 //                             size="small"
@@ -504,7 +500,6 @@
 // export default MyOrders;
 
 
-// src/components/MyOrder/MyOrders.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import {
@@ -549,7 +544,12 @@ function StatusChip({ value }) {
   );
 }
 
-const currency = (n) => `₱${Number(n || 0).toLocaleString()}`;
+// Always show two decimals, PH locale
+const currency = (n) =>
+  `₱${Number(n || 0).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 const pickTotal = (order) =>
   order?.total ??
@@ -562,6 +562,28 @@ const pickTotal = (order) =>
         0
       )
     : 0);
+
+// NEW: pickGrandTotal prefers explicit grandTotal fields, otherwise computes fallback
+const pickGrandTotal = (order) => {
+  if (!order) return 0;
+  const explicit =
+    order?.grandTotal ??
+    order?.finalTotal ??
+    order?.totalAfterDiscount ??
+    order?.final_amount ??
+    null;
+  if (explicit != null) return Number(explicit);
+
+  // fallback compute: total - discount + deliveryFee
+  const base = Number(pickTotal(order) || 0);
+  const discount = Number(order?.discount || 0);
+  const delivery = Number(order?.deliveryFee ?? order?.delivery_fee ?? 0);
+  const otherFees =
+    // if you use an "otherFees" array/object, you might want to include them here
+    0;
+
+  return Number((base - discount + delivery + otherFees).toFixed(2));
+};
 
 const pickOrderId = (order) => order?.orderId || order?._id || "—";
 
@@ -807,7 +829,8 @@ const MyOrders = () => {
                 const createdAt = order?.createdAt
                   ? new Date(order.createdAt).toLocaleString()
                   : "—";
-                const total = pickTotal(order);
+                // use grand total (prefers server's explicit field if present)
+                const grandTotal = pickGrandTotal(order);
                 const address = pickAddress(order);
                 const status = order?.status || "Pending";
                 const currentStep = getCurrentStepIndex(status);
@@ -846,7 +869,7 @@ const MyOrders = () => {
                           </Typography>
                           <Divider orientation="vertical" flexItem />
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            Total: {currency(total)}
+                            Total: {currency(grandTotal)}
                           </Typography>
                         </Stack>
 
