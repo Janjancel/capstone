@@ -6,7 +6,7 @@ import DashboardNavbar from "../DashboardNavbar";
 import Sidebar from "../Sidebar/Sidebar";
 import Items from "../Items";
 import Accounts from "../Accounts";
-import Dashboard from "../Dashboard";
+import Dashboard from "../Dashboard/Dashboard";
 import SellRequests from "../Requests/SellDashboard/SellDashboard";
 import DemolitionRequests from "../Requests/DemolishDashboard/DemolishDashboard";
 import OrderDashboard from "../OrderDashboard";
