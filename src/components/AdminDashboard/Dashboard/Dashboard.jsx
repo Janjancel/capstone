@@ -1,5 +1,5 @@
 
-// // Dashboard.jsx
+// // Dashboard.jsx (updated)
 // import React, { useState, useEffect } from "react";
 // import { Container, Row, Col, Button, Form, Card } from "react-bootstrap";
 // import { BuildingFillX, HouseFill, CartFill } from "react-bootstrap-icons";
@@ -13,6 +13,12 @@
 // import SellAnalytics3 from "../Dashboard/Analytics/Sell/SellAnalytics3";
 // import SellAnalytics4 from "../Dashboard/Analytics/Sell/SellAnalytics4";
 // import SellAnalytics5 from "../Dashboard/Analytics/Sell/SellAnalytics5";
+
+// import DemolishAnalytics1 from "../Dashboard/Analytics/Demolish/DemolishAnalytics1";
+// import DemolishAnalytics2 from "../Dashboard/Analytics/Demolish/DemolishAnalytics2";
+// import DemolishAnalytics3 from "../Dashboard/Analytics/Demolish/DemolishAnalytics3";
+// import DemolishAnalytics4 from "../Dashboard/Analytics/Demolish/DemolishAnalytics4";
+// import DemolishAnalytics5 from "../Dashboard/Analytics/Demolish/DemolishAnalytics5";
 
 // const API_URL = process.env.REACT_APP_API_URL || "";
 
@@ -39,6 +45,9 @@
 
 //   // Filter selector
 //   const [filter, setFilter] = useState("day");
+
+//   // Analytics selection (Sell or Demolish)
+//   const [analyticsView, setAnalyticsView] = useState("sell"); // 'sell' or 'demolish'
 
 //   // Current signed-in user (for display)
 //   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
@@ -259,29 +268,54 @@
 //         <small className="text-muted">
 //           Signed in as: <strong>{currentUser.email || "—"}</strong>
 //         </small>
-//         <Form.Select style={{ width: "180px" }} value={filter} onChange={(e) => setFilter(e.target.value)}>
-//           <option value="day">Group by Day</option>
-//           <option value="week">Group by Week</option>
-//           <option value="month">Group by Month</option>
-//         </Form.Select>
+
+//         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+//           <Form.Select style={{ width: "180px" }} value={filter} onChange={(e) => setFilter(e.target.value)}>
+//             <option value="day">Group by Day</option>
+//             <option value="week">Group by Week</option>
+//             <option value="month">Group by Month</option>
+//           </Form.Select>
+
+//           <Form.Select
+//             style={{ width: "220px" }}
+//             value={analyticsView}
+//             onChange={(e) => setAnalyticsView(e.target.value)}
+//           >
+//             <option value="sell">Sell Analytics</option>
+//             <option value="demolish">Demolish Analytics</option>
+//           </Form.Select>
+//         </div>
 //       </div>
 
 //       {/* Dashboard analytics area */}
 //       <div id="dashboard-report-content" className="p-3">
 //         <Card className="p-3 shadow-sm bg-light mb-3">
-//           <h5 className="mb-2">Sell Analytics</h5>
+//           <h5 className="mb-2">{analyticsView === "sell" ? "Sell Analytics" : "Demolish Analytics"}</h5>
 //           <p className="mb-0 text-muted">
-//             Below are analytics computed from sell requests. Use the export buttons above to include these in a
-//             report.
+//             {analyticsView === "sell"
+//               ? "Below are analytics computed from sell requests. Use the export buttons above to include these in a report."
+//               : "Below are analytics computed from demolish requests. Use the export buttons above to include these in a report."}
 //           </p>
 //         </Card>
 
 //         {/* Analytics widgets */}
-//         <SellAnalytics1 defaultGrouping={filter} />
-//         <SellAnalytics2 />
-//         <SellAnalytics3 />
-//         <SellAnalytics4 />
-//         <SellAnalytics5 />
+//         {analyticsView === "sell" ? (
+//           <>
+//             <SellAnalytics1 defaultGrouping={filter} />
+//             <SellAnalytics2 />
+//             <SellAnalytics3 />
+//             <SellAnalytics4 />
+//             <SellAnalytics5 />
+//           </>
+//         ) : (
+//           <>
+//             <DemolishAnalytics1 defaultGrouping={filter} />
+//             <DemolishAnalytics2 />
+//             <DemolishAnalytics3 />
+//             <DemolishAnalytics4 />
+//             <DemolishAnalytics5 />
+//           </>
+//         )}
 //       </div>
 //     </Container>
 //   );
@@ -290,7 +324,7 @@
 // export default Dashboard;
 
 
-// Dashboard.jsx (updated)
+// Dashboard.jsx (updated to include Orders analytics)
 import React, { useState, useEffect } from "react";
 import { Container, Row, Col, Button, Form, Card } from "react-bootstrap";
 import { BuildingFillX, HouseFill, CartFill } from "react-bootstrap-icons";
@@ -310,6 +344,12 @@ import DemolishAnalytics2 from "../Dashboard/Analytics/Demolish/DemolishAnalytic
 import DemolishAnalytics3 from "../Dashboard/Analytics/Demolish/DemolishAnalytics3";
 import DemolishAnalytics4 from "../Dashboard/Analytics/Demolish/DemolishAnalytics4";
 import DemolishAnalytics5 from "../Dashboard/Analytics/Demolish/DemolishAnalytics5";
+
+import OrderAnalytics1 from "../Dashboard/Analytics/Order/OrderAnalytics1";
+import OrderAnalytics2 from "../Dashboard/Analytics/Order/OrderAnalytics2";
+import OrderAnalytics3 from "../Dashboard/Analytics/Order/OrderAnalytics3";
+import OrderAnalytics4 from "../Dashboard/Analytics/Order/OrderAnalytics4";
+import OrderAnalytics5 from "../Dashboard/Analytics/Order/OrderAnalytics5";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 
@@ -337,8 +377,8 @@ const Dashboard = () => {
   // Filter selector
   const [filter, setFilter] = useState("day");
 
-  // Analytics selection (Sell or Demolish)
-  const [analyticsView, setAnalyticsView] = useState("sell"); // 'sell' or 'demolish'
+  // Analytics selection (sell / demolish / orders)
+  const [analyticsView, setAnalyticsView] = useState("sell");
 
   // Current signed-in user (for display)
   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
@@ -430,7 +470,7 @@ const Dashboard = () => {
     })();
   }, []);
 
-  // Export CSV
+  // Export CSV & PDF same as before
   const exportCSV = () => {
     const headers = "Order ID,User Email,Status,Total Items,Total Amount,Created At\n";
     const rows = (orders || [])
@@ -459,11 +499,9 @@ const Dashboard = () => {
     document.body.removeChild(link);
   };
 
-  // Export PDF (exports the container element)
   const exportPDF = () => {
     const element = document.getElementById("dashboard-report-content");
     if (!element) {
-      // Fallback: create a simple text element for export
       const fallback = document.createElement("div");
       fallback.innerHTML = `<h3>Dashboard Report</h3><p>Orders exported: ${orders.length}</p>`;
       document.body.appendChild(fallback);
@@ -482,7 +520,7 @@ const Dashboard = () => {
 
   return (
     <Container className="mt-4 p-3 bg-white border-bottom shadow-sm">
-      {/* === Top Tiles === */}
+      {/* Top tiles */}
       <Row className="g-4 row-cols-1 row-cols-md-3 mb-3">
         <Col>
           <Button
@@ -519,7 +557,7 @@ const Dashboard = () => {
         </Col>
       </Row>
 
-      {/* === Summary Cards + Export === */}
+      {/* Summary + Export */}
       <Row className="mb-4">
         <Col md={4}>
           <Card className="shadow-sm bg-light h-100">
@@ -554,7 +592,7 @@ const Dashboard = () => {
         </Col>
       </Row>
 
-      {/* === Signed in as + Filter (KEEP) === */}
+      {/* Signed in as + Filters */}
       <div className="d-flex justify-content-between align-items-center mb-3">
         <small className="text-muted">
           Signed in as: <strong>{currentUser.email || "—"}</strong>
@@ -568,29 +606,33 @@ const Dashboard = () => {
           </Form.Select>
 
           <Form.Select
-            style={{ width: "220px" }}
+            style={{ width: "260px" }}
             value={analyticsView}
             onChange={(e) => setAnalyticsView(e.target.value)}
           >
             <option value="sell">Sell Analytics</option>
             <option value="demolish">Demolish Analytics</option>
+            <option value="orders">Orders Analytics</option>
           </Form.Select>
         </div>
       </div>
 
-      {/* Dashboard analytics area */}
+      {/* Analytics area */}
       <div id="dashboard-report-content" className="p-3">
         <Card className="p-3 shadow-sm bg-light mb-3">
-          <h5 className="mb-2">{analyticsView === "sell" ? "Sell Analytics" : "Demolish Analytics"}</h5>
+          <h5 className="mb-2">
+            {analyticsView === "sell" ? "Sell Analytics" : analyticsView === "demolish" ? "Demolish Analytics" : "Orders Analytics"}
+          </h5>
           <p className="mb-0 text-muted">
             {analyticsView === "sell"
               ? "Below are analytics computed from sell requests. Use the export buttons above to include these in a report."
-              : "Below are analytics computed from demolish requests. Use the export buttons above to include these in a report."}
+              : analyticsView === "demolish"
+              ? "Below are analytics computed from demolish requests. Use the export buttons above to include these in a report."
+              : "Below are analytics computed from orders. Use the export buttons above to include these in a report."}
           </p>
         </Card>
 
-        {/* Analytics widgets */}
-        {analyticsView === "sell" ? (
+        {analyticsView === "sell" && (
           <>
             <SellAnalytics1 defaultGrouping={filter} />
             <SellAnalytics2 />
@@ -598,13 +640,25 @@ const Dashboard = () => {
             <SellAnalytics4 />
             <SellAnalytics5 />
           </>
-        ) : (
+        )}
+
+        {analyticsView === "demolish" && (
           <>
             <DemolishAnalytics1 defaultGrouping={filter} />
             <DemolishAnalytics2 />
             <DemolishAnalytics3 />
             <DemolishAnalytics4 />
             <DemolishAnalytics5 />
+          </>
+        )}
+
+        {analyticsView === "orders" && (
+          <>
+            <OrderAnalytics1 defaultGrouping={filter} />
+            <OrderAnalytics2 />
+            <OrderAnalytics3 />
+            <OrderAnalytics4 />
+            <OrderAnalytics5 />
           </>
         )}
       </div>
