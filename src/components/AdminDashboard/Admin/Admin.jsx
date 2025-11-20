@@ -10,7 +10,7 @@ import Dashboard from "../Dashboard";
 import SellRequests from "../Requests/SellDashboard/SellDashboard";
 import DemolitionRequests from "../Requests/DemolishDashboard/DemolishDashboard";
 import OrderDashboard from "../OrderDashboard";
-import ReportDashboard from "../ReportDashboard";
+import ReportDashboard from "../Reports/ReportDashboard";
 import HeritageDashboard from "../HeritageDashboard/HeritageDashboard";
 
 import "bootstrap/dist/css/bootstrap.min.css";

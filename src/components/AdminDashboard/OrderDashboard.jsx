@@ -615,7 +615,7 @@ import {
 import { Pagination } from "react-bootstrap";
 
 const OrderDashboard = () => {
-  const [orders, setOrders] = useState([]); // orders enriched with userEmail
+  const [orders, setOrders] = useState([]); // orders enriched with userEmail + normalizedStatus
   const [userData, setUserData] = useState({}); // { [userId]: { email } } cache
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -645,6 +645,14 @@ const OrderDashboard = () => {
     cancelled: "cancelled",
     cancelled_: "cancelled",
   };
+
+  const normalizeStatus = (s) =>
+    String(s || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "");
+
   const toApiStatus = (label) => {
     const key = String(label || "").trim().toLowerCase();
     return STATUS_API_MAP[key] || key.replace(/\s+/g, "_");
@@ -652,8 +660,9 @@ const OrderDashboard = () => {
 
   // Map API statuses (snake_case) -> friendly UI label
   const apiToUi = (apiStatus) => {
-    if (!apiStatus) return "Pending";
-    const s = String(apiStatus).toLowerCase();
+    // normalize first so we accept 'cancellation requested', 'cancellation_requested', etc.
+    const s = normalizeStatus(apiStatus);
+    if (!s) return "Pending";
     switch (s) {
       case "pending":
         return "Pending";
@@ -745,7 +754,14 @@ const OrderDashboard = () => {
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
       );
       const enriched = await enrichOrdersWithEmails(sorted);
-      setOrders(enriched);
+
+      // IMPORTANT: normalize status here and attach normalizedStatus property
+      const withNormalized = enriched.map((o) => ({
+        ...o,
+        normalizedStatus: normalizeStatus(o.status),
+      }));
+
+      setOrders(withNormalized);
       setLoading(false);
       setError("");
     } catch (err) {
@@ -854,7 +870,7 @@ const OrderDashboard = () => {
   };
 
   const getStatusColor = (apiStatus) => {
-    const s = String(apiStatus || "").toLowerCase();
+    const s = normalizeStatus(apiStatus);
     switch (s) {
       case "pending":
         return "default";
@@ -878,9 +894,10 @@ const OrderDashboard = () => {
   const filteredOrders = orders.filter((o) => {
     const emailValue = (o.userEmail || "").toLowerCase();
     const emailMatch = emailValue.includes(searchEmail.toLowerCase());
-    const uiStatus = apiToUi(o.status).toLowerCase();
-    const statusMatch =
-      statusTab === "All" || uiStatus === statusTab.toLowerCase();
+
+    // Use normalized status for comparisons
+    const uiStatus = apiToUi(o.normalizedStatus || o.status).toLowerCase();
+    const statusMatch = statusTab === "All" || uiStatus === statusTab.toLowerCase();
 
     // Date range filter
     let dateMatch = true;
@@ -904,7 +921,7 @@ const OrderDashboard = () => {
 
   // compute disabled states for action buttons
   const computeActionDisabled = (order) => {
-    const apiStatus = String(order.status || "pending").toLowerCase();
+    const apiStatus = normalizeStatus(order.normalizedStatus || order.status || "pending");
 
     const isDelivered = apiStatus === "delivered";
     const isCancelled = apiStatus === "cancelled";
@@ -1007,11 +1024,16 @@ const OrderDashboard = () => {
         sx={{ mb: 2 }}
       >
         {/* Reordered as requested: Cancellation Request before Cancelled */}
-        {["All", "Pending", "Cancellation Request", "Cancelled", "Shipped", "Delivered"].map(
-          (status) => (
-            <Tab key={status} label={status} value={status} />
-          )
-        )}
+        {[
+          "All",
+          "Pending",
+          "Cancellation Request",
+          "Cancelled",
+          "Shipped",
+          "Delivered",
+        ].map((status) => (
+          <Tab key={status} label={status} value={status} />
+        ))}
       </Tabs>
 
       {/* Search + Date Range + Export (inline with header) */}
@@ -1069,7 +1091,7 @@ const OrderDashboard = () => {
                 o.userEmail || "Unknown",
                 new Date(o.createdAt).toLocaleString(),
                 o.total,
-                apiToUi(o.status),
+                apiToUi(o.normalizedStatus || o.status),
               ]);
               const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
               const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -1098,7 +1120,7 @@ const OrderDashboard = () => {
       ) : (
         <>
           {currentOrders.map((order) => {
-            const apiStatus = String(order.status || "pending").toLowerCase();
+            const apiStatus = normalizeStatus(order.normalizedStatus || order.status);
             const uiStatusLabel = apiToUi(apiStatus);
             const statusColor = getStatusColor(apiStatus);
 
@@ -1119,12 +1141,9 @@ const OrderDashboard = () => {
               <Card key={order._id} variant="outlined" sx={{ mb: 2, p: 2 }}>
                 <CardContent>
                   {/* Display orderId (fallback to _id) */}
-                  <Typography variant="h6">
-                    Order ID: {order.orderId || order._id}
-                  </Typography>
+                  <Typography variant="h6">Order ID: {order.orderId || order._id}</Typography>
                   <Typography>
-                    <strong>Order Date:</strong>{" "}
-                    {new Date(order.createdAt).toLocaleString()}
+                    <strong>Order Date:</strong> {new Date(order.createdAt).toLocaleString()}
                   </Typography>
                   <Typography>
                     <strong>Email:</strong> {order.userEmail || "Unknown"}
@@ -1142,12 +1161,7 @@ const OrderDashboard = () => {
                     ))}
                   </ul>
 
-                  <Box
-                    display="flex"
-                    justifyContent="space-between"
-                    alignItems="center"
-                    mt={2}
-                  >
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
                     <Box>
                       <Typography>
                         <strong>Subtotal:</strong> {formatPHP(total)}
@@ -1171,10 +1185,7 @@ const OrderDashboard = () => {
                         <Typography>
                           <strong>Status:</strong>
                         </Typography>
-                        <Chip
-                          label={uiStatusLabel}
-                          color={statusColor}
-                        />
+                        <Chip label={uiStatusLabel} color={statusColor} />
                       </Box>
 
                       {!isFinal && (
@@ -1210,11 +1221,7 @@ const OrderDashboard = () => {
                         </Box>
                       )}
                     </Box>
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      onClick={() => handleShowInvoice(order)}
-                    >
+                    <Button variant="outlined" color="primary" onClick={() => handleShowInvoice(order)}>
                       View Details
                     </Button>
                   </Box>
@@ -1227,11 +1234,7 @@ const OrderDashboard = () => {
           <Box display="flex" justifyContent="center" mt={3}>
             <Pagination>
               {Array.from({ length: totalPages }, (_, i) => (
-                <Pagination.Item
-                  key={i + 1}
-                  active={i + 1 === currentPage}
-                  onClick={() => setCurrentPage(i + 1)}
-                >
+                <Pagination.Item key={i + 1} active={i + 1 === currentPage} onClick={() => setCurrentPage(i + 1)}>
                   {i + 1}
                 </Pagination.Item>
               ))}

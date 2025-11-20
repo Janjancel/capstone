@@ -1,28 +1,12 @@
 // import React, { useState, useEffect } from "react";
-// import {
-//   Container,
-//   Row,
-//   Col,
-//   Button,
-//   Form,
-//   Card,
-//   Table
-// } from "react-bootstrap";
-// import {
-//   BuildingFillX,
-//   HouseFill,
-//   CartFill
-// } from "react-bootstrap-icons";
+// import { Container, Row, Col, Button, Form, Card } from "react-bootstrap";
+// import { BuildingFillX, HouseFill, CartFill } from "react-bootstrap-icons";
 // import { useNavigate } from "react-router-dom";
 // import axios from "axios";
-// import {
-//   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-//   LineChart, Line, Legend, PieChart, Pie, Cell
-// } from "recharts";
 // import html2pdf from "html2pdf.js";
 // import "bootstrap/dist/css/bootstrap.min.css";
 
-// const API_URL = process.env.REACT_APP_API_URL; // ✅ env variable
+// const API_URL = process.env.REACT_APP_API_URL;
 
 // const CURRENCY = (n) =>
 //   `₱${(Number.isFinite(Number(n)) ? Number(n) : 0).toLocaleString("en-PH", {
@@ -32,81 +16,36 @@
 
 // const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-// // Colors for charts
-// const COLORS = ["#198754", "#dc3545", "#0d6efd", "#6f42c1", "#fd7e14", "#20c997", "#6c757d", "#0dcaf0"];
-
-// // --- Helpers
-// const norm = (v) => String(v ?? "").toLowerCase().trim();
-// const normStatus = (s) => norm(String(s).replaceAll("_", " "));
-
-// // Map raw statuses into buckets we chart consistently
-// const mapStatusBucket = (status) => {
-//   const s = normStatus(status);
-//   if (s.includes("delivered") || s.includes("completed")) return "delivered";
-//   if (s.includes("cancelled") || s.includes("canceled") || s.includes("declined")) return "cancelled";
-//   if (s.includes("pending") || s.includes("processing") || s.includes("awaiting")) return "pending";
-//   return s || "pending";
-// };
-
-// // Grouping key
-// const bucketKey = (dateObj, mode) => {
-//   const d = new Date(dateObj);
-//   if (Number.isNaN(d.getTime())) return "Invalid Date";
-//   if (mode === "day") return d.toISOString().split("T")[0];
-//   if (mode === "week") {
-//     const start = new Date(d);
-//     start.setDate(d.getDate() - d.getDay()); // Sunday
-//     return start.toISOString().split("T")[0];
-//   }
-//   // month
-//   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-// };
-
 // const Dashboard = () => {
 //   const navigate = useNavigate();
 
-//   // Top tiles (kept intact)
+//   // Top tiles
 //   const [demolitionCount, setDemolitionCount] = useState(0);
 //   const [sellCount, setSellCount] = useState(0);
 //   const [orderCount, setOrderCount] = useState(0);
 
-//   // Raw arrays for analytics
-//   const [demolishArr, setDemolishArr] = useState([]);
-//   const [sellArr, setSellArr] = useState([]);
+//   // Orders (raw)
 //   const [orders, setOrders] = useState([]);
 
-//   // Report analytics (existing + new)
-//   const [chartData, setChartData] = useState([]); // Sales over time
-//   const [statusChartData, setStatusChartData] = useState([]); // Order status trend
-//   const [itemSalesData, setItemSalesData] = useState([]); // Top-selling items (₱)
-//   const [pieData, setPieData] = useState([]); // Delivered vs Cancelled
-//   const [filter, setFilter] = useState("day"); // day | week | month
+//   // Summary metrics
 //   const [pendingOrders, setPendingOrders] = useState(0);
 //   const [totalRevenue, setTotalRevenue] = useState(0);
 
-//   // New metrics
-//   const [aov, setAov] = useState(0); // Average order value (delivered/completed)
-//   const [deliveryRate, setDeliveryRate] = useState(0);
-//   const [cancelRate, setCancelRate] = useState(0);
-//   const [uniqueBuyers, setUniqueBuyers] = useState(0);
-//   const [repeatBuyers, setRepeatBuyers] = useState(0);
-//   const [weekdayRevenueData, setWeekdayRevenueData] = useState([]); // Revenue by weekday
-//   const [paymentMixData, setPaymentMixData] = useState([]); // Payment method distribution
-//   const [requestTrendData, setRequestTrendData] = useState([]); // Sell vs Demolish trend
-//   const [topCustomers, setTopCustomers] = useState([]); // Top customers by spend
+//   // Filter selector
+//   const [filter, setFilter] = useState("day");
 
-//   // Current signed-in user (email display)
+//   // Current signed-in user (for display)
 //   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
 //   const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
 
-//   // ---- Fetch current user (to display email)
+//   // Fetch current user (to display email)
 //   useEffect(() => {
 //     if (!userId) return;
 //     const token = localStorage.getItem("token");
 //     (async () => {
 //       try {
 //         const res = await axios.get(`${API_URL}/api/users/${userId}`, {
-//           headers: token ? { Authorization: `Bearer ${token}` } : {}
+//           headers: token ? { Authorization: `Bearer ${token}` } : {},
 //         });
 //         const data = res.data || {};
 //         setCurrentUser({
@@ -120,238 +59,72 @@
 //     })();
 //   }, [userId]);
 
-//   // ---- Fetch demolish/sell counts (top tiles)
-//   useEffect(() => {
-//     (async () => {
-//       try {
-//         const [demolishRes, sellRes, ordersRes] = await Promise.all([
-//           axios.get(`${API_URL}/api/demolish`),
-//           axios.get(`${API_URL}/api/sell`),
-//           axios.get(`${API_URL}/api/orders`)
-//         ]);
-
-//         const demolish = Array.isArray(demolishRes.data) ? demolishRes.data : [];
-//         const sell = Array.isArray(sellRes.data) ? sellRes.data : [];
-//         const ordersArr = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-
-//         setDemolitionCount(demolish.length || 0);
-//         setSellCount(sell.length || 0);
-//         setOrderCount(ordersArr.length || 0);
-
-//         // store raw for trend
-//         setDemolishArr(demolish);
-//         setSellArr(sell);
-//       } catch (error) {
-//         console.error("Error fetching top tile counts:", error);
-//         setDemolitionCount(0);
-//         setSellCount(0);
-//         setOrderCount(0);
-//         setDemolishArr([]);
-//         setSellArr([]);
-//       }
-//     })();
-//   }, []);
-
-//   // ---- Fetch orders + sales for analytics (hydrate missing order emails)
+//   // Fetch demolish/sell counts and orders (basic summary)
 //   useEffect(() => {
 //     (async () => {
 //       try {
 //         const token = localStorage.getItem("token");
-//         const [ordersRes, salesRes] = await Promise.all([
-//           axios.get(`${API_URL}/api/orders`),
-//           axios.get(`${API_URL}/api/sales`),
+//         const [demolishRes, sellRes, ordersRes] = await Promise.all([
+//           axios.get(`${API_URL}/api/demolish`, {
+//             headers: token ? { Authorization: `Bearer ${token}` } : {},
+//           }),
+//           axios.get(`${API_URL}/api/sell`, {
+//             headers: token ? { Authorization: `Bearer ${token}` } : {},
+//           }),
+//           axios.get(`${API_URL}/api/orders`, {
+//             headers: token ? { Authorization: `Bearer ${token}` } : {},
+//           }),
 //         ]);
 
-//         // ----------------- HYDRATE ORDER EMAILS -----------------
+//         const demolish = Array.isArray(demolishRes.data) ? demolishRes.data : [];
+//         const sell = Array.isArray(sellRes.data) ? sellRes.data : [];
 //         const fetchedOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-//         const missingIds = Array.from(new Set(
-//           fetchedOrders.filter((o) => !o.userEmail && o.userId).map((o) => o.userId)
-//         ));
 
-//         let idToEmail = {};
-//         if (missingIds.length > 0) {
-//           const results = await Promise.all(
-//             missingIds.map((id) =>
-//               axios
-//                 .get(`${API_URL}/api/users/${id}`, {
-//                   headers: token ? { Authorization: `Bearer ${token}` } : {},
-//                 })
-//                 .then((r) => ({ id, email: (r.data && r.data.email) || "—" }))
-//                 .catch(() => ({ id, email: "—" }))
-//             )
-//           );
-//           idToEmail = results.reduce((acc, { id, email }) => {
-//             acc[id] = email;
-//             return acc;
-//           }, {});
-//         }
+//         setDemolitionCount(demolish.length || 0);
+//         setSellCount(sell.length || 0);
+//         setOrderCount(fetchedOrders.length || 0);
 
-//         const hydratedOrders = fetchedOrders.map((o) => ({
+//         // hydrate order email if present on order object, else keep as-is
+//         const hydrated = fetchedOrders.map((o) => ({
 //           ...o,
-//           userEmail: o.userEmail || idToEmail[o.userId] || o.email || "—",
+//           userEmail: o.userEmail || o.email || "—",
 //         }));
-//         setOrders(hydratedOrders);
 
-//         // ----------------- ANALYTICS -----------------
-//         const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
+//         setOrders(hydrated);
 
-//         // ===== Order Status Trend + Pie + Pending
-//         const statusCountMap = {}; // { bucket: { date, pending, cancelled, delivered } }
-//         let pendingCount = 0;
-//         let deliveredTotal = 0;
-//         let cancelledTotal = 0;
-
-//         hydratedOrders.forEach((order) => {
-//           const key = bucketKey(order.createdAt, filter);
-//           const bucket = mapStatusBucket(order.status);
-
-//           if (!statusCountMap[key]) {
-//             statusCountMap[key] = { date: key, pending: 0, cancelled: 0, delivered: 0 };
-//           }
-//           statusCountMap[key][bucket] = (statusCountMap[key][bucket] || 0) + 1;
-
-//           if (bucket === "pending") pendingCount++;
-//           if (bucket === "cancelled") cancelledTotal++;
-//           if (bucket === "delivered") deliveredTotal++;
-//         });
-
-//         setPendingOrders(pendingCount);
-//         setStatusChartData(
-//           Object.values(statusCountMap).sort((a, b) => new Date(a.date) - new Date(b.date))
-//         );
-//         setPieData([
-//           { name: "Delivered/Completed", value: deliveredTotal },
-//           { name: "Cancelled/Declined", value: cancelledTotal },
-//         ]);
-
-//         // ===== Sales over time + Top-selling items + Total revenue
-//         const salesMap = {}; // { bucket: totalRevenue }
-//         let total = 0;
-//         const itemMap = {}; // { itemName: amount }
-//         const buyerSpend = {}; // { email: total }
-//         const weekdayMap = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
-
-//         salesData.forEach((sale) => {
-//           const key = bucketKey(sale.deliveredAt || sale.createdAt, filter);
-//           const saleTotal = Number(sale.total) || 0;
-
-//           salesMap[key] = (salesMap[key] || 0) + saleTotal;
-//           total += saleTotal;
-
-//           // top items (by revenue)
-//           (sale.items || []).forEach((item) => {
-//             const name = item.name || "Unnamed Item";
-//             const amount = (Number(item.price) || 0) * (Number(item.quantity) || 0);
-//             itemMap[name] = (itemMap[name] || 0) + amount;
-//           });
-
-//           // top customers
-//           const email = sale.userEmail || sale.customerEmail || sale.email || "Unknown";
-//           buyerSpend[email] = (buyerSpend[email] || 0) + saleTotal;
-
-//           // weekday revenue (based on deliveredAt when present)
-//           const d = new Date(sale.deliveredAt || sale.createdAt);
-//           if (!Number.isNaN(d.getTime())) {
-//             const wd = d.getDay();
-//             weekdayMap[wd] = (weekdayMap[wd] || 0) + saleTotal;
+//         // compute pending orders & revenue from orders
+//         let pending = 0;
+//         let revenue = 0;
+//         hydrated.forEach((o) => {
+//           const status = String(o.status || "").toLowerCase();
+//           if (status.includes("pending") || status.includes("processing") || status === "") pending++;
+//           // compute revenue using items if present, otherwise attempt o.total
+//           if (Array.isArray(o.items) && o.items.length > 0) {
+//             o.items.forEach((it) => {
+//               const price = Number(it.price) || 0;
+//               const qty = Number(it.quantity) || 0;
+//               revenue += price * qty;
+//             });
+//           } else {
+//             revenue += Number(o.total) || 0;
 //           }
 //         });
 
-//         const chartArray = Object.entries(salesMap).map(([date, total]) => ({ date, total }));
-//         const itemArray = Object.entries(itemMap).map(([name, total]) => ({ name, total }));
-//         const weekdayArray = Object.keys(weekdayMap).map((k) => ({
-//           weekday: WEEKDAY[Number(k)],
-//           revenue: weekdayMap[k] || 0,
-//         }));
-//         const topCustomerArray = Object.entries(buyerSpend)
-//           .map(([email, total]) => ({ email, total }))
-//           .sort((a, b) => b.total - a.total)
-//           .slice(0, 5);
-
-//         setChartData(chartArray.sort((a, b) => new Date(a.date) - new Date(b.date)));
-//         setItemSalesData(itemArray.sort((a, b) => b.total - a.total).slice(0, 12));
-//         setTotalRevenue(total);
-//         setWeekdayRevenueData(weekdayArray);
-//         setTopCustomers(topCustomerArray);
-
-//         // ===== High-level KPIs
-//         const deliveredCount = salesData.length; // assuming each sale = delivered/completed order
-//         setAov(deliveredCount > 0 ? total / deliveredCount : 0);
-
-//         const totalResolved = deliveredTotal + cancelledTotal;
-//         setDeliveryRate(totalResolved > 0 ? (deliveredTotal / totalResolved) * 100 : 0);
-//         setCancelRate(totalResolved > 0 ? (cancelledTotal / totalResolved) * 100 : 0);
-
-//         // Unique & repeat buyers (based on sales)
-//         const countsByBuyer = {};
-//         salesData.forEach((s) => {
-//           const email = s.userEmail || s.customerEmail || s.email || "Unknown";
-//           countsByBuyer[email] = (countsByBuyer[email] || 0) + 1;
-//         });
-//         const buyers = Object.keys(countsByBuyer);
-//         setUniqueBuyers(buyers.length);
-//         setRepeatBuyers(buyers.filter((e) => countsByBuyer[e] >= 2).length);
-
-//         // ===== Payment method mix (from orders)
-//         const paymentMap = {};
-//         hydratedOrders.forEach((o) => {
-//           // Try several conventions: o.paymentMethod or o.cod boolean
-//           let method =
-//             o.paymentMethod ||
-//             (o.cod === true ? "Cash on Delivery" : o.cod === false ? "Cash" : undefined) ||
-//             o.method ||
-//             "Unknown";
-//           const m = norm(method);
-//           const label = m.includes("cod")
-//             ? "Cash on Delivery"
-//             : m.includes("cash")
-//             ? "Cash"
-//             : method || "Unknown";
-//           paymentMap[label] = (paymentMap[label] || 0) + 1;
-//         });
-//         const paymentArray = Object.entries(paymentMap).map(([name, value]) => ({ name, value }));
-//         setPaymentMixData(paymentArray);
-
-//         // ===== Sell vs Demolish trend (createdAt buckets)
-//         const trendMap = {}; // { bucket: { date, sell: n, demolish: n } }
-//         (sellArr || []).forEach((s) => {
-//           const k = bucketKey(s.createdAt, filter);
-//           if (!trendMap[k]) trendMap[k] = { date: k, sell: 0, demolish: 0 };
-//           trendMap[k].sell += 1;
-//         });
-//         (demolishArr || []).forEach((d) => {
-//           const k = bucketKey(d.createdAt, filter);
-//           if (!trendMap[k]) trendMap[k] = { date: k, sell: 0, demolish: 0 };
-//           trendMap[k].demolish += 1;
-//         });
-//         const trendArray = Object.values(trendMap).sort(
-//           (a, b) => new Date(a.date) - new Date(b.date)
-//         );
-//         setRequestTrendData(trendArray);
+//         setPendingOrders(pending);
+//         setTotalRevenue(revenue);
 //       } catch (error) {
-//         console.error("Error fetching analytics:", error);
+//         console.error("Error fetching top tile counts or orders:", error);
+//         setDemolitionCount(0);
+//         setSellCount(0);
+//         setOrderCount(0);
 //         setOrders([]);
-//         setChartData([]);
-//         setStatusChartData([]);
-//         setItemSalesData([]);
-//         setPieData([]);
-//         setWeekdayRevenueData([]);
-//         setPaymentMixData([]);
-//         setRequestTrendData([]);
-//         setTopCustomers([]);
 //         setPendingOrders(0);
 //         setTotalRevenue(0);
-//         setAov(0);
-//         setDeliveryRate(0);
-//         setCancelRate(0);
-//         setUniqueBuyers(0);
-//         setRepeatBuyers(0);
 //       }
 //     })();
-//     // re-run when filter or sources change size (cheap heuristic)
-//   }, [filter, demolishArr.length, sellArr.length]);
+//   }, []);
 
-//   // ---- Export helpers (CSV/PDF)
+//   // Export CSV
 //   const exportCSV = () => {
 //     const headers = "Order ID,User Email,Status,Total Items,Total Amount,Created At\n";
 //     const rows = (orders || [])
@@ -362,10 +135,12 @@
 //           (order.items || []).reduce(
 //             (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.price) || 0),
 //             0
-//           ) || 0;
+//           ) || Number(order.total) || 0;
 //         const oid = order.orderId || order._id || "";
 //         const created = order.createdAt ? new Date(order.createdAt).toISOString() : "";
-//         return `${oid},${(order.userEmail || "").replaceAll(",", " ")},${(order.status || "").replaceAll(",", " ")},${totalItems},${totalAmount},${created}`;
+//         return `${oid},${(order.userEmail || "").replaceAll(",", " ")},${(order.status || "")
+//           .toString()
+//           .replaceAll(",", " ")},${totalItems},${totalAmount},${created}`;
 //       })
 //       .join("\n");
 
@@ -378,9 +153,17 @@
 //     document.body.removeChild(link);
 //   };
 
+//   // Export PDF (exports the container element)
 //   const exportPDF = () => {
 //     const element = document.getElementById("dashboard-report-content");
-//     if (!element) return;
+//     if (!element) {
+//       // Fallback: create a simple text element for export
+//       const fallback = document.createElement("div");
+//       fallback.innerHTML = `<h3>Dashboard Report</h3><p>Orders exported: ${orders.length}</p>`;
+//       document.body.appendChild(fallback);
+//       html2pdf().from(fallback).save().finally(() => document.body.removeChild(fallback));
+//       return;
+//     }
 //     const options = {
 //       margin: 0.5,
 //       filename: "dashboard-report.pdf",
@@ -393,8 +176,7 @@
 
 //   return (
 //     <Container className="mt-4 p-3 bg-white border-bottom shadow-sm">
-
-//       {/* === Top Tiles (kept) === */}
+//       {/* === Top Tiles === */}
 //       <Row className="g-4 row-cols-1 row-cols-md-3 mb-3">
 //         <Col>
 //           <Button
@@ -431,7 +213,7 @@
 //         </Col>
 //       </Row>
 
-//       {/* === Summary Cards + Export (existing) === */}
+//       {/* === Summary Cards + Export === */}
 //       <Row className="mb-4">
 //         <Col md={4}>
 //           <Card className="shadow-sm bg-light h-100">
@@ -466,7 +248,7 @@
 //         </Col>
 //       </Row>
 
-//       {/* === NEW: Signed-in email + Filter === */}
+//       {/* === Signed in as + Filter (KEEP) === */}
 //       <div className="d-flex justify-content-between align-items-center mb-3">
 //         <small className="text-muted">
 //           Signed in as: <strong>{currentUser.email || "—"}</strong>
@@ -482,239 +264,14 @@
 //         </Form.Select>
 //       </div>
 
-//       {/* === NEW: KPI Row === */}
-//       <Row className="g-3 mb-4">
-//         <Col md={3}>
-//           <Card className="shadow-sm bg-light h-100">
-//             <Card.Body>
-//               <h6>Average Order Value</h6>
-//               <h4 className="mb-0">{CURRENCY(aov)}</h4>
-//               <small className="text-muted">Delivered/Completed orders</small>
-//             </Card.Body>
-//           </Card>
-//         </Col>
-//         <Col md={3}>
-//           <Card className="shadow-sm bg-light h-100">
-//             <Card.Body>
-//               <h6>Delivery Rate</h6>
-//               <h4 className="mb-0">{deliveryRate.toFixed(1)}%</h4>
-//               <small className="text-muted">Delivered ÷ (Delivered + Cancelled)</small>
-//             </Card.Body>
-//           </Card>
-//         </Col>
-//         <Col md={3}>
-//           <Card className="shadow-sm bg-light h-100">
-//             <Card.Body>
-//               <h6>Cancel Rate</h6>
-//               <h4 className="mb-0">{cancelRate.toFixed(1)}%</h4>
-//               <small className="text-muted">Cancelled/Declined share</small>
-//             </Card.Body>
-//           </Card>
-//         </Col>
-//         <Col md={3}>
-//           <Card className="shadow-sm bg-light h-100">
-//             <Card.Body>
-//               <h6>Buyers</h6>
-//               <h4 className="mb-0">{uniqueBuyers}</h4>
-//               <small className="text-muted">{repeatBuyers} repeat</small>
-//             </Card.Body>
-//           </Card>
-//         </Col>
-//       </Row>
-
-//       {/* === Report Content (existing + new) === */}
-//       <div id="dashboard-report-content">
-//         {/* Sales Over Time & Order Status Trend */}
-//         <Card className="p-4 shadow-sm mb-4 bg-light">
-//           <Row>
-//             <Col md={6}>
-//               <h5 className="mb-1">Sales Over Time</h5>
-//               <small className="text-muted d-block mb-3">
-//                 Grouped by {filter === "day" ? "day" : filter === "week" ? "week (Sun start)" : "month"}
-//               </small>
-//               <ResponsiveContainer width="100%" height={250}>
-//                 <BarChart data={chartData}>
-//                   <CartesianGrid strokeDasharray="3 3" />
-//                   <XAxis dataKey="date" />
-//                   <YAxis />
-//                   <Tooltip />
-//                   <Bar dataKey="total" fill="#312e81" />
-//                 </BarChart>
-//               </ResponsiveContainer>
-//             </Col>
-//             <Col md={6}>
-//               <h5 className="mb-3">Order Status Trend</h5>
-//               <ResponsiveContainer width="100%" height={250}>
-//                 <LineChart data={statusChartData}>
-//                   <CartesianGrid strokeDasharray="3 3" />
-//                   <XAxis dataKey="date" />
-//                   <YAxis />
-//                   <Tooltip />
-//                   <Legend />
-//                   <Line type="monotone" dataKey="pending" stroke="#ffc107" name="Pending" />
-//                   <Line type="monotone" dataKey="cancelled" stroke="#dc3545" name="Cancelled/Declined" />
-//                   <Line type="monotone" dataKey="delivered" stroke="#198754" name="Delivered/Completed" />
-//                 </LineChart>
-//               </ResponsiveContainer>
-//             </Col>
-//           </Row>
-//         </Card>
-
-//         {/* Top-Selling Items */}
-//         <Card className="p-4 shadow-sm mb-4 bg-light">
-//           <h5 className="mb-3">Top-Selling Items (by Revenue)</h5>
-//           <ResponsiveContainer width="100%" height={300}>
-//             <BarChart data={itemSalesData}>
-//               <CartesianGrid strokeDasharray="3 3" />
-//               <XAxis dataKey="name" />
-//               <YAxis />
-//               <Tooltip />
-//               <Bar dataKey="total" fill="#0c4a6e" />
-//             </BarChart>
-//           </ResponsiveContainer>
-//         </Card>
-
-//         {/* Revenue by Weekday & Payment Mix */}
-//         <Card className="p-4 shadow-sm mb-4 bg-light">
-//           <Row>
-//             <Col md={6}>
-//               <h5 className="mb-3">Revenue by Weekday</h5>
-//               <ResponsiveContainer width="100%" height={280}>
-//                 <BarChart data={weekdayRevenueData}>
-//                   <CartesianGrid strokeDasharray="3 3" />
-//                   <XAxis dataKey="weekday" />
-//                   <YAxis />
-//                   <Tooltip />
-//                   <Bar dataKey="revenue" fill="#0d6efd" />
-//                 </BarChart>
-//               </ResponsiveContainer>
-//             </Col>
-//             <Col md={6}>
-//               <h5 className="mb-3">Payment Method Mix</h5>
-//               <ResponsiveContainer width="100%" height={280}>
-//                 <PieChart>
-//                   <Pie
-//                     data={paymentMixData}
-//                     dataKey="value"
-//                     nameKey="name"
-//                     cx="50%"
-//                     cy="50%"
-//                     outerRadius={100}
-//                     label
-//                   >
-//                     {paymentMixData.map((_, idx) => (
-//                       <Cell key={`pm-${idx}`} fill={COLORS[idx % COLORS.length]} />
-//                     ))}
-//                   </Pie>
-//                   <Tooltip />
-//                   <Legend />
-//                 </PieChart>
-//               </ResponsiveContainer>
-//             </Col>
-//           </Row>
-//         </Card>
-
-//         {/* Delivered vs Cancelled */}
-//         <Card className="p-4 shadow-sm mb-4 bg-light">
-//           <h5 className="mb-3">Delivered vs Cancelled</h5>
-//           <ResponsiveContainer width="100%" height={300}>
-//             <PieChart>
-//               <Pie
-//                 data={pieData}
-//                 dataKey="value"
-//                 nameKey="name"
-//                 cx="50%"
-//                 cy="50%"
-//                 outerRadius={100}
-//                 label
-//               >
-//                 <Cell fill="#198754" />
-//                 <Cell fill="#dc3545" />
-//               </Pie>
-//               <Tooltip />
-//               <Legend />
-//             </PieChart>
-//           </ResponsiveContainer>
-//         </Card>
-
-//         {/* Sell vs Demolish Requests Trend */}
-//         <Card className="p-4 shadow-sm mb-4 bg-light">
-//           <h5 className="mb-3">Sell vs Demolish Requests</h5>
-//           <ResponsiveContainer width="100%" height={280}>
-//             <LineChart data={requestTrendData}>
-//               <CartesianGrid strokeDasharray="3 3" />
-//               <XAxis dataKey="date" />
-//               <YAxis />
-//               <Tooltip />
-//               <Legend />
-//               <Line type="monotone" dataKey="sell" stroke="#0d6efd" name="Sell Requests" />
-//               <Line type="monotone" dataKey="demolish" stroke="#6f42c1" name="Demolish Requests" />
-//             </LineChart>
-//           </ResponsiveContainer>
-//         </Card>
-
-//         {/* Top Customers */}
-//         <Card className="p-4 shadow-sm mb-4 bg-light">
-//           <h5 className="mb-3">Top Customers</h5>
-//           <Table striped bordered hover responsive className="mt-2">
-//             <thead>
-//               <tr>
-//                 <th>#</th>
-//                 <th>User Email</th>
-//                 <th>Total Spend</th>
-//               </tr>
-//             </thead>
-//             <tbody>
-//               {topCustomers.length === 0 ? (
-//                 <tr>
-//                   <td colSpan={3} className="text-center text-muted">No data</td>
-//                 </tr>
-//               ) : (
-//                 topCustomers.map((c, idx) => (
-//                   <tr key={c.email + idx}>
-//                     <td>{idx + 1}</td>
-//                     <td>{c.email}</td>
-//                     <td>{CURRENCY(c.total)}</td>
-//                   </tr>
-//                 ))
-//               )}
-//             </tbody>
-//           </Table>
-//         </Card>
-
-//         {/* Recent Orders Table */}
-//         <Card className="shadow-sm">
-//           <Card.Body>
-//             <h5>Recent Orders</h5>
-//             <Table striped bordered hover responsive className="mt-3">
-//               <thead>
-//                 <tr>
-//                   <th>Order ID</th>
-//                   <th>User Email</th>
-//                   <th>Status</th>
-//                   <th>Total Items</th>
-//                   <th>Total Amount</th>
-//                 </tr>
-//               </thead>
-//               <tbody>
-//                 {(orders || []).slice(0, 10).map((order) => {
-//                   const itemsCount = (order.items || [])
-//                     .reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
-//                   const amount = (order.items || [])
-//                     .reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.price) || 0), 0);
-//                   return (
-//                     <tr key={order._id}>
-//                       <td>{order.orderId || order._id}</td>
-//                       <td>{order.userEmail || "—"}</td>
-//                       <td>{(order.status || "Pending").toString().replaceAll("_", " ")}</td>
-//                       <td>{itemsCount}</td>
-//                       <td>{CURRENCY(amount)}</td>
-//                     </tr>
-//                   );
-//                 })}
-//               </tbody>
-//             </Table>
-//           </Card.Body>
+//       {/* Placeholder content area (removed all charts / tables as requested) */}
+//       <div id="dashboard-report-content" className="p-3">
+//         {/* Everything below 'Signed in as' was intentionally removed per request. */}
+//         <Card className="p-4 shadow-sm bg-light">
+//           <p className="mb-0 text-muted">
+//             Report content removed. Use the filter above to select grouping. Exports will include the
+//             currently loaded orders.
+//           </p>
 //         </Card>
 //       </div>
 //     </Container>
@@ -724,726 +281,1286 @@
 // export default Dashboard;
 
 
-import React, { useState, useEffect } from "react";
+// Dashboard.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Container,
+  Card,
   Row,
   Col,
+  Table,
   Button,
   Form,
-  Card,
-  Table
+  Badge,
+  ProgressBar,
 } from "react-bootstrap";
-import {
-  BuildingFillX,
-  HouseFill,
-  CartFill
-} from "react-bootstrap-icons";
-import { useNavigate } from "react-router-dom";
-import axios from "axios";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend, PieChart, Pie, Cell
-} from "recharts";
 import html2pdf from "html2pdf.js";
-import "bootstrap/dist/css/bootstrap.min.css";
+import axios from "axios";
+import InVoice from "./InVoice";
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+} from "chart.js";
+import { Pie, Bar, Line } from "react-chartjs-2";
 
-const API_URL = process.env.REACT_APP_API_URL; // ✅ env variable
+ChartJS.register(
+  ArcElement,
+  Tooltip,
+  Legend,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement
+);
 
-const CURRENCY = (n) =>
-  `₱${(Number.isFinite(Number(n)) ? Number(n) : 0).toLocaleString("en-PH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+// Add custom style for table row hover
+const styles = `
+  .hover-highlight:hover {
+    background-color: #f5f5f5 !important;
+    transition: background-color 0.2s ease;
+  }
+`;
 
-const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// Inject the styles (safe to run once)
+if (typeof document !== "undefined" && !document.getElementById("rd-hover-styles")) {
+  const styleSheet = document.createElement("style");
+  styleSheet.id = "rd-hover-styles";
+  styleSheet.innerText = styles;
+  document.head.appendChild(styleSheet);
+}
 
-// Colors for charts
-const COLORS = ["#198754", "#dc3545", "#0d6efd", "#6f42c1", "#fd7e14", "#20c997", "#6c757d", "#0dcaf0"];
+const API_URL = process.env.REACT_APP_API_URL;
 
-// --- Helpers
-const norm = (v) => String(v ?? "").toLowerCase().trim();
-const normStatus = (s) => norm(String(s).replaceAll("_", " "));
+const PERIOD_OPTIONS = [
+  { value: "day", label: "By Day" },
+  { value: "week", label: "By Week" },
+  { value: "month", label: "By Month" },
+];
 
-// Map raw statuses into buckets we chart consistently
-const mapStatusBucket = (status) => {
-  const s = normStatus(status);
-  if (s.includes("delivered") || s.includes("completed")) return "delivered";
-  if (s.includes("cancelled") || s.includes("canceled") || s.includes("declined")) return "cancelled";
-  if (s.includes("pending") || s.includes("processing") || s.includes("awaiting")) return "pending";
-  return s || "pending";
-};
-
-// Grouping key
-const bucketKey = (dateObj, mode) => {
+// ---- Helpers
+const toBucketKey = (dateObj, mode) => {
   const d = new Date(dateObj);
   if (Number.isNaN(d.getTime())) return "Invalid Date";
   if (mode === "day") return d.toISOString().split("T")[0];
   if (mode === "week") {
     const start = new Date(d);
-    start.setDate(d.getDate() - d.getDay()); // Sunday
+    // Start of week (Sunday)
+    start.setDate(d.getDate() - d.getDay());
     return start.toISOString().split("T")[0];
   }
-  // month
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}`;
 };
 
+const numberToPHP = (n) =>
+  (Number(n) ?? 0).toLocaleString("en-PH", {
+    style: "currency",
+    currency: "PHP",
+  });
+
+// Normalize categories: supports `item.category` (string) or `item.categories` (string[])
+const getCategories = (item) => {
+  if (Array.isArray(item?.categories) && item.categories.length > 0) {
+    return item.categories.filter(Boolean);
+  }
+  if (item?.category) return [item.category];
+  return ["Uncategorized"];
+};
+
+// Lowercased status helper
+const normStatus = (s) => String(s || "pending").toLowerCase();
+
 const Dashboard = () => {
-  const navigate = useNavigate();
-
-  // Top tiles (kept intact)
-  const [demolitionCount, setDemolitionCount] = useState(0);
-  const [sellCount, setSellCount] = useState(0);
-  const [orderCount, setOrderCount] = useState(0);
-
-  // Raw arrays for analytics
-  const [demolishArr, setDemolishArr] = useState([]);
-  const [sellArr, setSellArr] = useState([]);
-  const [orders, setOrders] = useState([]);
-
-  // Report analytics (existing + new)
-  const [chartData, setChartData] = useState([]); // Sales over time
-  const [statusChartData, setStatusChartData] = useState([]); // Order status trend
-  const [itemSalesData, setItemSalesData] = useState([]); // Top-selling items (₱)
-  const [pieData, setPieData] = useState([]); // Delivered vs Cancelled
-  const [filter, setFilter] = useState("day"); // day | week | month
-  const [pendingOrders, setPendingOrders] = useState(0);
-  const [totalRevenue, setTotalRevenue] = useState(0);
-
-  // New metrics
-  const [aov, setAov] = useState(0); // Average order value (delivered/completed)
-  const [deliveryRate, setDeliveryRate] = useState(0);
-  const [cancelRate, setCancelRate] = useState(0);
-  const [uniqueBuyers, setUniqueBuyers] = useState(0);
-  const [repeatBuyers, setRepeatBuyers] = useState(0);
-  const [weekdayRevenueData, setWeekdayRevenueData] = useState([]); // Revenue by weekday
-  const [paymentMixData, setPaymentMixData] = useState([]); // Payment method distribution
-  const [requestTrendData, setRequestTrendData] = useState([]); // Sell vs Demolish trend
-  const [topCustomers, setTopCustomers] = useState([]); // Top customers by spend
-
-  // Current signed-in user (email display)
+  // --- Current signed-in user (display email)
   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
   const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
 
-  // ---- Fetch current user (to display email)
+  // --- Orders for export / display
+  const [orders, setOrders] = useState([]);
+  const [filter, setFilter] = useState("day");
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [showInvoice, setShowInvoice] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+
+  // Items (inventory)
+  const [items, setItems] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(true);
+
+  // Recent requests (sell + demolition)
+  const [sellRequests, setSellRequests] = useState([]);
+  const [demoRequests, setDemoRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
+
+  // Date range for CSV exports (default: start of month -> today)
+  const todayISO = new Date().toISOString().split("T")[0];
+  const firstOfMonthISO = (() => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().split("T")[0];
+  })();
+
+  const [fromDate, setFromDate] = useState(firstOfMonthISO);
+  const [toDate, setToDate] = useState(todayISO);
+
+  // Invoice Modal Handlers
+  const handleShowInvoice = (order) => {
+    setSelectedOrder(order);
+    setShowInvoice(true);
+  };
+
+  const handleCloseInvoice = () => {
+    setShowInvoice(false);
+    setSelectedOrder(null);
+  };
+
+  // Fetch current user for email display
   useEffect(() => {
     if (!userId) return;
     const token = localStorage.getItem("token");
     (async () => {
       try {
         const res = await axios.get(`${API_URL}/api/users/${userId}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         const data = res.data || {};
         setCurrentUser({
           username: data.username || "N/A",
           email: data.email || "N/A",
         });
-      } catch (e) {
-        console.error("Failed to load current user:", e);
+      } catch (err) {
+        console.error("Error fetching current user:", err);
         setCurrentUser((u) => ({ ...u, email: "N/A" }));
       }
     })();
   }, [userId]);
 
-  // ---- Fetch demolish/sell counts (top tiles)
+  // Helper to hydrate arrays with emails via userId
+  const hydrateEmailsByUserId = async (arr, idField = "userId", emailField = "userEmail") => {
+    if (!Array.isArray(arr) || arr.length === 0) return arr;
+    const token = localStorage.getItem("token");
+
+    const missingIds = Array.from(
+      new Set(arr.filter((x) => !x[emailField] && x[idField]).map((x) => x[idField]))
+    );
+
+    if (missingIds.length === 0) return arr;
+
+    const results = await Promise.all(
+      missingIds.map((id) =>
+        axios
+          .get(`${API_URL}/api/users/${id}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
+          .then((r) => ({ id, email: (r.data && r.data.email) || "—" }))
+          .catch(() => ({ id, email: "—" }))
+      )
+    );
+
+    const map = results.reduce((acc, { id, email }) => {
+      acc[id] = email;
+      return acc;
+    }, {});
+
+    return arr.map((x) => ({
+      ...x,
+      [emailField]: x[emailField] || map[x[idField]] || x[emailField] || x.email || "—",
+    }));
+  };
+
+  // Fetch items data for inventory reports
   useEffect(() => {
+    let mounted = true;
     (async () => {
+      setLoadingItems(true);
       try {
-        const [demolishRes, sellRes, ordersRes] = await Promise.all([
-          axios.get(`${API_URL}/api/demolish`),
-          axios.get(`${API_URL}/api/sell`),
-          axios.get(`${API_URL}/api/orders`)
-        ]);
-
-        const demolish = Array.isArray(demolishRes.data) ? demolishRes.data : [];
-        const sell = Array.isArray(sellRes.data) ? sellRes.data : [];
-        const ordersArr = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-
-        setDemolitionCount(demolish.length || 0);
-        setSellCount(sell.length || 0);
-        setOrderCount(ordersArr.length || 0);
-
-        // store raw for trend
-        setDemolishArr(demolish);
-        setSellArr(sell);
-      } catch (error) {
-        console.error("Error fetching top tile counts:", error);
-        setDemolitionCount(0);
-        setSellCount(0);
-        setOrderCount(0);
-        setDemolishArr([]);
-        setSellArr([]);
+        const res = await axios.get(`${API_URL}/api/items`);
+        if (!mounted) return;
+        setItems(Array.isArray(res.data) ? res.data : []);
+      } catch (err) {
+        console.error("Error fetching items:", err);
+        if (!mounted) return;
+        setItems([]);
+      } finally {
+        if (mounted) setLoadingItems(false);
       }
     })();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // ---- Fetch orders + sales for analytics (hydrate missing order emails)
+  // Fetch orders (used for document generation/export and the table)
   useEffect(() => {
+    let mounted = true;
     (async () => {
+      setLoadingOrders(true);
       try {
-        const token = localStorage.getItem("token");
-        const [ordersRes, salesRes] = await Promise.all([
-          axios.get(`${API_URL}/api/orders`),
-          axios.get(`${API_URL}/api/sales`),
-        ]);
-
-        // ----------------- HYDRATE ORDER EMAILS -----------------
-        const fetchedOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-        const missingIds = Array.from(new Set(
-          fetchedOrders.filter((o) => !o.userEmail && o.userId).map((o) => o.userId)
-        ));
-
-        let idToEmail = {};
-        if (missingIds.length > 0) {
-          const results = await Promise.all(
-            missingIds.map((id) =>
-              axios
-                .get(`${API_URL}/api/users/${id}`, {
-                  headers: token ? { Authorization: `Bearer ${token}` } : {},
-                })
-                .then((r) => ({ id, email: (r.data && r.data.email) || "—" }))
-                .catch(() => ({ id, email: "—" }))
-            )
-          );
-          idToEmail = results.reduce((acc, { id, email }) => {
-            acc[id] = email;
-            return acc;
-          }, {});
-        }
-
-        const hydratedOrders = fetchedOrders.map((o) => ({
-          ...o,
-          userEmail: o.userEmail || idToEmail[o.userId] || o.email || "—",
-        }));
-        setOrders(hydratedOrders);
-
-        // ----------------- ANALYTICS -----------------
-        const salesData = Array.isArray(salesRes.data) ? salesRes.data : [];
-
-        // ===== Order Status Trend + Pie + Pending
-        const statusCountMap = {}; // { bucket: { date, pending, cancelled, delivered } }
-        let pendingCount = 0;
-        let deliveredTotal = 0;
-        let cancelledTotal = 0;
-
-        hydratedOrders.forEach((order) => {
-          const key = bucketKey(order.createdAt, filter);
-          const bucket = mapStatusBucket(order.status);
-
-          if (!statusCountMap[key]) {
-            statusCountMap[key] = { date: key, pending: 0, cancelled: 0, delivered: 0 };
-          }
-          statusCountMap[key][bucket] = (statusCountMap[key][bucket] || 0) + 1;
-
-          if (bucket === "pending") pendingCount++;
-          if (bucket === "cancelled") cancelledTotal++;
-          if (bucket === "delivered") deliveredTotal++;
-        });
-
-        setPendingOrders(pendingCount);
-        setStatusChartData(
-          Object.values(statusCountMap).sort((a, b) => new Date(a.date) - new Date(b.date))
-        );
-        setPieData([
-          { name: "Delivered/Completed", value: deliveredTotal },
-          { name: "Cancelled/Declined", value: cancelledTotal },
-        ]);
-
-        // ===== Sales over time + Top-selling items + Total revenue
-        const salesMap = {}; // { bucket: totalRevenue }
-        let total = 0;
-        const itemMap = {}; // { itemName: amount }
-        const buyerSpend = {}; // { email: total }
-        const weekdayMap = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
-
-        salesData.forEach((sale) => {
-          const key = bucketKey(sale.deliveredAt || sale.createdAt, filter);
-          const saleTotal = Number(sale.total) || 0;
-
-          salesMap[key] = (salesMap[key] || 0) + saleTotal;
-          total += saleTotal;
-
-          // top items (by revenue)
-          (sale.items || []).forEach((item) => {
-            const name = item.name || "Unnamed Item";
-            const amount = (Number(item.price) || 0) * (Number(item.quantity) || 0);
-            itemMap[name] = (itemMap[name] || 0) + amount;
-          });
-
-          // top customers
-          const email = sale.userEmail || sale.customerEmail || sale.email || "Unknown";
-          buyerSpend[email] = (buyerSpend[email] || 0) + saleTotal;
-
-          // weekday revenue (based on deliveredAt when present)
-          const d = new Date(sale.deliveredAt || sale.createdAt);
-          if (!Number.isNaN(d.getTime())) {
-            const wd = d.getDay();
-            weekdayMap[wd] = (weekdayMap[wd] || 0) + saleTotal;
-          }
-        });
-
-        const chartArray = Object.entries(salesMap).map(([date, total]) => ({ date, total }));
-        const itemArray = Object.entries(itemMap).map(([name, total]) => ({ name, total }));
-        const weekdayArray = Object.keys(weekdayMap).map((k) => ({
-          weekday: WEEKDAY[Number(k)],
-          revenue: weekdayMap[k] || 0,
-        }));
-        const topCustomerArray = Object.entries(buyerSpend)
-          .map(([email, total]) => ({ email, total }))
-          .sort((a, b) => b.total - a.total)
-          .slice(0, 5);
-
-        setChartData(chartArray.sort((a, b) => new Date(a.date) - new Date(b.date)));
-        setItemSalesData(itemArray.sort((a, b) => b.total - a.total).slice(0, 12));
-        setTotalRevenue(total);
-        setWeekdayRevenueData(weekdayArray);
-        setTopCustomers(topCustomerArray);
-
-        // ===== High-level KPIs
-        const deliveredCount = salesData.length; // assuming each sale = delivered/completed order
-        setAov(deliveredCount > 0 ? total / deliveredCount : 0);
-
-        const totalResolved = deliveredTotal + cancelledTotal;
-        setDeliveryRate(totalResolved > 0 ? (deliveredTotal / totalResolved) * 100 : 0);
-        setCancelRate(totalResolved > 0 ? (cancelledTotal / totalResolved) * 100 : 0);
-
-        // Unique & repeat buyers (based on sales)
-        const countsByBuyer = {};
-        salesData.forEach((s) => {
-          const email = s.userEmail || s.customerEmail || s.email || "Unknown";
-          countsByBuyer[email] = (countsByBuyer[email] || 0) + 1;
-        });
-        const buyers = Object.keys(countsByBuyer);
-        setUniqueBuyers(buyers.length);
-        setRepeatBuyers(buyers.filter((e) => countsByBuyer[e] >= 2).length);
-
-        // ===== Payment method mix (from orders)
-        const paymentMap = {};
-        hydratedOrders.forEach((o) => {
-          // Try several conventions: o.paymentMethod or o.cod boolean
-          let method =
-            o.paymentMethod ||
-            (o.cod === true ? "Cash on Delivery" : o.cod === false ? "Cash" : undefined) ||
-            o.method ||
-            "Unknown";
-          const m = norm(method);
-          const label = m.includes("cod")
-            ? "Cash on Delivery"
-            : m.includes("cash")
-            ? "Cash"
-            : method || "Unknown";
-          paymentMap[label] = (paymentMap[label] || 0) + 1;
-        });
-        const paymentArray = Object.entries(paymentMap).map(([name, value]) => ({ name, value }));
-        setPaymentMixData(paymentArray);
-
-        // ===== Sell vs Demolish trend (createdAt buckets)
-        const trendMap = {}; // { bucket: { date, sell: n, demolish: n } }
-        (sellArr || []).forEach((s) => {
-          const k = bucketKey(s.createdAt, filter);
-          if (!trendMap[k]) trendMap[k] = { date: k, sell: 0, demolish: 0 };
-          trendMap[k].sell += 1;
-        });
-        (demolishArr || []).forEach((d) => {
-          const k = bucketKey(d.createdAt, filter);
-          if (!trendMap[k]) trendMap[k] = { date: k, sell: 0, demolish: 0 };
-          trendMap[k].demolish += 1;
-        });
-        const trendArray = Object.values(trendMap).sort(
-          (a, b) => new Date(a.date) - new Date(b.date)
-        );
-        setRequestTrendData(trendArray);
-      } catch (error) {
-        console.error("Error fetching analytics:", error);
+        const res = await axios.get(`${API_URL}/api/orders`);
+        if (!mounted) return;
+        const baseOrders = Array.isArray(res.data) ? res.data : [];
+        // hydrate with emails if missing
+        const hydrated = await hydrateEmailsByUserId(baseOrders, "userId", "userEmail");
+        if (!mounted) return;
+        setOrders(hydrated);
+      } catch (err) {
+        console.error("Error fetching orders for export:", err);
+        if (!mounted) return;
         setOrders([]);
-        setChartData([]);
-        setStatusChartData([]);
-        setItemSalesData([]);
-        setPieData([]);
-        setWeekdayRevenueData([]);
-        setPaymentMixData([]);
-        setRequestTrendData([]);
-        setTopCustomers([]);
-        setPendingOrders(0);
-        setTotalRevenue(0);
-        setAov(0);
-        setDeliveryRate(0);
-        setCancelRate(0);
-        setUniqueBuyers(0);
-        setRepeatBuyers(0);
+      } finally {
+        if (mounted) setLoadingOrders(false);
       }
     })();
-    // re-run when filter or the underlying request arrays change
-  }, [filter, demolishArr, sellArr]);
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  // ---- Export helpers (CSV/PDF)
-  const exportCSV = () => {
-    const headers = "Order ID,User Email,Status,Total Items,Total Amount,Created At\n";
-    const rows = (orders || [])
-      .map((order) => {
-        const totalItems =
-          (order.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0) || 0;
-        const totalAmount =
-          (order.items || []).reduce(
-            (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.price) || 0),
-            0
-          ) || 0;
-        const oid = order.orderId || order._id || "";
-        const created = order.createdAt ? new Date(order.createdAt).toISOString() : "";
-        return `${oid},${(order.userEmail || "").replaceAll(",", " ")},${(order.status || "").replaceAll(",", " ")},${totalItems},${totalAmount},${created}`;
-      })
+  // Fetch sell + demolition requests for the “Recent Requests” table (hydrate emails, too)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoadingRequests(true);
+      try {
+        const [sellRes, demoRes] = await Promise.all([axios.get(`${API_URL}/api/sell`), axios.get(`${API_URL}/api/demolish`)]);
+        let sells = Array.isArray(sellRes.data) ? sellRes.data : [];
+        let demos = Array.isArray(demoRes.data) ? demoRes.data : [];
+
+        // hydrate both arrays with user emails if missing
+        sells = await hydrateEmailsByUserId(sells, "userId", "userEmail");
+        demos = await hydrateEmailsByUserId(demos, "userId", "userEmail");
+
+        if (!mounted) return;
+        setSellRequests(sells);
+        setDemoRequests(demos);
+      } catch (err) {
+        console.error("Error fetching requests:", err);
+        if (!mounted) return;
+        setSellRequests([]);
+        setDemoRequests([]);
+      } finally {
+        if (mounted) setLoadingRequests(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // --- Derived data for exports (bucketed by filter) — used for CSV/PDF generation only
+  const exportRowsAll = useMemo(() => {
+    const rows = (orders || []).map((order) => {
+      const totalItems = order.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+      const totalAmount = order.items?.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.price) || 0), 0) || 0;
+      return {
+        bucket: toBucketKey(order.createdAt, filter),
+        orderId: order.orderId || order._id || "",
+        email: order.userEmail || order.email || "—",
+        status: order.status || "Pending",
+        items: totalItems,
+        amount: totalAmount,
+        createdAt: order.createdAt,
+        createdAtISO: order.createdAt ? new Date(order.createdAt).toISOString() : "",
+      };
+    });
+    rows.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    return rows;
+  }, [orders, filter]);
+
+  // Filter rows by fromDate/toDate for CSV exports
+  const exportRowsInRange = useMemo(() => {
+    const from = fromDate ? new Date(fromDate) : null;
+    const to = toDate ? new Date(toDate) : null;
+    if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return exportRowsAll;
+    // include entire "to" day (set time to 23:59:59)
+    const toInclusive = new Date(to);
+    toInclusive.setHours(23, 59, 59, 999);
+
+    return exportRowsAll.filter((r) => {
+      if (!r.createdAt) return false;
+      const created = new Date(r.createdAt);
+      return created >= from && created <= toInclusive;
+    });
+  }, [exportRowsAll, fromDate, toDate]);
+
+  // ---- Exports (Documents Generation)
+  const exportOrdersCSV = () => {
+    // Validate date range
+    const from = fromDate ? new Date(fromDate) : null;
+    const to = toDate ? new Date(toDate) : null;
+    if (!from || !to || Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      alert("Please provide valid From and To dates.");
+      return;
+    }
+    if (to < from) {
+      alert("'To' date must be the same or after the 'From' date.");
+      return;
+    }
+
+    const rows = exportRowsInRange;
+
+    const headers = ["Period Bucket", "Order ID", "User Email", "Status", "Total Items", "Total Amount", "Created At"].join(",");
+
+    const body = rows
+      .map((r) =>
+        [
+          r.bucket,
+          `"${String(r.orderId).replace(/"/g, '""')}"`,
+          `"${String(r.email).replace(/"/g, '""')}"`,
+          r.status,
+          r.items,
+          Number(r.amount).toFixed(2),
+          new Date(r.createdAt).toISOString(),
+        ].join(",")
+      )
       .join("\n");
 
-    const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([headers + "\n" + body], { type: "text/csv;charset=utf-8;" });
+
+    const fileName = `orders_${filter}_${fromDate}_to_${toDate}.csv`;
+
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.setAttribute("download", "dashboard-report.csv");
+    link.setAttribute("download", fileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const exportPDF = () => {
-    const element = document.getElementById("dashboard-report-content");
-    if (!element) return;
+  const exportInventoryPDF = () => {
+    // compute inventoryStats (we have a memo below, but reuse quickly)
+    const invStats = inventoryStats;
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 16px;">
+        <h2 style="margin: 0 0 24px 0;">Inventory Report</h2>
+        
+        <h3 style="margin: 0 0 12px 0;">Category Summary</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 24px;">
+          <thead>
+            <tr>
+              <th style="border:1px solid #ccc; padding:6px; text-align:left;">Category</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">Count</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">Total Value</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">Avg Condition</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.entries(invStats)
+              .map(
+                ([category, stats]) => `
+              <tr>
+                <td style="border:1px solid #eee; padding:6px;">${category}</td>
+                <td style="border:1px solid #eee; padding:6px; text-align:right;">${stats.count}</td>
+                <td style="border:1px solid #eee; padding:6px; text-align:right;">${numberToPHP(stats.totalValue)}</td>
+                <td style="border:1px solid #eee; padding:6px; text-align:right;">${(stats.avgCondition / Math.max(stats.count, 1)).toFixed(1)}</td>
+              </tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+
+        <h3 style="margin: 0 0 12px 0;">Condition Analysis</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr>
+              <th style="border:1px solid #ccc; padding:6px; text-align:left;">Condition Range</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">Count</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">% of Inventory</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              [
+                { range: "Poor (1-3)", min: 1, max: 3 },
+                { range: "Fair (4-6)", min: 4, max: 6 },
+                { range: "Good (7-8)", min: 7, max: 8 },
+                { range: "Excellent (9-10)", min: 9, max: 10 },
+              ]
+                .map(({ range, min, max }) => {
+                  const count = Object.entries(conditionAnalysis.distribution)
+                    .filter(([condition]) => {
+                      const c = Number(condition);
+                      return c >= min && c <= max;
+                    })
+                    .reduce((sum, [, c]) => sum + c, 0);
+                  return `
+                <tr>
+                  <td style="border:1px solid #eee; padding:6px;">${range}</td>
+                  <td style="border:1px solid #eee; padding:6px; text-align:right;">${count}</td>
+                  <td style="border:1px solid #eee; padding:6px; text-align:right;">${((count / Math.max(items.length, 1)) * 100).toFixed(1)}%</td>
+                </tr>`;
+                })
+                .join("")
+            }
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const container = document.createElement("div");
+    container.setAttribute("id", "inventory-pdf");
+    container.style.position = "fixed";
+    container.style.left = "-9999px";
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
     const options = {
       margin: 0.5,
-      filename: "dashboard-report.pdf",
+      filename: "inventory-report.pdf",
       image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
+      html2canvas: { scale: 2 },
       jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
     };
-    html2pdf().set(options).from(element).save();
+
+    html2pdf()
+      .set(options)
+      .from(container)
+      .save()
+      .then(() => document.body.removeChild(container))
+      .catch(() => document.body.removeChild(container));
   };
 
-  return (
-    <Container className="mt-4 p-3 bg-white border-bottom shadow-sm">
-
-      {/* === Top Tiles (kept) === */}
-      <Row className="g-4 row-cols-1 row-cols-md-3 mb-3">
-        <Col>
-          <Button
-            className="w-100 p-4 d-flex flex-column align-items-center border-0"
-            onClick={() => navigate("/admin/demolishDashboard")}
-            style={{ backgroundColor: "#f8f9fa" }}
-          >
-            <BuildingFillX size={40} className="mb-2 text-danger" />
-            <h5 className="text-dark">Demolition Requests</h5>
-            <div className="fs-3 fw-bold text-secondary">{demolitionCount}</div>
-          </Button>
-        </Col>
-        <Col>
-          <Button
-            className="w-100 p-4 d-flex flex-column align-items-center border-0"
-            onClick={() => navigate("/admin/sellDashboard")}
-            style={{ backgroundColor: "#f8f9fa" }}
-          >
-            <HouseFill size={40} className="mb-2 text-primary" />
-            <h5 className="text-dark">Sell Requests</h5>
-            <div className="fs-3 fw-bold text-secondary">{sellCount}</div>
-          </Button>
-        </Col>
-        <Col>
-          <Button
-            className="w-100 p-4 d-flex flex-column align-items-center border-0"
-            onClick={() => navigate("/admin/orders")}
-            style={{ backgroundColor: "#f8f9fa" }}
-          >
-            <CartFill size={40} className="mb-2 text-success" />
-            <h5 className="text-dark">Orders</h5>
-            <div className="fs-3 fw-bold text-secondary">{orderCount}</div>
-          </Button>
-        </Col>
-      </Row>
-
-      {/* === Summary Cards + Export (existing) === */}
-      <Row className="mb-4">
-        <Col md={4}>
-          <Card className="shadow-sm bg-light h-100">
-            <Card.Body>
-              <h6>Pending Orders</h6>
-              <h3 className="text-success">{pendingOrders}</h3>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={4}>
-          <Card className="shadow-sm bg-light h-100">
-            <Card.Body>
-              <h6>Total Revenue</h6>
-              <h3 className="text-primary">{CURRENCY(totalRevenue)}</h3>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={4}>
-          <Card className="shadow-sm bg-light h-100">
-            <Card.Body className="d-flex flex-column justify-content-between h-100">
-              <h6>Export</h6>
-              <div className="d-flex gap-2 mt-2">
-                <Button variant="outline-dark" size="sm" onClick={exportCSV}>
-                  Download CSV
-                </Button>
-                <Button variant="outline-primary" size="sm" onClick={exportPDF}>
-                  Download PDF
-                </Button>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* === NEW: Signed-in email + Filter === */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <small className="text-muted">
-          Signed in as: <strong>{currentUser.email || "—"}</strong>
-        </small>
-        <Form.Select
-          style={{ width: "180px" }}
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        >
-          <option value="day">Group by Day</option>
-          <option value="week">Group by Week</option>
-          <option value="month">Group by Month</option>
-        </Form.Select>
+  const exportOrdersPDF = () => {
+    const html = `
+      <div style="font-family: Arial, sans-serif; padding: 16px;">
+        <h2 style="margin: 0 0 12px 0;">Orders Report (${filter.toUpperCase()})</h2>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr>
+              <th style="border:1px solid #ccc; padding:6px; text-align:left;">Period Bucket</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:left;">Order ID</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:left;">User Email</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:left;">Status</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">Total Items</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:right;">Total Amount (PHP)</th>
+              <th style="border:1px solid #ccc; padding:6px; text-align:left;">Created At</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${exportRowsAll
+              .map(
+                (r) => `
+              <tr>
+                <td style="border:1px solid #eee; padding:6px;">${r.bucket}</td>
+                <td style="border:1px solid #eee; padding:6px;">${r.orderId}</td>
+                <td style="border:1px solid #eee; padding:6px;">${r.email}</td>
+                <td style="border:1px solid #eee; padding:6px;">${r.status}</td>
+                <td style="border:1px solid #eee; padding:6px; text-align:right;">${r.items}</td>
+                <td style="border:1px solid #eee; padding:6px; text-align:right;">${Number(r.amount).toFixed(2)}</td>
+                <td style="border:1px solid #eee; padding:6px;">${new Date(r.createdAt).toLocaleString()}</td>
+              </tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
       </div>
+    `;
 
-      {/* === NEW: KPI Row === */}
+    const container = document.createElement("div");
+    container.setAttribute("id", "orders-pdf");
+    container.style.position = "fixed";
+    container.style.left = "-9999px";
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    const options = {
+      margin: 0.5,
+      filename: `orders_${filter}.pdf`,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+    };
+
+    html2pdf()
+      .set(options)
+      .from(container)
+      .save()
+      .then(() => document.body.removeChild(container))
+      .catch(() => document.body.removeChild(container));
+  };
+
+  // --- NEW CSV Exports (Top customers, Top items, Requests summary)
+  const exportTopCustomersCSV = () => {
+    const headers = ["Customer Email", "Orders", "Items", "Total Spend"].join(",");
+    const body = topCustomers.map((c) => [c.email, c.orders, c.items, Number(c.spend).toFixed(2)].join(",")).join("\n");
+    const blob = new Blob([headers + "\n" + body], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", "top_customers.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportTopItemsCSV = () => {
+    const headers = ["Item", "Item ID", "Qty Sold", "Revenue"].join(",");
+    const body = topItems.map((it) => [it.name, it.itemId || "", it.quantity, Number(it.revenue).toFixed(2)].join(",")).join("\n");
+    const blob = new Blob([headers + "\n" + body], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", "top_items.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportRequestsCSV = () => {
+    const headers = ["Type", "Request ID", "Customer", "Status", "Created At"].join(",");
+    const body = recentRequests
+      .map((req) => {
+        const customer = req.userEmail || req.email || req.contactEmail || req.customerEmail || req.contactName || req.fullName || req.name || "—";
+        const requestId = req.selId || req.demolishId || req._id;
+        return [req.__type, requestId, `"${String(customer).replace(/"/g, '""')}"`, req.status || "Pending", req.createdAt ? new Date(req.createdAt).toISOString() : ""].join(",");
+      })
+      .join("\n");
+
+    const blob = new Blob([headers + "\n" + body], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute("download", "requests_summary.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // ====== COMPUTATIONS ======
+
+  // Compute inventory stats by category (supports multi-category)
+  const inventoryStats = useMemo(() => {
+    if (!items.length) return {};
+
+    return items.reduce((acc, item) => {
+      const cats = getCategories(item);
+      const price = Number(item.price) || 0;
+      const condition = Number(item.condition) || 0;
+      const share = Math.max(cats.length, 1);
+
+      cats.forEach((cat) => {
+        if (!acc[cat]) {
+          acc[cat] = {
+            count: 0,
+            totalValue: 0,
+            avgCondition: 0, // sum; divide by count later
+            items: [],
+          };
+        }
+        acc[cat].count += 1;
+        // apportion value to avoid inflating totals when multi-category
+        acc[cat].totalValue += price / share;
+        acc[cat].avgCondition += condition;
+        acc[cat].items.push(item);
+      });
+
+      return acc;
+    }, {});
+  }, [items]);
+
+  // Compute revenue by category (supports multi-category on order items)
+  const categoryRevenue = useMemo(() => {
+    if (!orders.length) return {};
+
+    const revenue = {};
+    orders.forEach((order) => {
+      if (!order.items) return;
+      order.items.forEach((item) => {
+        const cats = getCategories(item);
+        const qty = Number(item.quantity) || 0;
+        const price = Number(item.price) || 0;
+        const value = qty * price;
+        const share = Math.max(cats.length, 1);
+
+        cats.forEach((cat) => {
+          if (!revenue[cat]) revenue[cat] = 0;
+          revenue[cat] += value / share;
+        });
+      });
+    });
+
+    return revenue;
+  }, [orders]);
+
+  // Compute condition analysis data
+  const conditionAnalysis = useMemo(() => {
+    if (!items.length) return { average: 0, distribution: {} };
+
+    const distribution = {};
+    let totalCondition = 0;
+
+    items.forEach((item) => {
+      const c = Number(item.condition) || 0;
+      if (!distribution[c]) distribution[c] = 0;
+      distribution[c]++;
+      totalCondition += c;
+    });
+
+    return {
+      average: items.length ? totalCondition / items.length : 0,
+      distribution,
+    };
+  }, [items]);
+
+  // NEW: Sales over time (bucketed by filter)
+  const salesBuckets = useMemo(() => {
+    const map = new Map(); // bucket -> { revenue, orders }
+    orders.forEach((o) => {
+      const bucket = toBucketKey(o.createdAt, filter);
+      const revenue = o.items?.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.price) || 0), 0) || 0;
+      if (!map.has(bucket)) map.set(bucket, { revenue: 0, orders: 0 });
+      const entry = map.get(bucket);
+      entry.revenue += revenue;
+      entry.orders += 1;
+    });
+
+    // sort by date (ignore "Invalid Date")
+    const valid = Array.from(map.entries()).filter(([k]) => k && k !== "Invalid Date");
+    valid.sort((a, b) => new Date(a[0]) - new Date(b[0]));
+    return valid;
+  }, [orders, filter]);
+
+  const revenueOverTimeData = useMemo(() => {
+    const labels = salesBuckets.map(([bucket]) => bucket);
+    const data = salesBuckets.map(([, v]) => v.revenue);
+    return {
+      labels,
+      datasets: [
+        {
+          label: "Revenue (PHP)",
+          data,
+          tension: 0.25,
+          borderWidth: 2,
+          pointRadius: 3,
+        },
+      ],
+    };
+  }, [salesBuckets]);
+
+  const ordersOverTimeData = useMemo(() => {
+    const labels = salesBuckets.map(([bucket]) => bucket);
+    const data = salesBuckets.map(([, v]) => v.orders);
+    return {
+      labels,
+      datasets: [
+        {
+          label: "Orders",
+          data,
+          backgroundColor: "rgba(99, 132, 255, 0.5)",
+          borderColor: "rgb(99,132,255)",
+          borderWidth: 1,
+        },
+      ],
+    };
+  }, [salesBuckets]);
+
+  // NEW: Order status distribution
+  const orderStatusCounts = useMemo(() => {
+    const map = {};
+    orders.forEach((o) => {
+      const s = normStatus(o.status);
+      map[s] = (map[s] || 0) + 1;
+    });
+    return map;
+  }, [orders]);
+
+  const orderStatusPieData = useMemo(() => {
+    const labels = Object.keys(orderStatusCounts);
+    const values = labels.map((k) => orderStatusCounts[k]);
+    return {
+      labels,
+      datasets: [
+        {
+          data: values,
+          backgroundColor: ["#36A2EB", "#4BC0C0", "#FFCE56", "#FF6384", "#9966FF", "#FF9F40"],
+        },
+      ],
+    };
+  }, [orderStatusCounts]);
+
+  // NEW: Top customers
+  const topCustomers = useMemo(() => {
+    const byCustomer = {};
+    orders.forEach((o) => {
+      const email = o.userEmail || o.email || "—";
+      if (!byCustomer[email]) byCustomer[email] = { orders: 0, items: 0, spend: 0 };
+      const items = o.items?.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0) || 0;
+      const spend = o.items?.reduce((sum, it) => sum + (Number(it.quantity) || 0) * (Number(it.price) || 0), 0) || 0;
+      byCustomer[email].orders += 1;
+      byCustomer[email].items += items;
+      byCustomer[email].spend += spend;
+    });
+    return Object.entries(byCustomer).map(([email, v]) => ({ email, ...v })).sort((a, b) => b.spend - a.spend).slice(0, 10);
+  }, [orders]);
+
+  // NEW: Top items (by quantity sold)
+  const topItems = useMemo(() => {
+    const map = {};
+    orders.forEach((o) => {
+      (o.items || []).forEach((it) => {
+        const key = it.itemId || it._id || it.name || "Unknown Item";
+        if (!map[key]) {
+          map[key] = {
+            key,
+            itemId: it.itemId || it._id || "",
+            name: it.name || "Unnamed",
+            quantity: 0,
+            revenue: 0,
+          };
+        }
+        map[key].quantity += Number(it.quantity) || 0;
+        map[key].revenue += (Number(it.quantity) || 0) * (Number(it.price) || 0);
+      });
+    });
+    return Object.values(map).sort((a, b) => b.quantity - a.quantity).slice(0, 10);
+  }, [orders]);
+
+  // NEW: Request status breakdowns (sell & demolish)
+  const sellStatusCounts = useMemo(() => {
+    const map = {};
+    sellRequests.forEach((r) => {
+      const s = normStatus(r.status);
+      map[s] = (map[s] || 0) + 1;
+    });
+    return map;
+  }, [sellRequests]);
+
+  const demoStatusCounts = useMemo(() => {
+    const map = {};
+    demoRequests.forEach((r) => {
+      const s = normStatus(r.status);
+      map[s] = (map[s] || 0) + 1;
+    });
+    return map;
+  }, [demoRequests]);
+
+  const sellStatusPieData = useMemo(() => {
+    const labels = Object.keys(sellStatusCounts);
+    const values = labels.map((k) => sellStatusCounts[k]);
+    return {
+      labels,
+      datasets: [{ data: values, backgroundColor: ["#36A2EB", "#FF6384", "#FFCE56", "#4BC0C0", "#9966FF"] }],
+    };
+  }, [sellStatusCounts]);
+
+  const demoStatusPieData = useMemo(() => {
+    const labels = Object.keys(demoStatusCounts);
+    const values = labels.map((k) => demoStatusCounts[k]);
+    return {
+      labels,
+      datasets: [{ data: values, backgroundColor: ["#FF9F40", "#36A2EB", "#FF6384", "#4BC0C0", "#9966FF"] }],
+    };
+  }, [demoStatusCounts]);
+
+  // NEW: High-level KPIs
+  const kpis = useMemo(() => {
+    const totalOrders = orders.length;
+    const totalRevenue = orders.reduce((sum, o) => {
+      const v = o.items?.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.price) || 0), 0) || 0;
+      return sum + v;
+    }, 0);
+    const completedOrders = orders.filter((o) => ["delivered", "completed"].includes(normStatus(o.status))).length;
+    const fulfillmentRate = totalOrders ? (completedOrders / totalOrders) * 100 : 0;
+    const aov = totalOrders ? totalRevenue / totalOrders : 0;
+
+    return { totalOrders, totalRevenue, fulfillmentRate, aov };
+  }, [orders]);
+
+  // ======= CHART DATA =======
+
+  const categoryChartData = useMemo(() => {
+    const categories = Object.keys(inventoryStats);
+    const counts = categories.map((cat) => inventoryStats[cat]?.count || 0);
+    return { labels: categories, datasets: [{ data: counts, backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40", "#FF6384", "#4BC0C0", "#FFCE56", "#36A2EB"] }] };
+  }, [inventoryStats]);
+
+  const revenueChartData = useMemo(() => {
+    const categories = Object.keys(categoryRevenue);
+    const revenues = categories.map((cat) => categoryRevenue[cat] || 0);
+    return { labels: categories, datasets: [{ label: "Revenue (PHP)", data: revenues, backgroundColor: "rgba(54, 162, 235, 0.5)", borderColor: "rgb(54, 162, 235)", borderWidth: 1 }] };
+  }, [categoryRevenue]);
+
+  // Merge & sort sell + demo requests for display
+  const recentRequests = useMemo(() => {
+    const taggedSell = (sellRequests || []).map((r) => ({ ...r, __type: "Sell" })) || [];
+    const taggedDemo = (demoRequests || []).map((r) => ({ ...r, __type: "Demolition" })) || [];
+    const all = [...taggedSell, ...taggedDemo];
+    all.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return all;
+  }, [sellRequests, demoRequests]);
+
+  return (
+    <div className="container mt-4">
+      {/* ===== Header: Quick Exports (CSV only with date range) ===== */}
+      <Card className="shadow-sm mb-4">
+        <Card.Body className="d-flex flex-wrap gap-3 align-items-end">
+          <div className="me-auto">
+            <h5 className="mb-1">Generate Reports</h5>
+            <div className="text-muted" style={{ fontSize: 14 }}>
+              Export orders as CSV — choose a date range and period bucket.
+            </div>
+            <div className="mt-2">
+              <small className="text-muted">
+                Signed in as: <strong>{currentUser.email || "—"}</strong>
+              </small>
+            </div>
+          </div>
+
+          <div className="d-flex align-items-center gap-2">
+            <Form.Label className="m-0">From</Form.Label>
+            <Form.Control type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} style={{ width: 160 }} />
+          </div>
+
+          <div className="d-flex align-items-center gap-2">
+            <Form.Label className="m-0">To</Form.Label>
+            <Form.Control type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} style={{ width: 160 }} />
+          </div>
+
+          <div className="d-flex align-items-center gap-2">
+            <Form.Label className="m-0">Period</Form.Label>
+            <Form.Select style={{ width: 160 }} value={filter} onChange={(e) => setFilter(e.target.value)}>
+              {PERIOD_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Form.Select>
+          </div>
+
+          <div className="d-flex gap-2">
+            <Button variant="outline-dark" size="sm" onClick={exportOrdersCSV} disabled={loadingOrders || exportRowsInRange.length === 0}>
+              Download Orders CSV
+            </Button>
+          </div>
+        </Card.Body>
+      </Card>
+
+      {/* ===== KPIs ===== */}
       <Row className="g-3 mb-4">
         <Col md={3}>
-          <Card className="shadow-sm bg-light h-100">
+          <Card className="shadow-sm">
             <Card.Body>
-              <h6>Average Order Value</h6>
-              <h4 className="mb-0">{CURRENCY(aov)}</h4>
-              <small className="text-muted">Delivered/Completed orders</small>
+              <div className="text-muted small">Total Revenue</div>
+              <h4 className="mb-0">{numberToPHP(kpis.totalRevenue)}</h4>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="shadow-sm bg-light h-100">
+          <Card className="shadow-sm">
             <Card.Body>
-              <h6>Delivery Rate</h6>
-              <h4 className="mb-0">{deliveryRate.toFixed(1)}%</h4>
-              <small className="text-muted">Delivered ÷ (Delivered + Cancelled)</small>
+              <div className="text-muted small">Total Orders</div>
+              <h4 className="mb-0">{kpis.totalOrders}</h4>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="shadow-sm bg-light h-100">
+          <Card className="shadow-sm">
             <Card.Body>
-              <h6>Cancel Rate</h6>
-              <h4 className="mb-0">{cancelRate.toFixed(1)}%</h4>
-              <small className="text-muted">Cancelled/Declined share</small>
+              <div className="text-muted small">Fulfillment Rate</div>
+              <h4 className="mb-0">{kpis.fulfillmentRate.toFixed(1)}%</h4>
             </Card.Body>
           </Card>
         </Col>
         <Col md={3}>
-          <Card className="shadow-sm bg-light h-100">
+          <Card className="shadow-sm">
             <Card.Body>
-              <h6>Buyers</h6>
-              <h4 className="mb-0">{uniqueBuyers}</h4>
-              <small className="text-muted">{repeatBuyers} repeat</small>
+              <div className="text-muted small">Avg Order Value (AOV)</div>
+              <h4 className="mb-0">{numberToPHP(kpis.aov)}</h4>
             </Card.Body>
           </Card>
         </Col>
       </Row>
 
-      {/* === Report Content (existing + new) === */}
-      <div id="dashboard-report-content">
-        {/* Sales Over Time & Order Status Trend */}
-        <Card className="p-4 shadow-sm mb-4 bg-light">
+      {/* ===== Sales Over Time ===== */}
+      <Card className="shadow-sm mb-4">
+        <Card.Body>
+          <h5 className="mb-3">Sales Over Time ({PERIOD_OPTIONS.find((p) => p.value === filter)?.label})</h5>
           <Row>
-            <Col md={6}>
-              <h5 className="mb-1">Sales Over Time</h5>
-              <small className="text-muted d-block mb-3">
-                Grouped by {filter === "day" ? "day" : filter === "week" ? "week (Sun start)" : "month"}
-              </small>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="total" fill="#312e81" />
-                </BarChart>
-              </ResponsiveContainer>
+            <Col md={8}>
+              <div style={{ height: "300px" }}>
+                {!loadingOrders && orders.length > 0 && <Line data={revenueOverTimeData} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />}
+              </div>
             </Col>
-            <Col md={6}>
-              <h5 className="mb-3">Order Status Trend</h5>
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={statusChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="pending" stroke="#ffc107" name="Pending" />
-                  <Line type="monotone" dataKey="cancelled" stroke="#dc3545" name="Cancelled/Declined" />
-                  <Line type="monotone" dataKey="delivered" stroke="#198754" name="Delivered/Completed" />
-                </LineChart>
-              </ResponsiveContainer>
+            <Col md={4}>
+              <div style={{ height: "300px" }}>
+                {!loadingOrders && orders.length > 0 && <Bar data={ordersOverTimeData} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />}
+              </div>
             </Col>
           </Row>
-        </Card>
+        </Card.Body>
+      </Card>
 
-        {/* Top-Selling Items */}
-        <Card className="p-4 shadow-sm mb-4 bg-light">
-          <h5 className="mb-3">Top-Selling Items (by Revenue)</h5>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={itemSalesData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="total" fill="#0c4a6e" />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        {/* Revenue by Weekday & Payment Mix */}
-        <Card className="p-4 shadow-sm mb-4 bg-light">
+      {/* ===== Inventory by Category ===== */}
+      <Card className="shadow-sm mb-4">
+        <Card.Body>
+          <h5 className="mb-3">Inventory by Category</h5>
           <Row>
             <Col md={6}>
-              <h5 className="mb-3">Revenue by Weekday</h5>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={weekdayRevenueData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="weekday" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="revenue" fill="#0d6efd" />
-                </BarChart>
-              </ResponsiveContainer>
+              <div style={{ height: "300px" }}>{!loadingItems && items.length > 0 && <Pie data={categoryChartData} options={{ maintainAspectRatio: false }} />}</div>
             </Col>
             <Col md={6}>
-              <h5 className="mb-3">Payment Method Mix</h5>
-              <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Pie
-                    data={paymentMixData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label
-                  >
-                    {paymentMixData.map((_, idx) => (
-                      <Cell key={`pm-${idx}`} fill={COLORS[idx % COLORS.length]} />
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Count</th>
+                    <th>Total Value</th>
+                    <th>Avg Condition</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(inventoryStats).map(([category, stats]) => (
+                    <tr key={category}>
+                      <td>{category}</td>
+                      <td>{stats.count}</td>
+                      <td>{numberToPHP(stats.totalValue)}</td>
+                      <td>{(stats.avgCondition / Math.max(stats.count, 1)).toFixed(1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
+
+      {/* ===== Revenue by Category ===== */}
+      <Card className="shadow-sm mb-4">
+        <Card.Body>
+          <h5 className="mb-3">Revenue by Category</h5>
+          <div style={{ height: "300px" }}>{!loadingOrders && orders.length > 0 && <Bar data={revenueChartData} options={{ maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }} />}</div>
+        </Card.Body>
+      </Card>
+
+      {/* ===== Order Status Distribution ===== */}
+      <Card className="shadow-sm mb-4">
+        <Card.Body>
+          <h5 className="mb-3">Order Status Distribution</h5>
+          <Row>
+            <Col md={6}>
+              <div style={{ height: "300px" }}>{!loadingOrders && orders.length > 0 && <Pie data={orderStatusPieData} options={{ maintainAspectRatio: false }} />}</div>
+            </Col>
+            <Col md={6}>
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(orderStatusCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([s, c]) => (
+                      <tr key={s}>
+                        <td>{s.replaceAll("_", " ")}</td>
+                        <td>{c}</td>
+                      </tr>
                     ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+                </tbody>
+              </Table>
             </Col>
           </Row>
-        </Card>
+        </Card.Body>
+      </Card>
 
-        {/* Delivered vs Cancelled */}
-        <Card className="p-4 shadow-sm mb-4 bg-light">
-          <h5 className="mb-3">Delivered vs Cancelled</h5>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                outerRadius={100}
-                label
-              >
-                <Cell fill="#198754" />
-                <Cell fill="#dc3545" />
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </Card>
+      {/* ===== Top Customers & Top Items ===== */}
+      <Row className="g-3 mb-4">
+        <Col md={6}>
+          <Card className="shadow-sm h-100">
+            <Card.Body>
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                <h5 className="m-0">Top Customers (by Spend)</h5>
+                <Button variant="outline-dark" size="sm" onClick={exportTopCustomersCSV} disabled={topCustomers.length === 0}>
+                  Download CSV
+                </Button>
+              </div>
+              <Table striped bordered hover size="sm" responsive>
+                <thead>
+                  <tr>
+                    <th>Customer Email</th>
+                    <th>Orders</th>
+                    <th>Items</th>
+                    <th>Total Spend</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topCustomers.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="text-center text-muted">
+                        No data.
+                      </td>
+                    </tr>
+                  ) : (
+                    topCustomers.map((c) => (
+                      <tr key={c.email}>
+                        <td>{c.email}</td>
+                        <td>{c.orders}</td>
+                        <td>{c.items}</td>
+                        <td>{numberToPHP(c.spend)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Table>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col md={6}>
+          <Card className="shadow-sm h-100">
+            <Card.Body>
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                <h5 className="m-0">Top Items (by Qty)</h5>
+                <Button variant="outline-dark" size="sm" onClick={exportTopItemsCSV} disabled={topItems.length === 0}>
+                  Download CSV
+                </Button>
+              </div>
+              <Table striped bordered hover size="sm" responsive>
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Item ID</th>
+                    <th>Qty Sold</th>
+                    <th>Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="text-center text-muted">
+                        No data.
+                      </td>
+                    </tr>
+                  ) : (
+                    topItems.map((it) => (
+                      <tr key={it.key}>
+                        <td>{it.name}</td>
+                        <td>{it.itemId || "—"}</td>
+                        <td>{it.quantity}</td>
+                        <td>{numberToPHP(it.revenue)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Table>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
 
-        {/* Sell vs Demolish Requests Trend */}
-        <Card className="p-4 shadow-sm mb-4 bg-light">
-          <h5 className="mb-3">Sell vs Demolish Trend</h5>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={requestTrendData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="sell" stroke="#0d6efd" name="Sell Requests" />
-              <Line type="monotone" dataKey="demolish" stroke="#6f42c1" name="Demolish Requests" />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
+      {/* ===== Item Condition Analysis ===== */}
+      <Card className="shadow-sm mb-4">
+        <Card.Body>
+          <h5 className="mb-3">Item Condition Analysis</h5>
+          <Row>
+            <Col md={6}>
+              <div className="mb-3">
+                <strong>Average Condition Score: </strong>
+                {conditionAnalysis.average.toFixed(1)} / 10
+              </div>
+              <div>
+                {Object.entries(conditionAnalysis.distribution)
+                  .sort(([a], [b]) => Number(a) - Number(b))
+                  .map(([condition, count]) => (
+                    <div key={condition} className="mb-2">
+                      <div className="d-flex justify-content-between mb-1">
+                        <span>Condition {condition}/10</span>
+                        <span>{count} items</span>
+                      </div>
+                      <ProgressBar now={items.length ? (count / Math.max(items.length, 1)) * 100 : 0} variant={Number(condition) >= 7 ? "success" : Number(condition) >= 4 ? "warning" : "danger"} />
+                    </div>
+                  ))}
+              </div>
+            </Col>
+            <Col md={6}>
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Condition Range</th>
+                    <th>Count</th>
+                    <th>% of Inventory</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { range: "Poor (1-3)", min: 1, max: 3 },
+                    { range: "Fair (4-6)", min: 4, max: 6 },
+                    { range: "Good (7-8)", min: 7, max: 8 },
+                    { range: "Excellent (9-10)", min: 9, max: 10 },
+                  ].map(({ range, min, max }) => {
+                    const count = Object.entries(conditionAnalysis.distribution)
+                      .filter(([condition]) => {
+                        const c = Number(condition);
+                        return c >= min && c <= max;
+                      })
+                      .reduce((sum, [, c]) => sum + c, 0);
 
-        {/* Top Customers */}
-        <Card className="p-4 shadow-sm mb-4 bg-light">
-          <h5 className="mb-3">Top Customers</h5>
+                    return (
+                      <tr key={range}>
+                        <td>{range}</td>
+                        <td>{count}</td>
+                        <td>{((count / Math.max(items.length, 1)) * 100).toFixed(1)}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
+
+      {/* ===== Recent Orders (tabular view only) ===== */}
+      <Card className="shadow-sm mb-4">
+        <Card.Body>
+          <div className="d-flex align-items-center mb-3">
+            <h5 className="m-0">Recent Orders (Preview)</h5>
+            {!loadingOrders && (
+              <Badge bg="secondary" className="ms-2">
+                {orders.length}
+              </Badge>
+            )}
+          </div>
+
           <Table striped bordered hover responsive className="mt-2">
             <thead>
               <tr>
-                <th>#</th>
+                <th>Order ID</th>
                 <th>User Email</th>
-                <th>Total Spend</th>
+                <th>Status</th>
+                <th>Total Items</th>
+                <th>Total Amount</th>
+                <th>Created At</th>
               </tr>
             </thead>
             <tbody>
-              {topCustomers.length === 0 ? (
+              {loadingOrders ? (
                 <tr>
-                  <td colSpan={3} className="text-center text-muted">No data</td>
+                  <td colSpan={6} className="text-center text-muted">
+                    Loading orders…
+                  </td>
+                </tr>
+              ) : orders.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center text-muted">
+                    No orders found.
+                  </td>
                 </tr>
               ) : (
-                topCustomers.map((c, idx) => (
-                  <tr key={c.email + idx}>
-                    <td>{idx + 1}</td>
-                    <td>{c.email}</td>
-                    <td>{CURRENCY(c.total)}</td>
-                  </tr>
-                ))
+                orders.slice(0, 10).map((order) => {
+                  const itemsCount = order.items?.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0) || 0;
+                  const amount = order.items?.reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.price) || 0), 0) || 0;
+                  return (
+                    <tr key={order._id} onClick={() => handleShowInvoice(order)} style={{ cursor: "pointer" }} className="hover-highlight">
+                      <td>{order.orderId || order._id}</td>
+                      <td>{order.userEmail || order.email || "—"}</td>
+                      <td>{order.status || "Pending"}</td>
+                      <td>{itemsCount}</td>
+                      <td>{numberToPHP(amount)}</td>
+                      <td>{order.createdAt ? new Date(order.createdAt).toLocaleString() : "—"}</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </Table>
-        </Card>
 
-        {/* Recent Orders Table */}
-        <Card className="shadow-sm">
-          <Card.Body>
-            <h5>Recent Orders</h5>
-            <Table striped bordered hover responsive className="mt-3">
-              <thead>
+          <div className="d-flex gap-2 mt-3">
+            <Button variant="outline-dark" size="sm" onClick={exportOrdersCSV} disabled={loadingOrders || exportRowsInRange.length === 0}>
+              Download Orders CSV
+            </Button>
+            <Button variant="outline-primary" size="sm" onClick={exportOrdersPDF} disabled={loadingOrders || exportRowsAll.length === 0}>
+              Download Orders PDF
+            </Button>
+          </div>
+        </Card.Body>
+      </Card>
+
+      {/* ===== Requests (Sell & Demolition) - Breakdown + Table ===== */}
+      <Card className="shadow-sm mb-3">
+        <Card.Body>
+          <div className="d-flex align-items-center mb-3">
+            <h5 className="m-0">Request Status Breakdown</h5>
+          </div>
+          <Row>
+            <Col md={6}>
+              <h6>Sell Requests</h6>
+              <div style={{ height: "260px" }}>{!loadingRequests && sellRequests.length > 0 && <Pie data={sellStatusPieData} options={{ maintainAspectRatio: false }} />}</div>
+            </Col>
+            <Col md={6}>
+              <h6>Demolition Requests</h6>
+              <div style={{ height: "260px" }}>{!loadingRequests && demoRequests.length > 0 && <Pie data={demoStatusPieData} options={{ maintainAspectRatio: false }} />}</div>
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
+
+      {/* ===== Recent Requests (Sell & Demolition) ===== */}
+      <Card className="shadow-sm">
+        <Card.Body>
+          <div className="d-flex align-items-center mb-3">
+            <h5 className="m-0">Recent Requests (Sell & Demolition)</h5>
+            {!loadingRequests && (
+              <Badge bg="secondary" className="ms-2">
+                {recentRequests.length}
+              </Badge>
+            )}
+            <div className="ms-auto">
+              <Button variant="outline-dark" size="sm" onClick={exportRequestsCSV} disabled={loadingRequests || recentRequests.length === 0}>
+                Download CSV
+              </Button>
+            </div>
+          </div>
+
+          <Table striped bordered hover responsive>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Request ID</th>
+                <th>Customer (Email/Name)</th>
+                <th>Status</th>
+                <th>Created At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingRequests ? (
                 <tr>
-                  <th>Order ID</th>
-                  <th>User Email</th>
-                  <th>Status</th>
-                  <th>Total Items</th>
-                  <th>Total Amount</th>
+                  <td colSpan={5} className="text-center text-muted">
+                    Loading requests…
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {(orders || []).slice(0, 10).map((order) => {
-                  const itemsCount = (order.items || [])
-                    .reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
-                  const amount = (order.items || [])
-                    .reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.price) || 0), 0);
+              ) : recentRequests.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center text-muted">
+                    No requests found.
+                  </td>
+                </tr>
+              ) : (
+                recentRequests.slice(0, 10).map((req) => {
+                  const customer = req.userEmail || req.email || req.contactEmail || req.customerEmail || req.contactName || req.fullName || req.name || "—";
+                  const requestId = req.selId || req.demolishId || req._id;
+
                   return (
-                    <tr key={order._id}>
-                      <td>{order.orderId || order._id}</td>
-                      <td>{order.userEmail || "—"}</td>
-                      <td>{(order.status || "Pending").toString().replaceAll("_", " ")}</td>
-                      <td>{itemsCount}</td>
-                      <td>{CURRENCY(amount)}</td>
+                    <tr key={req._id}>
+                      <td>{req.__type}</td>
+                      <td>{requestId}</td>
+                      <td>{customer}</td>
+                      <td>{req.status || "Pending"}</td>
+                      <td>{req.createdAt ? new Date(req.createdAt).toLocaleString() : "—"}</td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </Table>
-          </Card.Body>
-        </Card>
-      </div>
-    </Container>
+                })
+              )}
+            </tbody>
+          </Table>
+        </Card.Body>
+      </Card>
+
+      {/* Invoice Modal */}
+      <InVoice show={showInvoice} handleClose={handleCloseInvoice} order={selectedOrder} />
+    </div>
   );
 };
 
