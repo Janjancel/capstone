@@ -1,4 +1,3 @@
-
 // import React, { useState } from "react";
 // import {
 //   Box,
@@ -20,7 +19,6 @@
 // import toast from "react-hot-toast";
 // import { useAuth } from "../../context/AuthContext";
 // import { useNavigate } from "react-router-dom";
-
 
 // export default function RegisterForm({ onSuccess, toggleMode }) {
 //   const [loading, setLoading] = useState(false);
@@ -55,7 +53,7 @@
 //     onSubmit: async (values, { setSubmitting, resetForm, setFieldError }) => {
 //       setLoading(true);
 //       try {
-//         await axios.post(
+//         const res = await axios.post(
 //           `${process.env.REACT_APP_API_URL}/api/auth/register`,
 //           values
 //         );
@@ -85,12 +83,12 @@
 
 //       const decoded = jwtDecode(credentialResponse.credential);
 
-//       const { data } = await axios.post(
+//       const res = await axios.post(
 //         `${process.env.REACT_APP_API_URL}/api/auth/google`,
 //         { token: credentialResponse.credential }
 //       );
 
-//       const { token, user } = data;
+//       const { token, user } = res.data;
 
 //       localStorage.setItem("token", token);
 //       localStorage.setItem("userId", user._id);
@@ -185,13 +183,13 @@
 //       <Button
 //         type="submit"
 //         variant="contained"
-//         sx={{
-//           backgroundColor: "black",
-//           color: "white",
-//           "&:hover": {
-//             backgroundColor: "#222",
-//           },
-//         }}
+//           sx={{
+//     backgroundColor: "black",
+//     color: "white",
+//     "&:hover": {
+//       backgroundColor: "#222", // slightly lighter black on hover
+//     },
+//   }}
 //         fullWidth
 //         disabled={formik.isSubmitting || loading}
 //         startIcon={loading && <CircularProgress size={20} />}
@@ -227,8 +225,7 @@
 // }
 
 
-// src/components/Auth/RegisterForm.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Box,
   Button,
@@ -245,11 +242,11 @@ import * as Yup from "yup";
 import Swal from "sweetalert2";
 import axios from "axios";
 import { GoogleLogin } from "@react-oauth/google";
-import { jwtDecode } from "jwt-decode";
+import {jwtDecode} from "jwt-decode";
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import emailjs from "@emailjs/browser";
+
 
 export default function RegisterForm({ onSuccess, toggleMode }) {
   const [loading, setLoading] = useState(false);
@@ -259,13 +256,6 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
   const navigate = useNavigate();
   const { setUser } = useAuth();
 
-  // init EmailJS
-  useEffect(() => {
-    if (process.env.REACT_APP_EMAILJS_PUBLIC_KEY) {
-      emailjs.init(process.env.REACT_APP_EMAILJS_PUBLIC_KEY);
-    }
-  }, []);
-
   const formik = useFormik({
     initialValues: {
       username: "",
@@ -274,7 +264,9 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
       confirmPassword: "",
     },
     validationSchema: Yup.object({
-      username: Yup.string().min(3, "Too short").required("Username is required"),
+      username: Yup.string()
+        .min(3, "Too short")
+        .required("Username is required"),
       email: Yup.string().email("Invalid email").required("Email is required"),
       password: Yup.string()
         .matches(
@@ -289,79 +281,21 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
     onSubmit: async (values, { setSubmitting, resetForm, setFieldError }) => {
       setLoading(true);
       try {
-        // Register on server. Server will create user and return verificationToken
-        const { data } = await axios.post(
+        await axios.post(
           `${process.env.REACT_APP_API_URL}/api/auth/register`,
-          {
-            username: values.username,
-            email: values.email,
-            password: values.password,
-          }
+          values
         );
-
-        // Expect server to return { message, verificationToken }
-        const verificationToken = data?.verificationToken;
-        if (!verificationToken) {
-          // Fallback: inform user to check email (server might have sent email itself)
-          Swal.fire(
-            "Registration Successful",
-            "Check your email to verify your account before logging in.",
-            "success"
-          );
-          resetForm();
-          toggleMode();
-          return;
-        }
-
-        // Build verification links
-        const yesLink = `${process.env.REACT_APP_CLIENT_URL}/verify?token=${verificationToken}&email=${encodeURIComponent(
-          values.email
-        )}&confirm=yes`;
-        const noLink = `${process.env.REACT_APP_CLIENT_URL}/verify?token=${verificationToken}&email=${encodeURIComponent(
-          values.email
-        )}&confirm=no`;
-
-        // Send verification email using EmailJS
-        // Requires these env vars:
-        // REACT_APP_EMAILJS_SERVICE_ID, REACT_APP_EMAILJS_TEMPLATE_ID
-        const serviceId = process.env.REACT_APP_EMAILJS_SERVICE_ID;
-        const templateId = process.env.REACT_APP_EMAILJS_TEMPLATE_ID;
-
-        if (!serviceId || !templateId) {
-          console.warn("EmailJS service/template ID not set. Skipping client email send.");
-          Swal.fire(
-            "Registration Successful",
-            "Check your email to verify your account before logging in.",
-            "success"
-          );
-          resetForm();
-          toggleMode();
-          return;
-        }
-
-        const templateParams = {
-          to_email: values.email,
-          username: values.username,
-          verification_link_yes: yesLink,
-          verification_link_no: noLink,
-          app_name: process.env.REACT_APP_CLIENT_NAME || "App",
-        };
-
-        await emailjs.send(serviceId, templateId, templateParams);
-
         Swal.fire(
           "Registration Successful",
-          "A verification email was sent. Click the ✅ link in the email to confirm it's you.",
+          "Check your email to verify your account before logging in.",
           "success"
         );
         resetForm();
         toggleMode(); // switch to login form
-
       } catch (err) {
-        console.error("Registration error:", err);
-        const msg = err?.response?.data?.message || err?.message;
-        if (msg?.toLowerCase()?.includes("email")) setFieldError("email", msg);
-        if (msg?.toLowerCase()?.includes("username")) setFieldError("username", msg);
+        const msg = err?.response?.data?.message;
+        if (msg?.includes("email")) setFieldError("email", msg);
+        if (msg?.includes("username")) setFieldError("username", msg);
         Swal.fire("Error", msg || "Something went wrong.", "error");
       } finally {
         setSubmitting(false);
@@ -372,7 +306,8 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
 
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
-      if (!credentialResponse?.credential) throw new Error("No credential received");
+      if (!credentialResponse?.credential)
+        throw new Error("No credential received");
 
       const decoded = jwtDecode(credentialResponse.credential);
 
@@ -438,7 +373,10 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">
-              <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+              <IconButton
+                onClick={() => setShowPassword(!showPassword)}
+                edge="end"
+              >
                 {showPassword ? <VisibilityOff /> : <Visibility />}
               </IconButton>
             </InputAdornment>
@@ -513,4 +451,3 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
     </Box>
   );
 }
-
