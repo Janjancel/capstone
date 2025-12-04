@@ -245,7 +245,7 @@ import * as Yup from "yup";
 import Swal from "sweetalert2";
 import axios from "axios";
 import { GoogleLogin } from "@react-oauth/google";
-import jwtDecode from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
