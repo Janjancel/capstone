@@ -1,6 +1,6 @@
 
-// import React, { useRef } from "react";
-// import { Modal, Form, Button } from "react-bootstrap";
+// import React, { useRef, useMemo } from "react";
+// import { Modal, Form, Button, Badge } from "react-bootstrap";
 
 // const AddItemModal = ({
 //   show,
@@ -13,6 +13,32 @@
 // }) => {
 //   const fileInputRef = useRef(null);
 
+//   // Backward + forward compatibility:
+//   // Prefer array newItem.categories; if absent, seed from legacy newItem.category
+//   const selectedCategories = useMemo(() => {
+//     if (Array.isArray(newItem?.categories)) return newItem.categories;
+//     if (newItem?.category) return [newItem.category];
+//     return [];
+//   }, [newItem]);
+
+//   const setCategories = (nextArr) => {
+//     // Write to both fields to keep legacy consumers working
+//     setNewItem({
+//       ...newItem,
+//       categories: nextArr,
+//       category: nextArr[0] || "",
+//     });
+//   };
+
+//   const toggleCategory = (cat) => {
+//     const set = new Set(selectedCategories);
+//     if (set.has(cat)) set.delete(cat);
+//     else set.add(cat);
+//     setCategories(Array.from(set));
+//   };
+
+//   const clearCategories = () => setCategories([]);
+
 //   const handleOpenFilePicker = () => {
 //     if (fileInputRef.current) fileInputRef.current.click();
 //   };
@@ -20,7 +46,9 @@
 //   const handleFiles = (files) => {
 //     const incoming = Array.from(files || []);
 //     // Limit to 5 images to match backend route (upload.array("images", 5))
-//     const firstFive = incoming.slice(0, 5).filter((f) => f.type.startsWith("image/"));
+//     const firstFive = incoming
+//       .slice(0, 5)
+//       .filter((f) => f.type?.startsWith("image/"));
 //     setNewItem({ ...newItem, images: firstFive });
 //   };
 
@@ -66,12 +94,17 @@
 //                 min={field === "price" ? 0 : undefined}
 //                 step={field === "price" ? "0.01" : undefined}
 //                 placeholder={
-//                   field === "price" ? "e.g., 1500.00" :
-//                   field === "age" ? "e.g., 80" : undefined
+//                   field === "price"
+//                     ? "e.g., 1500.00"
+//                     : field === "age"
+//                     ? "e.g., 80"
+//                     : undefined
 //                 }
 //               />
 //               {field === "price" && (
-//                 <Form.Text muted>Enter a valid number (no currency symbols).</Form.Text>
+//                 <Form.Text muted>
+//                   Enter a valid number (no currency symbols).
+//                 </Form.Text>
 //               )}
 //             </Form.Group>
 //           ))}
@@ -96,23 +129,65 @@
 //             </Form.Text>
 //           </Form.Group>
 
-//           {/* ✅ Category Dropdown */}
+//           {/* ✅ Categories (Multi-select via checkboxes; backward-friendly) */}
 //           <Form.Group className="mb-3">
-//             <Form.Label>Category</Form.Label>
-//             <Form.Select
-//               value={newItem.category}
-//               onChange={(e) =>
-//                 setNewItem({ ...newItem, category: e.target.value })
-//               }
-//               required
+//             <Form.Label>Categories</Form.Label>
+
+//             {/* Selected summary with quick clear */}
+//             <div className="mb-2" aria-live="polite">
+//               {selectedCategories.length ? (
+//                 <>
+//                   {selectedCategories.map((c) => (
+//                     <Badge
+//                       key={c}
+//                       bg="secondary"
+//                       style={{ marginRight: 6, marginBottom: 6 }}
+//                     >
+//                       {c}
+//                     </Badge>
+//                   ))}
+//                   <Button
+//                     variant="link"
+//                     size="sm"
+//                     onClick={clearCategories}
+//                     style={{ textDecoration: "none" }}
+//                   >
+//                     clear
+//                   </Button>
+//                 </>
+//               ) : (
+//                 <span style={{ color: "#6c757d" }}>
+//                   No category selected yet.
+//                 </span>
+//               )}
+//             </div>
+
+//             {/* Checkbox list */}
+//             <div
+//               role="group"
+//               aria-label="Select one or more categories"
+//               style={{
+//                 display: "grid",
+//                 gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+//                 gap: 4,
+//               }}
 //             >
-//               <option value="">-- Select Category --</option>
 //               {categories.map((cat) => (
-//                 <option key={cat} value={cat}>
-//                   {cat}
-//                 </option>
+//                 <Form.Check
+//                   key={cat}
+//                   type="checkbox"
+//                   id={`cat-${cat}`}
+//                   label={cat}
+//                   checked={selectedCategories.includes(cat)}
+//                   onChange={() => toggleCategory(cat)}
+//                 />
 //               ))}
-//             </Form.Select>
+//             </div>
+
+//             <Form.Text muted>
+//               Select one or more categories (default is "Uncategorized" if none
+//               selected during save).
+//             </Form.Text>
 //           </Form.Group>
 
 //           {/* ✅ Enhanced Images Input with dashed rectangle & previews */}
@@ -196,7 +271,8 @@
 //             </div>
 
 //             <Form.Text muted>
-//               Tip: You can select multiple images at once. Max 5 images per item to match the upload limit.
+//               Tip: You can select multiple images at once. Max 5 images per item
+//               to match the upload limit.
 //             </Form.Text>
 //           </Form.Group>
 //         </Form>
@@ -300,7 +376,7 @@ const AddItemModal = ({
                     ? "number"
                     : "text"
                 }
-                value={newItem[field]}
+                value={newItem[field] ?? ""}
                 onChange={(e) =>
                   setNewItem({ ...newItem, [field]: e.target.value })
                 }
@@ -325,12 +401,12 @@ const AddItemModal = ({
             </Form.Group>
           ))}
 
-          {/* ✅ Condition (1–10) */}
+          {/* Condition (1–10) */}
           <Form.Group className="mb-3">
             <Form.Label>Condition (1–10)</Form.Label>
             <Form.Control
               type="number"
-              value={newItem.condition}
+              value={newItem.condition ?? ""}
               onChange={(e) =>
                 setNewItem({ ...newItem, condition: e.target.value })
               }
@@ -345,7 +421,27 @@ const AddItemModal = ({
             </Form.Text>
           </Form.Group>
 
-          {/* ✅ Categories (Multi-select via checkboxes; backward-friendly) */}
+          {/* Quantity */}
+          <Form.Group className="mb-3">
+            <Form.Label>Quantity</Form.Label>
+            <Form.Control
+              type="number"
+              value={
+                typeof newItem.quantity === "undefined" ? 1 : newItem.quantity
+              }
+              onChange={(e) =>
+                setNewItem({ ...newItem, quantity: e.target.value })
+              }
+              min={0}
+              step={1}
+              required
+            />
+            <Form.Text muted>
+              Enter the available quantity (integer ≥ 0). Defaults to 1.
+            </Form.Text>
+          </Form.Group>
+
+          {/* Categories (Multi-select via checkboxes; backward-friendly) */}
           <Form.Group className="mb-3">
             <Form.Label>Categories</Form.Label>
 
@@ -406,7 +502,7 @@ const AddItemModal = ({
             </Form.Text>
           </Form.Group>
 
-          {/* ✅ Enhanced Images Input with dashed rectangle & previews */}
+          {/* Enhanced Images Input with dashed rectangle & previews */}
           <Form.Group className="mb-3">
             <Form.Label>Images</Form.Label>
 
@@ -449,7 +545,7 @@ const AddItemModal = ({
               {newItem.images?.length ? (
                 newItem.images.map((file, idx) => (
                   <div
-                    key={`${file.name}-${idx}`}
+                    key={`${file.name ?? idx}-${idx}`}
                     style={{
                       width: 80,
                       height: 80,

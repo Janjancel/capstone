@@ -46,8 +46,7 @@
 //   // Newly added images: [{ url: objectURL, file: File }]
 //   const [newPreviews, setNewPreviews] = useState([]);
 
-//   // Track which existing URLs were removed (for keepImages)
-//   const [removedExisting, setRemovedExisting] = useState([]);
+//   // removedExisting state removed (existingUrls now reflects removals directly)
 
 //   const [loading, setLoading] = useState(false);
 //   const [uploading, setUploading] = useState(false);
@@ -79,8 +78,7 @@
 //       });
 
 //       setExistingUrls(Array.isArray(item.images) ? item.images : []);
-//       setNewPreviews([]);       // reset new files
-//       setRemovedExisting([]);   // reset removals
+//       setNewPreviews([]); // reset new files
 //       resetFileInput();
 //     } else {
 //       resetFileInput();
@@ -145,7 +143,7 @@
 //     e.stopPropagation();
 //   };
 
-//   // Remove preview: if it's an existing URL, mark for removal; if it's a blob, drop it & revoke URL
+//   // Remove preview: if it's an existing URL, remove it from existingUrls; if it's a blob, drop it & revoke URL
 //   const handleRemovePreview = (src) => {
 //     // First check newPreviews
 //     const idx = newPreviews.findIndex((p) => p.url === src);
@@ -162,7 +160,7 @@
 
 //     // Otherwise it's an existing server URL
 //     if (existingUrls.includes(src)) {
-//       setRemovedExisting((prev) => Array.from(new Set([...prev, src])));
+//       // remove from existingUrls — we will send the remaining as keepImages
 //       setExistingUrls((prev) => prev.filter((u) => u !== src));
 //     }
 //   };
@@ -504,7 +502,6 @@
 
 // export default EditItemModal;
 
-
 import React, { useRef, useState, useEffect, useMemo } from "react";
 import { Modal, Form, Button, Image, Spinner, Badge } from "react-bootstrap";
 import Swal from "sweetalert2";
@@ -527,31 +524,32 @@ const CATEGORIES = [
 const EditItemModal = ({ show, onHide, item }) => {
   // ---- New: keep BOTH fields for backward compatibility ----
   const [updatedItem, setUpdatedItem] = useState({
-    name: item.name || "",
-    description: item.description || "",
-    price: item.price ?? "",
-    condition: item.condition ?? "",
-    origin: item.origin || "",
-    age: item.age || "",
+    name: item?.name || "",
+    description: item?.description || "",
+    price: item?.price ?? "",
+    condition: item?.condition ?? "",
+    origin: item?.origin || "",
+    age: item?.age || "",
+    quantity: typeof item?.quantity === "undefined" ? 1 : item.quantity,
     // prefer array if present, else seed from legacy single
-    categories: Array.isArray(item.categories)
+    categories: Array.isArray(item?.categories)
       ? item.categories
-      : item.category
+      : item?.category
       ? [item.category]
       : [],
     category:
-      item.category ||
-      (Array.isArray(item.categories) && item.categories[0]) ||
+      item?.category ||
+      (Array.isArray(item?.categories) && item.categories[0]) ||
       "Table",
   });
 
   // Existing image URLs that come from the server
-  const [existingUrls, setExistingUrls] = useState(Array.isArray(item.images) ? item.images : []);
+  const [existingUrls, setExistingUrls] = useState(
+    Array.isArray(item?.images) ? item.images : []
+  );
 
   // Newly added images: [{ url: objectURL, file: File }]
   const [newPreviews, setNewPreviews] = useState([]);
-
-  // removedExisting state removed (existingUrls now reflects removals directly)
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -565,24 +563,25 @@ const EditItemModal = ({ show, onHide, item }) => {
   // Reset state on open or when item changes
   useEffect(() => {
     if (show) {
-      const nextCategories = Array.isArray(item.categories)
+      const nextCategories = Array.isArray(item?.categories)
         ? item.categories
-        : item.category
+        : item?.category
         ? [item.category]
         : [];
 
       setUpdatedItem({
-        name: item.name || "",
-        description: item.description || "",
-        price: item.price ?? "",
-        condition: item.condition ?? "",
-        origin: item.origin || "",
-        age: item.age || "",
+        name: item?.name || "",
+        description: item?.description || "",
+        price: item?.price ?? "",
+        condition: item?.condition ?? "",
+        origin: item?.origin || "",
+        age: item?.age || "",
+        quantity: typeof item?.quantity === "undefined" ? 1 : item.quantity,
         categories: nextCategories,
-        category: item.category || nextCategories[0] || "Table",
+        category: item?.category || nextCategories[0] || "Table",
       });
 
-      setExistingUrls(Array.isArray(item.images) ? item.images : []);
+      setExistingUrls(Array.isArray(item?.images) ? item.images : []);
       setNewPreviews([]); // reset new files
       resetFileInput();
     } else {
@@ -654,7 +653,9 @@ const EditItemModal = ({ show, onHide, item }) => {
     const idx = newPreviews.findIndex((p) => p.url === src);
     if (idx > -1) {
       // revoke objectURL and remove
-      URL.revokeObjectURL(newPreviews[idx].url);
+      try {
+        URL.revokeObjectURL(newPreviews[idx].url);
+      } catch {}
       setNewPreviews((prev) => {
         const next = [...prev];
         next.splice(idx, 1);
@@ -686,11 +687,16 @@ const EditItemModal = ({ show, onHide, item }) => {
     const cond = updatedItem.condition;
     if (
       cond !== "" &&
-      (Number.isNaN(Number(cond)) ||
-        Number(cond) < 1 ||
-        Number(cond) > 10)
+      (Number.isNaN(Number(cond)) || Number(cond) < 1 || Number(cond) > 10)
     ) {
       toast.error("Condition must be a number between 1 and 10");
+      return;
+    }
+
+    // Validate quantity
+    const q = Number(updatedItem.quantity ?? 1);
+    if (!Number.isInteger(q) || q < 0) {
+      toast.error("Quantity must be an integer >= 0");
       return;
     }
 
@@ -713,10 +719,13 @@ const EditItemModal = ({ show, onHide, item }) => {
       formData.append("description", updatedItem.description);
       formData.append("price", String(updatedItem.price ?? ""));
       formData.append("condition", String(updatedItem.condition ?? ""));
-      formData.append("origin", updatedItem.origin);
-      formData.append("age", updatedItem.age);
+      formData.append("origin", updatedItem.origin ?? "");
+      formData.append("age", updatedItem.age ?? "");
 
-      // ✅ Multi-category: send array AND keep legacy single
+      // quantity and availability — availability will be derived server-side if you prefer
+      formData.append("quantity", String(q));
+
+      // Multi-category: send array AND keep legacy single
       const cats = (updatedItem.categories || []).length
         ? updatedItem.categories
         : ["Uncategorized"];
@@ -773,7 +782,7 @@ const EditItemModal = ({ show, onHide, item }) => {
                 }
                 as={field === "description" ? "textarea" : "input"}
                 rows={field === "description" ? 3 : undefined}
-                value={updatedItem[field]}
+                value={updatedItem[field] ?? ""}
                 onChange={(e) =>
                   setUpdatedItem({ ...updatedItem, [field]: e.target.value })
                 }
@@ -800,7 +809,7 @@ const EditItemModal = ({ show, onHide, item }) => {
             <Form.Label>Condition (1–10)</Form.Label>
             <Form.Control
               type="number"
-              value={updatedItem.condition}
+              value={updatedItem.condition ?? ""}
               onChange={(e) =>
                 setUpdatedItem({ ...updatedItem, condition: e.target.value })
               }
@@ -815,7 +824,22 @@ const EditItemModal = ({ show, onHide, item }) => {
             </Form.Text>
           </Form.Group>
 
-          {/* ✅ Multi-categories (checkbox grid) with legacy sync */}
+          {/* Quantity */}
+          <Form.Group className="mb-3">
+            <Form.Label>Quantity</Form.Label>
+            <Form.Control
+              type="number"
+              value={typeof updatedItem.quantity === "undefined" ? 1 : updatedItem.quantity}
+              onChange={(e) => setUpdatedItem({ ...updatedItem, quantity: e.target.value })}
+              min={0}
+              step={1}
+            />
+            <Form.Text muted>
+              Enter available quantity (integer ≥ 0). If left blank it will default to 1.
+            </Form.Text>
+          </Form.Group>
+
+          {/* Multi-categories (checkbox grid) with legacy sync */}
           <Form.Group className="mb-3">
             <Form.Label>Categories</Form.Label>
 
