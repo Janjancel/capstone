@@ -132,6 +132,10 @@
 //   const [deliveryFeePreview, setDeliveryFeePreview] = useState(null); // null => unknown/TBD
 //   const [grandTotalPreview, setGrandTotalPreview] = useState(null);
 
+//   // Discount preview states
+//   const [discountPercentPreview, setDiscountPercentPreview] = useState(null);
+//   const [discountAmountPreview, setDiscountAmountPreview] = useState(null);
+
 //   // Safer auth header helper (always returns object)
 //   const authHeaders = () => {
 //     const token = localStorage.getItem("token");
@@ -331,6 +335,27 @@
 //     };
 //   };
 
+//   // ---------- Client-side discount rules (mirror server) ----------
+//   // - total >= 50,000 and < 100,000 => 5%
+//   // - total >= 100,000 and <= 199,999.99 => 8%
+//   // - total >= 200,000 => 10%
+//   function computeDiscount(total) {
+//     if (!isFinite(total) || total <= 0) return { percent: null, amount: null };
+//     let percent = null;
+//     if (total >= 200000) {
+//       percent = 10;
+//     } else if (total >= 100000) {
+//       percent = 8;
+//     } else if (total >= 50000) {
+//       percent = 5;
+//     } else {
+//       percent = null;
+//     }
+//     if (percent == null) return { percent: null, amount: null };
+//     const amount = parseFloat(((percent / 100) * total).toFixed(2));
+//     return { percent, amount };
+//   }
+
 //   // --- Order confirmation (internal default) ---
 //   const handleOrderConfirmation = async () => {
 //     if (!user) return toast.error("User not found.");
@@ -357,7 +382,7 @@
 
 //       const created = orderRes.data;
 
-//       // Try multiple shapes for deliveryFee/grandTotal returned from server
+//       // Try multiple shapes for deliveryFee/grandTotal/discount returned from server
 //       const serverDeliveryFee =
 //         created?.meta?.computed?.deliveryFee ??
 //         created?.deliveryFee ??
@@ -369,15 +394,35 @@
 //         created?.order?.grandTotal ??
 //         null;
 
+//       const serverDiscountAmount =
+//         created?.meta?.computed?.discountAmount ??
+//         created?.discount ??
+//         created?.order?.discount ??
+//         null;
+//       const serverDiscountPercent =
+//         created?.meta?.computed?.discountPercent ?? null;
+
 //       if (serverDeliveryFee != null && serverGrandTotal != null) {
-//         toast.success(
-//           `Order created. Delivery fee: ${formatPHP(
-//             serverDeliveryFee
-//           )}. Grand total: ${formatPHP(serverGrandTotal)}.`
-//         );
+//         let message = `Order created. Delivery fee: ${formatPHP(
+//           serverDeliveryFee
+//         )}. Grand total: ${formatPHP(serverGrandTotal)}.`;
+//         if (serverDiscountAmount != null) {
+//           message = `Order created. Discount applied: ${serverDiscountPercent ?? ""}${
+//             serverDiscountPercent ? "%" : ""
+//           } (${formatPHP(serverDiscountAmount)}). ` + message;
+//         }
+//         toast.success(message);
 //       } else {
-//         // fallback success message
-//         toast.success("Order placed successfully!");
+//         // fallback success message; include discount if server returned it
+//         if (serverDiscountAmount != null) {
+//           toast.success(
+//             `Order created. Discount: ${serverDiscountPercent ?? ""}${
+//               serverDiscountPercent ? "%" : ""
+//             } (${formatPHP(serverDiscountAmount)}).`
+//           );
+//         } else {
+//           toast.success("Order placed successfully!");
+//         }
 //       }
 
 //       const orderId = created?._id || created?.order?._id || created?.orderId;
@@ -575,7 +620,7 @@
 //     return sum + qty * price;
 //   }, 0);
 
-//   // ---------------- Delivery fee preview (client-side) ----------------
+//   // ---------------- Delivery fee & discount preview (client-side) ----------------
 //   // Haversine and fee constants (mirror server logic)
 //   const toRad = (deg) => (deg * Math.PI) / 180;
 //   const haversineKm = (lat1, lon1, lat2, lon2) => {
@@ -607,15 +652,22 @@
 //     const lat = user?.coordinates?.lat ?? user?.coordinates?.latitude ?? null;
 //     const lng = user?.coordinates?.lng ?? user?.coordinates?.longitude ?? null;
 
+//     // compute discount based on computedTotal (before delivery)
+//     const discount = computeDiscount(computedTotal);
+//     setDiscountPercentPreview(discount.percent);
+//     setDiscountAmountPreview(discount.amount);
+
 //     if (lat != null && lng != null && isFinite(Number(lat)) && isFinite(Number(lng))) {
 //       const distanceKm = haversineKm(PIVOT.lat, PIVOT.lng, Number(lat), Number(lng));
 //       const fee = computeDeliveryFee(distanceKm);
 //       setDeliveryFeePreview(fee);
-//       setGrandTotalPreview(Number((computedTotal + fee).toFixed(2)));
+//       const gt = Number((computedTotal - (discount.amount || 0) + fee).toFixed(2));
+//       setGrandTotalPreview(gt);
 //     } else {
-//       // coordinates missing -> unknown fee
+//       // coordinates missing -> unknown fee; still compute grand total without delivery (mark delivery TBD)
 //       setDeliveryFeePreview(null);
-//       setGrandTotalPreview(null);
+//       const gt = Number((computedTotal - (discount.amount || 0)).toFixed(2));
+//       setGrandTotalPreview(gt);
 //     }
 //     // recompute when selectedItems/user change
 //   }, [user, computedTotal]);
@@ -736,6 +788,18 @@
 
 //                     <div className="mt-2">
 //                       <div>
+//                         <strong>Discount: </strong>
+//                         {discountAmountPreview == null ? (
+//                           <span className="text-muted">No discount</span>
+//                         ) : (
+//                           <span>
+//                             {discountPercentPreview ? `${discountPercentPreview}% ` : ""}
+//                             ({formatPHP(discountAmountPreview)})
+//                           </span>
+//                         )}
+//                       </div>
+
+//                       <div>
 //                         <strong>Delivery Fee: </strong>
 //                         {deliveryFeePreview == null ? (
 //                           <span className="text-muted">TBD (coordinates not found)</span>
@@ -743,6 +807,7 @@
 //                           <span>{formatPHP(deliveryFeePreview)}</span>
 //                         )}
 //                       </div>
+
 //                       <div>
 //                         <strong>Grand Total: </strong>
 //                         {grandTotalPreview == null ? (
@@ -751,10 +816,11 @@
 //                           <span className="fw-bold">{formatPHP(grandTotalPreview)}</span>
 //                         )}
 //                       </div>
+
 //                       {deliveryFeePreview == null && (
 //                         <small className="text-muted d-block">
-//                           We couldn't find your saved coordinates. The final delivery fee will be
-//                           calculated on the server when you place the order.
+//                           We couldn't find your saved coordinates. The final delivery fee (and grand total)
+//                           will be calculated on the server when you place the order.
 //                         </small>
 //                       )}
 //                     </div>
@@ -802,7 +868,6 @@
 // };
 
 // export default CartModal;
-
 
 import React, { useState, useEffect } from "react";
 import { Modal, Button, Spinner, Form, Alert } from "react-bootstrap";
@@ -889,16 +954,6 @@ function SafeImg({ src, alt, style, className }) {
 }
 
 /** -------------------------------- Component -------------------------------- */
-/**
- * Props:
- * - show, onClose
- * - user
- * - totalPrice
- * - selectedItems (array)
- * - setCartItems, setSelectedItems, setCartCount, setShowModal (optional callbacks for UI updates)
- * - onConfirm(address, notes, selectedItems) => optional function; if provided CartModal delegates order submission to it (must return a Promise)
- * - defaultAddress => optional address object to prefill the form
- */
 const CartModal = ({
   show,
   onClose,
@@ -966,8 +1021,8 @@ const CartModal = ({
         value={address[name]}
         onChange={handleInputChange}
         disabled={
-          (name === "province" && !address.region) ||
-          (name === "city" && !address.province) ||
+          (name === "province" && !address.region) |
+          (name === "city" && !address.province) |
           (name === "barangay" && !address.city)
         }
       >
@@ -1141,9 +1196,6 @@ const CartModal = ({
   };
 
   // ---------- Client-side discount rules (mirror server) ----------
-  // - total >= 50,000 and < 100,000 => 5%
-  // - total >= 100,000 and <= 199,999.99 => 8%
-  // - total >= 200,000 => 10%
   function computeDiscount(total) {
     if (!isFinite(total) || total <= 0) return { percent: null, amount: null };
     let percent = null;
@@ -1160,6 +1212,23 @@ const CartModal = ({
     const amount = parseFloat(((percent / 100) * total).toFixed(2));
     return { percent, amount };
   }
+
+  // Helper: decrement a single item using backend atomic endpoint
+  const decrementItem = async (id, amount = 1) => {
+    try {
+      const res = await axios.post(
+        `${API_URL}/api/items/${id}/decrement`,
+        { amount },
+        { headers: { "Content-Type": "application/json", ...authHeaders() } }
+      );
+      return { ok: true, data: res.data };
+    } catch (err) {
+      // Extract meaningful info
+      const status = err?.response?.status;
+      const body = err?.response?.data || {};
+      return { ok: false, status, body, message: err?.message };
+    }
+  };
 
   // --- Order confirmation (internal default) ---
   const handleOrderConfirmation = async () => {
@@ -1232,22 +1301,36 @@ const CartModal = ({
 
       const orderId = created?._id || created?.order?._id || created?.orderId;
 
-      // 🔹 After order creation: mark each ordered item as unavailable (availability: false)
-      // Best-effort: attempt to update each item individually; log but don't block on failures.
-      const orderedIds = payload.items.map((it) => it.id).filter(Boolean);
-      let availabilityFailures = 0;
-      for (const id of orderedIds) {
-        try {
-          await axios.put(
-            `${API_URL}/api/items/${id}`,
-            { availability: false },
-            { headers: { "Content-Type": "application/json", ...authHeaders() } }
-          );
-        } catch (availErr) {
-          // If item already sold/unavailable, backend might return 409 or 400 — handle gracefully
-          availabilityFailures += 1;
-          console.warn(`Failed to update availability for item ${id}:`, availErr);
+      // NEW: Atomically decrement quantity for each ordered item using backend endpoint
+      const orderedItems = payload.items || [];
+      let decrementFailures = 0;
+      let insufficientIds = [];
+
+      for (const ordered of orderedItems) {
+        const id = ordered.id;
+        const amount = Number(ordered.quantity) || 1;
+        if (!id) continue;
+
+        const result = await decrementItem(id, amount);
+        if (!result.ok) {
+          decrementFailures += 1;
+          // If backend says insufficient stock (400) mark for removal and inform user
+          if (result.status === 400 && result.body?.error?.toLowerCase?.().includes("insufficient")) {
+            insufficientIds.push(String(id));
+          }
+          console.warn(`Failed to decrement item ${id}:`, result);
         }
+      }
+
+      // If some items had insufficient stock, remove them locally and notify user
+      if (insufficientIds.length > 0) {
+        toast.error(`Some items were out of stock and removed from your cart.`);
+        try {
+          setCartItems && setCartItems((prev = []) => prev.filter((it) => !insufficientIds.includes(String(getItemId(it)))));
+        } catch (e) {}
+        try { setSelectedItems && setSelectedItems([]); } catch (e) {}
+        try { setCartCount && setCartCount((prev = 0) => Math.max(0, prev - insufficientIds.length)); } catch (e) {}
+        window.dispatchEvent(new CustomEvent("cartUpdated", { detail: -insufficientIds.length }));
       }
 
       // 🔹 Create notification for admin (best-effort)
@@ -1299,13 +1382,12 @@ const CartModal = ({
       try { setShowModal && setShowModal(false); } catch {}
 
       // Notify other parts of the app that cart changed.
-      // Use number of removed items as detail so listeners can update badges incrementally.
       const removedCount = (selectedItems || []).length;
       window.dispatchEvent(new CustomEvent("cartUpdated", { detail: removedCount }));
 
       // Provide user feedback
-      if (availabilityFailures > 0) {
-        toast.success(`Order placed (but ${availabilityFailures} item(s) failed to update availability).`);
+      if (decrementFailures > 0) {
+        toast.success(`Order placed (but ${decrementFailures} item(s) failed to decrement stock).`);
       }
 
       onClose && onClose();
@@ -1322,7 +1404,6 @@ const CartModal = ({
       // remove the unavailable items locally and inform the user.
       if (err?.response?.status === 409) {
         toast.error("Order failed: one or more items are no longer available.");
-        // remove locally to avoid showing unavailable item
         try {
           const unavailableIds = (err?.response?.data?.unavailable || []).map(String);
           if (unavailableIds.length > 0) {
@@ -1359,6 +1440,26 @@ const CartModal = ({
         // parent onConfirm may accept (address, notes, selectedItems)
         // ensure it returns a Promise so we can await it
         await onConfirm(address, "", selectedItems);
+
+        // After parent handled order creation, attempt to decrement stock for each ordered item here as well
+        const orderedItems = (selectedItems || []).map((i) => ({ id: getItemId(i), quantity: Number(i.quantity) || 1 }));
+        let decrementFailures = 0;
+        let insufficientIds = [];
+
+        for (const ordered of orderedItems) {
+          if (!ordered.id) continue;
+          const result = await decrementItem(ordered.id, ordered.quantity);
+          if (!result.ok) {
+            decrementFailures += 1;
+            if (result.status === 400 && result.body?.error?.toLowerCase?.().includes("insufficient")) {
+              insufficientIds.push(String(ordered.id));
+            }
+          }
+        }
+
+        if (insufficientIds.length > 0) {
+          toast.error(`Some items were out of stock and removed from your cart.`);
+        }
 
         // after success, run the same UI cleanup we normally do (best-effort)
         try {
@@ -1426,7 +1527,6 @@ const CartModal = ({
   }, 0);
 
   // ---------------- Delivery fee & discount preview (client-side) ----------------
-  // Haversine and fee constants (mirror server logic)
   const toRad = (deg) => (deg * Math.PI) / 180;
   const haversineKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371;
@@ -1585,7 +1685,7 @@ const CartModal = ({
                 <div className="d-flex justify-content-between align-items-center mt-3">
                   <div>
                     <h4>
-                      Total:{" "}
+                      Total: {" "}
                       <span className="text-success">
                         {formatPHP(computedTotal || totalPrice || 0)}
                       </span>
