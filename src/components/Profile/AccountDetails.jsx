@@ -15,7 +15,7 @@ const AccountDetails = ({ username, email }) => {
         <Badge
           badgeContent={isOnline ? "Online" : "Offline"}
           color={isOnline ? "success" : "secondary"}
-          sx={{ ml: 2 }}
+          sx={{ ml: 2, marginLeft: 5 }}
         />
       </Box>
 
