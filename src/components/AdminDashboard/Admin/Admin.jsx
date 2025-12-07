@@ -4,7 +4,7 @@ import axios from "axios";
 
 import DashboardNavbar from "../DashboardNavbar";
 import Sidebar from "../Sidebar/Sidebar";
-import Items from "../Items";
+import Items from "../Items/Items";
 import Accounts from "../Accounts";
 import Dashboard from "../Dashboard/Dashboard";
 import SellRequests from "../Requests/SellDashboard/SellDashboard";
