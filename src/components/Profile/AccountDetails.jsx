@@ -68,6 +68,7 @@ import {
   TextField,
   IconButton,
   Stack,
+  CircularProgress,
 } from "@mui/material";
 import {
   Person as PersonIcon,
@@ -86,48 +87,72 @@ import axios from "axios";
 /**
  * AccountDetails Component
  *
- * Props:
+ * Props (all optional):
  * - username
  * - email
  * - personalInfo: { lastName, firstName, middleInitial, phoneNumber }
  * - onSave(personalInfo) optional callback invoked after successful save
  * - onDelete() optional callback invoked after successful delete
+ *
+ * Behavior changes in this updated version:
+ * - If username/email/personalInfo props are not provided, the component will fetch /api/users/me
+ *   to display existing values (so it "displays the existing personal info").
+ * - Preserves all original features: add/edit/delete personal info, validation, optimistic UI update,
+ *   and callback invocation.
  */
-const AccountDetails = ({
-  username,
-  email,
-  personalInfo: initialPersonalInfo,
-  onSave: onSaveCallback,
-  onDelete: onDeleteCallback,
-}) => {
-  const isOnline = true;
-
-  // Dialogs
+const AccountDetails = ({ username: propUsername, email: propEmail, personalInfo: initialPersonalInfo, onSave: onSaveCallback, onDelete: onDeleteCallback, }) => {
   const [open, setOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
-  // Loading states
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMe, setLoadingMe] = useState(false);
 
-  // Local personalInfo state so UI updates immediately after save/delete
+  // Local state for displayed account data (falls back to props)
+  const [username, setUsername] = useState(propUsername || "");
+  const [email, setEmail] = useState(propEmail || "");
   const [personalInfo, setPersonalInfo] = useState(initialPersonalInfo ?? null);
 
-  // Form fields
-  const [form, setForm] = useState({
-    lastName: "",
-    firstName: "",
-    middleInitial: "",
-    phoneNumber: "",
-  });
+  // Form
+  const [form, setForm] = useState({ lastName: "", firstName: "", middleInitial: "", phoneNumber: "", });
 
-  // Keep local personalInfo in sync when prop changes
+  // API base (relative by default so it works in prod/dev without env)
+  const API_URL = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
+
+  // Keep local state in sync with incoming props when they change
+  useEffect(() => setUsername(propUsername || ""), [propUsername]);
+  useEffect(() => setEmail(propEmail || ""), [propEmail]);
+  useEffect(() => setPersonalInfo(initialPersonalInfo ?? null), [initialPersonalInfo]);
+
+  // If no data supplied by props, try to fetch /api/users/me once on mount
   useEffect(() => {
-    setPersonalInfo(initialPersonalInfo ?? null);
-  }, [initialPersonalInfo]);
+    const shouldFetch = !propUsername && !propEmail && !initialPersonalInfo;
+    if (!shouldFetch) return;
 
-  // Prefill form on open
+    let mounted = true;
+    (async () => {
+      try {
+        setLoadingMe(true);
+        const headers = getAuthHeaders();
+        const res = await axios.get(buildUrl("/api/users/me"), { headers });
+        if (!mounted) return;
+        const data = res.data || {};
+        setUsername(data.username || "");
+        setEmail(data.email || "");
+        setPersonalInfo(data.personalInfo ?? null);
+      } catch (err) {
+        // Fail silently (component still usable with Add button) but log
+        console.warn("Could not fetch /api/users/me:", err?.response?.data || err?.message || err);
+      } finally {
+        if (mounted) setLoadingMe(false);
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [propUsername, propEmail, initialPersonalInfo]);
+
+  // Prefill form fields when opening dialog
   useEffect(() => {
     if (open) {
       setForm({
@@ -140,53 +165,38 @@ const AccountDetails = ({
   }, [open, personalInfo]);
 
   const handleOpen = () => setOpen(true);
-  const handleClose = () => {
-    if (!saving && !deleting) setOpen(false);
-  };
+  const handleClose = () => { if (!saving && !deleting) setOpen(false); };
 
-  const handleChange = (e) =>
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleChange = (e) => setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const validate = () => {
-    if (!form.firstName.trim() || !form.lastName.trim()) {
-      return "First name and last name are required.";
-    }
-    if (form.middleInitial && form.middleInitial.length > 1) {
-      return "Middle initial must be a single character.";
-    }
-    if (form.phoneNumber && !/^\+?[0-9]{7,15}$/.test(form.phoneNumber.trim())) {
-      return "Phone number must be digits (optional +), length 7–15.";
-    }
+    if (!form.firstName.trim() || !form.lastName.trim()) return "First name and last name are required.";
+    if (form.middleInitial && form.middleInitial.length > 1) return "Middle initial must be a single character.";
+    if (form.phoneNumber && !/^\+?[0-9]{7,15}$/.test(form.phoneNumber.trim())) return "Phone number must be digits (optional +), length 7–15.";
     return null;
   };
 
-  // Helper to attach auth header (adjust if you use cookies or other auth)
   const getAuthHeaders = () => {
     const token = localStorage.getItem("token");
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
-  // Internal API calls
-  const apiSavePersonalInfo = async (payload) => {
-    // If there's already personalInfo, call PUT, otherwise POST
-    const method = personalInfo ? "put" : "post";
-    const url = personalInfo ? "/api/users/personal-info" : "/api/users/personal-info";
+  const buildUrl = (path) => `${API_URL}${path}`;
 
-    const res = await axios[method](url, payload, {
-      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-    });
-    // server returns { personalInfo: {...} }
-    return res.data.personalInfo ?? res.data;
+  const apiSavePersonalInfo = async (payload) => {
+    const method = personalInfo ? "put" : "post"; // backend supports both on same endpoint
+    const url = buildUrl("/api/users/personal-info");
+    const res = await axios[method](url, payload, { headers: { "Content-Type": "application/json", ...getAuthHeaders() } });
+    // server returns { personalInfo: {...} } for POST/PUT
+    return res.data?.personalInfo ?? res.data;
   };
 
   const apiDeletePersonalInfo = async () => {
-    const res = await axios.delete("/api/users/personal-info", {
-      headers: { ...getAuthHeaders() },
-    });
+    const url = buildUrl("/api/users/personal-info");
+    const res = await axios.delete(url, { headers: { ...getAuthHeaders() } });
     return res.data;
   };
 
-  // Handler wired to Save button (uses API, updates UI)
   const handleSave = async () => {
     const error = validate();
     if (error) return toast.error(error);
@@ -202,16 +212,13 @@ const AccountDetails = ({
 
       const updated = await apiSavePersonalInfo(payload);
 
+      // Update UI with server response if available, otherwise optimistic payload
       setPersonalInfo(updated ?? payload);
       setOpen(false);
       toast.success("Personal information saved.");
 
       if (typeof onSaveCallback === "function") {
-        try {
-          onSaveCallback(updated ?? payload);
-        } catch (err) {
-          console.warn("onSave callback error:", err);
-        }
+        try { onSaveCallback(updated ?? payload); } catch (err) { console.warn("onSave callback error:", err); }
       }
     } catch (err) {
       const serverMessage = err?.response?.data?.message || err?.message || "Failed to save personal information.";
@@ -222,7 +229,6 @@ const AccountDetails = ({
     }
   };
 
-  // Handler wired to Delete confirmation (uses API, updates UI)
   const handleDeleteConfirmed = async () => {
     setDeleting(true);
     try {
@@ -234,11 +240,7 @@ const AccountDetails = ({
       toast.success("Personal information deleted.");
 
       if (typeof onDeleteCallback === "function") {
-        try {
-          onDeleteCallback();
-        } catch (err) {
-          console.warn("onDelete callback error:", err);
-        }
+        try { onDeleteCallback(); } catch (err) { console.warn("onDelete callback error:", err); }
       }
     } catch (err) {
       const serverMessage = err?.response?.data?.message || err?.message || "Failed to delete personal information.";
@@ -249,17 +251,15 @@ const AccountDetails = ({
     }
   };
 
+  // Render
   return (
     <>
-      {/* ===========================
-          MAIN CARD
-      ============================ */}
       <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
         <Box display="flex" alignItems="center" mb={3}>
           <Typography variant="h6">Account Details</Typography>
           <Badge
-            badgeContent={isOnline ? "Online" : "Offline"}
-            color={isOnline ? "success" : "secondary"}
+            badgeContent={"Online"}
+            color={"success"}
             sx={{ ml: 2, marginLeft: 5 }}
           />
         </Box>
@@ -272,7 +272,7 @@ const AccountDetails = ({
           <Box>
             <Typography variant="caption">Username</Typography>
             <Typography variant="body1" fontWeight="500">
-              {username || "Not set"}
+              {loadingMe ? <CircularProgress size={18} /> : (username || "Not set")}
             </Typography>
           </Box>
         </Box>
@@ -285,39 +285,20 @@ const AccountDetails = ({
           <Box>
             <Typography variant="caption">Email Address</Typography>
             <Typography variant="body1" fontWeight="500">
-              {email || "Not set"}
+              {loadingMe ? <CircularProgress size={18} /> : (email || "Not set")}
             </Typography>
           </Box>
         </Box>
 
-        {/* ===========================
-            PERSONAL INFORMATION
-        ============================ */}
+        {/* Personal Information */}
         <Box mt={3}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-            <Typography variant="subtitle1" fontWeight="600">
-              Personal Information
-            </Typography>
+            <Typography variant="subtitle1" fontWeight="600">Personal Information</Typography>
 
-            {/* Add / Edit button */}
             {personalInfo ? (
-              <Button
-                size="small"
-                startIcon={<EditIcon />}
-                variant="outlined"
-                onClick={handleOpen}
-              >
-                Edit
-              </Button>
+              <Button size="small" startIcon={<EditIcon />} variant="outlined" onClick={handleOpen}>Edit</Button>
             ) : (
-              <Button
-                size="small"
-                startIcon={<AddIcon />}
-                variant="contained"
-                onClick={handleOpen}
-              >
-                Add
-              </Button>
+              <Button size="small" startIcon={<AddIcon />} variant="contained" onClick={handleOpen}>Add</Button>
             )}
           </Stack>
 
@@ -330,10 +311,8 @@ const AccountDetails = ({
               <Typography variant="caption">Full Name</Typography>
               <Typography variant="body1" fontWeight="500">
                 {personalInfo
-                  ? `${personalInfo.firstName || ""} ${
-                      personalInfo.middleInitial ? personalInfo.middleInitial + " " : ""
-                    }${personalInfo.lastName || ""}`
-                  : "Not set"}
+                  ? `${personalInfo.firstName || ""} ${personalInfo.middleInitial ? personalInfo.middleInitial + " " : ""}${personalInfo.lastName || ""}`
+                  : (loadingMe ? <CircularProgress size={18} /> : "Not set")}
               </Typography>
             </Box>
           </Box>
@@ -346,109 +325,51 @@ const AccountDetails = ({
             <Box>
               <Typography variant="caption">Phone Number</Typography>
               <Typography variant="body1" fontWeight="500">
-                {personalInfo?.phoneNumber || "Not set"}
+                {personalInfo?.phoneNumber || (loadingMe ? <CircularProgress size={18} /> : "Not set")}
               </Typography>
             </Box>
           </Box>
         </Box>
       </Paper>
 
-      {/* ===========================
-          ADD / EDIT DIALOG
-      ============================ */}
+      {/* Add / Edit Dialog */}
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between" }}>
           {personalInfo ? "Edit Personal Information" : "Add Personal Information"}
-
-          <IconButton onClick={handleClose} disabled={saving || deleting}>
-            <CloseIcon />
-          </IconButton>
+          <IconButton onClick={handleClose} disabled={saving || deleting}><CloseIcon /></IconButton>
         </DialogTitle>
 
         <DialogContent dividers>
           <Stack spacing={2} mt={1}>
-            <TextField
-              label="First Name"
-              name="firstName"
-              value={form.firstName}
-              onChange={handleChange}
-              fullWidth
-              required
-            />
-            <TextField
-              label="Middle Initial"
-              name="middleInitial"
-              value={form.middleInitial}
-              onChange={handleChange}
-              inputProps={{ maxLength: 1 }}
-              helperText="Optional (1 character)"
-            />
-            <TextField
-              label="Last Name"
-              name="lastName"
-              value={form.lastName}
-              onChange={handleChange}
-              fullWidth
-              required
-            />
-            <TextField
-              label="Phone Number"
-              name="phoneNumber"
-              value={form.phoneNumber}
-              onChange={handleChange}
-              fullWidth
-              helperText="Digits only, optional + (7–15 chars)"
-            />
+            <TextField label="First Name" name="firstName" value={form.firstName} onChange={handleChange} fullWidth required />
+            <TextField label="Middle Initial" name="middleInitial" value={form.middleInitial} onChange={handleChange} inputProps={{ maxLength: 1 }} helperText="Optional (1 character)" />
+            <TextField label="Last Name" name="lastName" value={form.lastName} onChange={handleChange} fullWidth required />
+            <TextField label="Phone Number" name="phoneNumber" value={form.phoneNumber} onChange={handleChange} fullWidth helperText="Digits only, optional + (7–15 chars)" />
           </Stack>
         </DialogContent>
 
         <DialogActions sx={{ p: 2 }}>
           {personalInfo && (
-            <Button
-              startIcon={<DeleteIcon />}
-              color="error"
-              onClick={() => setConfirmDeleteOpen(true)}
-              disabled={saving || deleting}
-            >
-              Delete
-            </Button>
+            <Button startIcon={<DeleteIcon />} color="error" onClick={() => setConfirmDeleteOpen(true)} disabled={saving || deleting}>Delete</Button>
           )}
 
           <Box sx={{ flexGrow: 1 }} />
 
-          <Button onClick={handleClose} disabled={saving || deleting}>
-            Cancel
-          </Button>
+          <Button onClick={handleClose} disabled={saving || deleting}>Cancel</Button>
 
-          <Button variant="contained" startIcon={<EditIcon />} onClick={handleSave} disabled={saving || deleting}>
-            {saving ? "Saving..." : "Save"}
-          </Button>
+          <Button variant="contained" startIcon={<EditIcon />} onClick={handleSave} disabled={saving || deleting}>{saving ? "Saving..." : "Save"}</Button>
         </DialogActions>
       </Dialog>
 
-      {/* ===========================
-          DELETE CONFIRMATION DIALOG
-      ============================ */}
-      <Dialog
-        open={confirmDeleteOpen}
-        onClose={() => setConfirmDeleteOpen(false)}
-        fullWidth
-        maxWidth="xs"
-      >
+      {/* Delete confirmation */}
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>Delete Personal Information</DialogTitle>
         <DialogContent dividers>
-          <Typography>
-            Are you sure you want to delete your personal information? This cannot be undone.
-          </Typography>
+          <Typography>Are you sure you want to delete your personal information? This cannot be undone.</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDeleteOpen(false)} disabled={deleting}>
-            Cancel
-          </Button>
-
-          <Button variant="contained" color="error" onClick={handleDeleteConfirmed} disabled={deleting}>
-            {deleting ? "Deleting..." : "Delete"}
-          </Button>
+          <Button onClick={() => setConfirmDeleteOpen(false)} disabled={deleting}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleDeleteConfirmed} disabled={deleting}>{deleting ? "Deleting..." : "Delete"}</Button>
         </DialogActions>
       </Dialog>
     </>
