@@ -81,6 +81,7 @@ import {
 } from "@mui/icons-material";
 import { green, grey } from "@mui/material/colors";
 import toast from "react-hot-toast";
+import axios from "axios";
 
 /**
  * AccountDetails Component
@@ -89,15 +90,15 @@ import toast from "react-hot-toast";
  * - username
  * - email
  * - personalInfo: { lastName, firstName, middleInitial, phoneNumber }
- * - onSave(personalInfo)
- * - onDelete()
+ * - onSave(personalInfo) optional callback invoked after successful save
+ * - onDelete() optional callback invoked after successful delete
  */
 const AccountDetails = ({
   username,
   email,
-  personalInfo,
-  onSave = async () => {},
-  onDelete = async () => {},
+  personalInfo: initialPersonalInfo,
+  onSave: onSaveCallback,
+  onDelete: onDeleteCallback,
 }) => {
   const isOnline = true;
 
@@ -108,6 +109,10 @@ const AccountDetails = ({
   // Loading states
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Local personalInfo state so UI updates immediately after save/delete
+  const [personalInfo, setPersonalInfo] = useState(initialPersonalInfo ?? null);
 
   // Form fields
   const [form, setForm] = useState({
@@ -116,6 +121,11 @@ const AccountDetails = ({
     middleInitial: "",
     phoneNumber: "",
   });
+
+  // Keep local personalInfo in sync when prop changes
+  useEffect(() => {
+    setPersonalInfo(initialPersonalInfo ?? null);
+  }, [initialPersonalInfo]);
 
   // Prefill form on open
   useEffect(() => {
@@ -150,6 +160,33 @@ const AccountDetails = ({
     return null;
   };
 
+  // Helper to attach auth header (adjust if you use cookies or other auth)
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  // Internal API calls
+  const apiSavePersonalInfo = async (payload) => {
+    // If there's already personalInfo, call PUT, otherwise POST
+    const method = personalInfo ? "put" : "post";
+    const url = personalInfo ? "/api/users/personal-info" : "/api/users/personal-info";
+
+    const res = await axios[method](url, payload, {
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    });
+    // server returns { personalInfo: {...} }
+    return res.data.personalInfo ?? res.data;
+  };
+
+  const apiDeletePersonalInfo = async () => {
+    const res = await axios.delete("/api/users/personal-info", {
+      headers: { ...getAuthHeaders() },
+    });
+    return res.data;
+  };
+
+  // Handler wired to Save button (uses API, updates UI)
   const handleSave = async () => {
     const error = validate();
     if (error) return toast.error(error);
@@ -163,27 +200,50 @@ const AccountDetails = ({
         phoneNumber: form.phoneNumber ? form.phoneNumber.trim() : null,
       };
 
-      await onSave(payload);
-      toast.success("Personal information saved.");
+      const updated = await apiSavePersonalInfo(payload);
+
+      setPersonalInfo(updated ?? payload);
       setOpen(false);
+      toast.success("Personal information saved.");
+
+      if (typeof onSaveCallback === "function") {
+        try {
+          onSaveCallback(updated ?? payload);
+        } catch (err) {
+          console.warn("onSave callback error:", err);
+        }
+      }
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to save personal information.");
+      const serverMessage = err?.response?.data?.message || err?.message || "Failed to save personal information.";
+      console.error("Failed to save personal info:", err);
+      toast.error(serverMessage);
     } finally {
       setSaving(false);
     }
   };
 
+  // Handler wired to Delete confirmation (uses API, updates UI)
   const handleDeleteConfirmed = async () => {
     setDeleting(true);
     try {
-      await onDelete();
-      toast.success("Personal information deleted.");
+      await apiDeletePersonalInfo();
+
+      setPersonalInfo(null);
       setConfirmDeleteOpen(false);
       setOpen(false);
+      toast.success("Personal information deleted.");
+
+      if (typeof onDeleteCallback === "function") {
+        try {
+          onDeleteCallback();
+        } catch (err) {
+          console.warn("onDelete callback error:", err);
+        }
+      }
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to delete personal information.");
+      const serverMessage = err?.response?.data?.message || err?.message || "Failed to delete personal information.";
+      console.error("Failed to delete personal info:", err);
+      toast.error(serverMessage);
     } finally {
       setDeleting(false);
     }
@@ -360,12 +420,7 @@ const AccountDetails = ({
             Cancel
           </Button>
 
-          <Button
-            variant="contained"
-            startIcon={<EditIcon />}
-            onClick={handleSave}
-            disabled={saving || deleting}
-          >
+          <Button variant="contained" startIcon={<EditIcon />} onClick={handleSave} disabled={saving || deleting}>
             {saving ? "Saving..." : "Save"}
           </Button>
         </DialogActions>
@@ -391,12 +446,7 @@ const AccountDetails = ({
             Cancel
           </Button>
 
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDeleteConfirmed}
-            disabled={deleting}
-          >
+          <Button variant="contained" color="error" onClick={handleDeleteConfirmed} disabled={deleting}>
             {deleting ? "Deleting..." : "Delete"}
           </Button>
         </DialogActions>
