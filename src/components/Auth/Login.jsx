@@ -224,7 +224,7 @@ import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { GoogleLogin } from "@react-oauth/google";
-import { jwtDecode } from "jwt-decode";// <-- correct import
+import { jwtDecode } from "jwt-decode";
 import ForgotPassword from "./ForgotPassword";
 import { useAuth } from "../../context/AuthContext";
 
@@ -301,7 +301,7 @@ export default function LoginForm({ onSuccess, toggleMode }) {
     try {
       if (!credentialResponse?.credential) throw new Error("No credential received");
 
-      const decoded = jwt_decode(credentialResponse.credential);
+      const decoded = jwtDecode(credentialResponse.credential);
 
       const res = await axios.post(`${API_BASE}/api/auth/google`, {
         token: credentialResponse.credential,
