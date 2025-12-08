@@ -165,7 +165,7 @@ function App() {
         </Routes>
       </div>
 
-      <Toaster position="top-right" reverseOrder={false} />
+      <Toaster position="top-right" reverseOrder={false} containerStyle={{ marginTop: "80px" }} />
       {!location.pathname.startsWith("/admin") && <Footer />}
     </GoogleOAuthProvider>
   );

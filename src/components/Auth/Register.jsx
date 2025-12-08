@@ -1,3 +1,4 @@
+
 // import React, { useState } from "react";
 // import {
 //   Box,
@@ -19,6 +20,7 @@
 // import toast from "react-hot-toast";
 // import { useAuth } from "../../context/AuthContext";
 // import { useNavigate } from "react-router-dom";
+
 
 // export default function RegisterForm({ onSuccess, toggleMode }) {
 //   const [loading, setLoading] = useState(false);
@@ -53,7 +55,7 @@
 //     onSubmit: async (values, { setSubmitting, resetForm, setFieldError }) => {
 //       setLoading(true);
 //       try {
-//         const res = await axios.post(
+//         await axios.post(
 //           `${process.env.REACT_APP_API_URL}/api/auth/register`,
 //           values
 //         );
@@ -83,12 +85,12 @@
 
 //       const decoded = jwtDecode(credentialResponse.credential);
 
-//       const res = await axios.post(
+//       const { data } = await axios.post(
 //         `${process.env.REACT_APP_API_URL}/api/auth/google`,
 //         { token: credentialResponse.credential }
 //       );
 
-//       const { token, user } = res.data;
+//       const { token, user } = data;
 
 //       localStorage.setItem("token", token);
 //       localStorage.setItem("userId", user._id);
@@ -183,13 +185,13 @@
 //       <Button
 //         type="submit"
 //         variant="contained"
-//           sx={{
-//     backgroundColor: "black",
-//     color: "white",
-//     "&:hover": {
-//       backgroundColor: "#222", // slightly lighter black on hover
-//     },
-//   }}
+//         sx={{
+//           backgroundColor: "black",
+//           color: "white",
+//           "&:hover": {
+//             backgroundColor: "#222",
+//           },
+//         }}
 //         fullWidth
 //         disabled={formik.isSubmitting || loading}
 //         startIcon={loading && <CircularProgress size={20} />}
@@ -225,6 +227,7 @@
 // }
 
 
+// src/components/Auth/RegisterForm.jsx
 import React, { useState } from "react";
 import {
   Box,
@@ -242,11 +245,10 @@ import * as Yup from "yup";
 import Swal from "sweetalert2";
 import axios from "axios";
 import { GoogleLogin } from "@react-oauth/google";
-import {jwtDecode} from "jwt-decode";
+import {jwtDecode} from "jwt-decode";// <-- FIXED import
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-
 
 export default function RegisterForm({ onSuccess, toggleMode }) {
   const [loading, setLoading] = useState(false);
@@ -293,9 +295,10 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
         resetForm();
         toggleMode(); // switch to login form
       } catch (err) {
-        const msg = err?.response?.data?.message;
-        if (msg?.includes("email")) setFieldError("email", msg);
-        if (msg?.includes("username")) setFieldError("username", msg);
+        const msg = err?.response?.data?.message || err?.message;
+        // set field errors if backend mentions those fields
+        if (msg?.toLowerCase().includes("email")) setFieldError("email", msg);
+        if (msg?.toLowerCase().includes("username")) setFieldError("username", msg);
         Swal.fire("Error", msg || "Something went wrong.", "error");
       } finally {
         setSubmitting(false);
@@ -306,27 +309,42 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
 
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
-      if (!credentialResponse?.credential)
-        throw new Error("No credential received");
+      if (!credentialResponse?.credential) {
+        throw new Error("No credential received from Google.");
+      }
 
-      const decoded = jwtDecode(credentialResponse.credential);
+      // decode to extract basic info for welcome toast if needed
+      let decoded = {};
+      try {
+        decoded = jwtDecode(credentialResponse.credential) || {};
+      } catch (e) {
+        // non-fatal: we can still continue without decoded details
+        console.warn("Could not decode Google JWT:", e);
+      }
 
       const { data } = await axios.post(
         `${process.env.REACT_APP_API_URL}/api/auth/google`,
         { token: credentialResponse.credential }
       );
 
-      const { token, user } = data;
+      const { token, user } = data || {};
+
+      if (!token || !user) {
+        throw new Error("Invalid response from server during Google login.");
+      }
 
       localStorage.setItem("token", token);
       localStorage.setItem("userId", user._id);
 
+      // update auth context and navigate
       setUser(user);
       navigate(user.role === "admin" ? "/admin" : "/", { replace: true });
+
       toast.success(`Welcome, ${user.username || decoded.name || "User"}!`);
+      if (typeof onSuccess === "function") onSuccess(user);
     } catch (err) {
       console.error("Google login failed:", err);
-      toast.error(err?.response?.data?.message || "Google login failed.");
+      toast.error(err?.response?.data?.message || err?.message || "Google login failed.");
     }
   };
 
@@ -339,6 +357,7 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
       component="form"
       onSubmit={formik.handleSubmit}
       sx={{ maxWidth: 400, mx: "auto", display: "flex", flexDirection: "column", gap: 2 }}
+      noValidate
     >
       {/* Username */}
       <TextField
@@ -348,6 +367,7 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
         {...formik.getFieldProps("username")}
         error={formik.touched.username && Boolean(formik.errors.username)}
         helperText={formik.touched.username && formik.errors.username}
+        autoComplete="username"
       />
 
       {/* Email */}
@@ -359,6 +379,7 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
         {...formik.getFieldProps("email")}
         error={formik.touched.email && Boolean(formik.errors.email)}
         helperText={formik.touched.email && formik.errors.email}
+        autoComplete="email"
       />
 
       {/* Password */}
@@ -374,14 +395,16 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
           endAdornment: (
             <InputAdornment position="end">
               <IconButton
-                onClick={() => setShowPassword(!showPassword)}
+                onClick={() => setShowPassword((s) => !s)}
                 edge="end"
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <VisibilityOff /> : <Visibility />}
               </IconButton>
             </InputAdornment>
           ),
         }}
+        autoComplete="new-password"
       />
 
       {/* Confirm Password */}
@@ -397,14 +420,16 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
           endAdornment: (
             <InputAdornment position="end">
               <IconButton
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                onClick={() => setShowConfirmPassword((s) => !s)}
                 edge="end"
+                aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
               >
                 {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
               </IconButton>
             </InputAdornment>
           ),
         }}
+        autoComplete="new-password"
       />
 
       {/* Register Button */}
@@ -420,7 +445,7 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
         }}
         fullWidth
         disabled={formik.isSubmitting || loading}
-        startIcon={loading && <CircularProgress size={20} />}
+        startIcon={loading ? <CircularProgress size={20} /> : null}
       >
         {loading ? "Registering..." : "Register"}
       </Button>
@@ -434,7 +459,12 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
 
       {/* Google Login */}
       <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
-        <GoogleLogin onSuccess={handleGoogleSuccess} onError={handleGoogleFailure} />
+        <GoogleLogin
+          onSuccess={handleGoogleSuccess}
+          onError={handleGoogleFailure}
+          useOneTap={false}
+          disabled={loading}
+        />
       </Box>
 
       {/* Toggle to Login */}
