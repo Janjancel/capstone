@@ -1,4 +1,5 @@
 
+
 // import React, { useState, useEffect } from "react";
 // import { Modal, Button, Spinner, Form, Alert } from "react-bootstrap";
 // import toast from "react-hot-toast";
@@ -456,37 +457,9 @@
 
 //       const orderId = created?._id || created?.order?._id || created?.orderId;
 
-//       // NEW: Atomically decrement quantity for each ordered item using backend endpoint
-//       const orderedItems = payload.items || [];
-//       let decrementFailures = 0;
-//       let insufficientIds = [];
-
-//       for (const ordered of orderedItems) {
-//         const id = ordered.id;
-//         const amount = Number(ordered.quantity) || 1;
-//         if (!id) continue;
-
-//         const result = await decrementItem(id, amount);
-//         if (!result.ok) {
-//           decrementFailures += 1;
-//           // If backend says insufficient stock (400) mark for removal and inform user
-//           if (result.status === 400 && result.body?.error?.toLowerCase?.().includes("insufficient")) {
-//             insufficientIds.push(String(id));
-//           }
-//           console.warn(`Failed to decrement item ${id}:`, result);
-//         }
-//       }
-
-//       // If some items had insufficient stock, remove them locally and notify user
-//       if (insufficientIds.length > 0) {
-//         toast.error(`Some items were out of stock and removed from your cart.`);
-//         try {
-//           setCartItems && setCartItems((prev = []) => prev.filter((it) => !insufficientIds.includes(String(getItemId(it)))));
-//         } catch (e) {}
-//         try { setSelectedItems && setSelectedItems([]); } catch (e) {}
-//         try { setCartCount && setCartCount((prev = 0) => Math.max(0, prev - insufficientIds.length)); } catch (e) {}
-//         window.dispatchEvent(new CustomEvent("cartUpdated", { detail: -insufficientIds.length }));
-//       }
+//       // NOTE: Server already decrements stock inside transaction when creating the order.
+//       // The client must NOT call decrement endpoints again to avoid double-decrementing.
+//       // (Previously we called decrementItem here; that has been removed.)
 
 //       // 🔹 Create notification for admin (best-effort)
 //       if (orderId) {
@@ -540,11 +513,6 @@
 //       const removedCount = (selectedItems || []).length;
 //       window.dispatchEvent(new CustomEvent("cartUpdated", { detail: removedCount }));
 
-//       // Provide user feedback
-//       if (decrementFailures > 0) {
-//         toast.success(`Order placed (but ${decrementFailures} item(s) failed to decrement stock).`);
-//       }
-
 //       onClose && onClose();
 //     } catch (err) {
 //       // Robust error extraction
@@ -596,25 +564,9 @@
 //         // ensure it returns a Promise so we can await it
 //         await onConfirm(address, "", selectedItems);
 
-//         // After parent handled order creation, attempt to decrement stock for each ordered item here as well
-//         const orderedItems = (selectedItems || []).map((i) => ({ id: getItemId(i), quantity: Number(i.quantity) || 1 }));
-//         let decrementFailures = 0;
-//         let insufficientIds = [];
-
-//         for (const ordered of orderedItems) {
-//           if (!ordered.id) continue;
-//           const result = await decrementItem(ordered.id, ordered.quantity);
-//           if (!result.ok) {
-//             decrementFailures += 1;
-//             if (result.status === 400 && result.body?.error?.toLowerCase?.().includes("insufficient")) {
-//               insufficientIds.push(String(ordered.id));
-//             }
-//           }
-//         }
-
-//         // if (insufficientIds.length > 0) {
-//         //   toast.error(`Some items were out of stock and removed from your cart.`);
-//         // }
+//         // NOTE: parent onConfirm is expected to create the order on the server.
+//         // The server will handle stock decrement atomically. Do NOT call decrementItem here
+//         // (previously we did and it caused double-decrements).
 
 //         // after success, run the same UI cleanup we normally do (best-effort)
 //         try {
@@ -1498,6 +1450,35 @@ const CartModal = ({
     }
   };
 
+  // ----- NEW: derive a display name & phone number with sensible fallbacks -----
+  const formatFullNameFromPersonalInfo = (pi) => {
+    if (!pi) return null;
+    const first = pi.firstName?.trim() || "";
+    const middle = pi.middleInitial ? (pi.middleInitial.trim().charAt(0) + ".") : "";
+    const last = pi.lastName?.trim() || "";
+    const full = `${first}${middle ? " " + middle : ""}${last ? " " + last : ""}`.trim();
+    return full || null;
+  };
+
+  const computedDisplayName = (() => {
+    // 1) personalInfo on user (common server shape)
+    if (user?.personalInfo) {
+      const n = formatFullNameFromPersonalInfo(user.personalInfo);
+      if (n) return n;
+    }
+    // 2) top-level fields
+    if (user?.displayName) return user.displayName;
+    if (user?.firstName || user?.lastName) return `${(user.firstName || "").trim()} ${(user.lastName || "").trim()}`.trim();
+    // 3) email fallback
+    if (user?.email) return user.email.split("@")[0];
+    return "N/A";
+  })();
+
+  const computedPhoneNumber = (() => {
+    // prefer personalInfo.phoneNumber, then top-level phoneNumber, then 'N/A'
+    return user?.personalInfo?.phoneNumber || user?.phoneNumber || user?.mobile || "N/A";
+  })();
+
   const renderViewMode = () => (
     <div className="card p-4 shadow-sm">
       <div className="d-flex justify-content-between align-items-center">
@@ -1588,7 +1569,7 @@ const CartModal = ({
                     <Form.Label>Name</Form.Label>
                     <Form.Control
                       type="text"
-                      value={user?.displayName || "N/A"}
+                      value={computedDisplayName}
                       disabled
                     />
                   </Form.Group>
@@ -1604,7 +1585,7 @@ const CartModal = ({
                     <Form.Label>Phone Number</Form.Label>
                     <Form.Control
                       type="text"
-                      value={user?.phoneNumber || "N/A"}
+                      value={computedPhoneNumber}
                       disabled
                     />
                   </Form.Group>
