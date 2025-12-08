@@ -1,5 +1,4 @@
 
-
 // import React, { useEffect, useState, useCallback } from "react";
 // import { useNavigate } from "react-router-dom";
 // import {
@@ -81,6 +80,7 @@
 //     fetchUserAddress();
 //   }, [user, API_URL]);
 
+//   // fetch items (includes quantity)
 //   useEffect(() => {
 //     const fetchItems = async () => {
 //       setLoading(true);
@@ -88,6 +88,7 @@
 //         const res = await axios.get(`${API_URL}/api/items`);
 //         const itemArray = Array.isArray(res.data) ? res.data : [];
 
+//         // Only show available items (server controls availability) but keep quantity
 //         const availableOnly = itemArray.filter(
 //           (it) => it?.availability === true || it?.availability === "true"
 //         );
@@ -216,9 +217,19 @@
 //     setSelectedItem(null);
 //   };
 
+//   // Helper to call decrement endpoint
+//   const decrementItem = async (id, amount = 1, headers = {}) => {
+//     try {
+//       const res = await axios.post(`${API_URL}/api/items/${id}/decrement`, { amount }, { headers: { "Content-Type": "application/json", ...headers } });
+//       return { ok: true, data: res.data };
+//     } catch (err) {
+//       return { ok: false, err };
+//     }
+//   };
+
 //   // ------------ NEW: parent-provided onConfirm handler ----------------
 //   // This lets the CartModal delegate order creation to Buy, which will
-//   // ensure the item's availability is updated and local state is cleaned up.
+//   // ensure the item's quantity is decremented and local state is updated.
 //   const handleParentConfirm = useCallback(
 //     async (address, notes = "", selectedItems = []) => {
 //       if (!user?._id) throw new Error("User not found.");
@@ -257,24 +268,50 @@
 //       const created = orderRes.data;
 //       const orderId = created?._id || created?.order?._id || created?.orderId;
 
-//       // mark items unavailable
-//       const orderedIds = itemsPayload.map((it) => it.id).filter(Boolean);
-//       for (const id of orderedIds) {
-//         try {
-//           await axios.put(
-//             `${API_URL}/api/items/${id}`,
-//             { availability: false },
-//             { headers: { "Content-Type": "application/json", ...headers } }
-//           );
-//         } catch (err) {
-//           console.warn(`Failed to update availability for ${id}:`, err);
+//       // decrement quantities atomically using backend endpoint
+//       const orderedIds = itemsPayload.map((it) => ({ id: it.id, amount: it.quantity })).filter(Boolean);
+//       const insufficient = [];
+//       const decrementFailures = [];
+
+//       for (const ord of orderedIds) {
+//         const result = await decrementItem(ord.id, ord.amount, headers);
+//         if (!result.ok) {
+//           // inspect response for insufficient stock
+//           const resp = result.err?.response;
+//           if (resp?.status === 400 && resp?.data?.error?.toLowerCase?.().includes("insufficient")) {
+//             insufficient.push(String(ord.id));
+//           } else {
+//             decrementFailures.push(String(ord.id));
+//           }
+//         } else {
+//           // success -> update local item's quantity and availability
+//           const updated = result.data;
+//           try {
+//             setItems((prev = []) => prev.map((it) => (String(it._id) === String(updated._id) ? updated : it)));
+//             setFilteredItems((prev = []) => prev.map((it) => (String(it._id) === String(updated._id) ? updated : it)));
+//           } catch (e) {
+//             console.warn("Failed to update local item after decrement:", e);
+//           }
 //         }
 //       }
 
-//       // remove item locally so UI updates correctly
+//       // Handle insufficient stock: remove locally and notify user
+//       if (insufficient.length > 0) {
+//         toast.error("Some items were out of stock and removed from your cart.");
+//         setItems((prev = []) => prev.filter((it) => !insufficient.includes(String(it._id))));
+//         setFilteredItems((prev = []) => prev.filter((it) => !insufficient.includes(String(it._id))));
+//       }
+
+//       if (decrementFailures.length > 0) {
+//         toast.success(`Order placed (but failed to update stock for ${decrementFailures.length} item(s)).`);
+//       }
+
+//       // remove item locally so UI updates correctly (if quantity reached 0 backend should set availability=false)
 //       try {
-//         setItems((prev = []) => prev.filter((it) => !orderedIds.includes(it._id)));
-//         setFilteredItems((prev = []) => prev.filter((it) => !orderedIds.includes(it._id)));
+//         const removeIfZero = (updated) => String(updated._id);
+//         const removedIds = orderedIds.map((o) => String(o.id));
+//         setItems((prev = []) => prev.filter((it) => !removedIds.includes(String(it._id)) || (it.quantity && it.quantity > 0)));
+//         setFilteredItems((prev = []) => prev.filter((it) => !removedIds.includes(String(it._id)) || (it.quantity && it.quantity > 0)));
 //       } catch (e) {
 //         console.warn("Local cleanup failed:", e);
 //       }
@@ -282,9 +319,10 @@
 //       // optionally remove from cart via API (best-effort)
 //       try {
 //         if (orderedIds.length > 0) {
+//           const ids = orderedIds.map((o) => o.id);
 //           await axios.put(
 //             `${API_URL}/api/cart/${user._id}/remove`,
-//             { removeItems: orderedIds },
+//             { removeItems: ids },
 //             { headers: { "Content-Type": "application/json", ...headers } }
 //           );
 //         }
@@ -402,9 +440,18 @@
 //                   >
 //                     {truncateText(item.description, 50)}
 //                   </Typography>
-//                   <Typography variant="body1" fontWeight="bold" color="text.primary" sx={{ mt: 1 }}>
-//                     ₱{item.price}
-//                   </Typography>
+//                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 1 }}>
+//                     <Typography variant="body1" fontWeight="bold" color="text.primary">
+//                       ₱{item.price}
+//                     </Typography>
+//                     {/* show quantity available */}
+//                     <Typography variant="caption" color={item.quantity > 0 ? "success.main" : "error.main"}>
+//                       {typeof item.quantity !== "undefined" && item.quantity !== null
+//                         ? `${item.quantity} left`
+//                         : "Quantity N/A"}
+//                     </Typography>
+//                   </Box>
+
 //                   <Typography variant="caption" color="text.secondary">
 //                     {renderCategoryLabel(item)}
 //                   </Typography>
@@ -451,7 +498,7 @@
 //         <CartModal
 //           show={showCartModal}
 //           onClose={closeCartModal}
-//           onConfirm={handleParentConfirm} // <-- delegate order creation to parent so availability updates
+//           onConfirm={handleParentConfirm} // <-- delegate order creation to parent so quantity updates
 //           user={user}
 //           totalPrice={selectedItem.price}
 //           selectedItems={[selectedItem]}
@@ -512,16 +559,18 @@ const Buy = () => {
 
   const API_URL = process.env.REACT_APP_API_URL;
 
+  // Updated categories to match server model
   const categories = [
     "Table",
     "Chair",
-    "Flooring",
     "Cabinet",
     "Post",
     "Scraps",
     "Stones",
     "Windows",
-    "Bed",
+    "Railings",
+    "Doors",
+    "Others",
   ];
 
   const getItemCategories = (item) => {
@@ -579,7 +628,9 @@ const Buy = () => {
     let filtered = items.filter(
       (item) =>
         (item.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.description || "").toLowerCase().includes(searchQuery.toLowerCase())
+        (item.description || "")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
     );
 
     if (priceFilter === "low") {
@@ -593,7 +644,9 @@ const Buy = () => {
     }
 
     if (categoryFilter) {
-      filtered = filtered.filter((item) => itemMatchesCategory(item, categoryFilter));
+      filtered = filtered.filter((item) =>
+        itemMatchesCategory(item, categoryFilter)
+      );
     }
 
     filtered = filtered.filter(
@@ -689,7 +742,11 @@ const Buy = () => {
   // Helper to call decrement endpoint
   const decrementItem = async (id, amount = 1, headers = {}) => {
     try {
-      const res = await axios.post(`${API_URL}/api/items/${id}/decrement`, { amount }, { headers: { "Content-Type": "application/json", ...headers } });
+      const res = await axios.post(
+        `${API_URL}/api/items/${id}/decrement`,
+        { amount },
+        { headers: { "Content-Type": "application/json", ...headers } }
+      );
       return { ok: true, data: res.data };
     } catch (err) {
       return { ok: false, err };
@@ -711,8 +768,11 @@ const Buy = () => {
         quantity: Number(i.quantity) || 1,
         name: i.name || i.title || i.itemName || "",
         price: Number(i.price) || Number(i.unitPrice) || 0,
-        image: Array.isArray(i.images) && i.images.length ? i.images[0] : i.image || "",
-        subtotal: Number(((Number(i.quantity) || 1) * (Number(i.price) || 0)).toFixed(2)),
+        image:
+          Array.isArray(i.images) && i.images.length ? i.images[0] : i.image || "",
+        subtotal: Number(
+          ((Number(i.quantity) || 1) * (Number(i.price) || 0)).toFixed(2)
+        ),
       }));
 
       const total = itemsPayload.reduce((acc, it) => acc + (Number(it.subtotal) || 0), 0);
@@ -738,7 +798,9 @@ const Buy = () => {
       const orderId = created?._id || created?.order?._id || created?.orderId;
 
       // decrement quantities atomically using backend endpoint
-      const orderedIds = itemsPayload.map((it) => ({ id: it.id, amount: it.quantity })).filter(Boolean);
+      const orderedIds = itemsPayload
+        .map((it) => ({ id: it.id, amount: it.quantity }))
+        .filter(Boolean);
       const insufficient = [];
       const decrementFailures = [];
 
@@ -747,7 +809,10 @@ const Buy = () => {
         if (!result.ok) {
           // inspect response for insufficient stock
           const resp = result.err?.response;
-          if (resp?.status === 400 && resp?.data?.error?.toLowerCase?.().includes("insufficient")) {
+          if (
+            resp?.status === 400 &&
+            resp?.data?.error?.toLowerCase?.().includes("insufficient")
+          ) {
             insufficient.push(String(ord.id));
           } else {
             decrementFailures.push(String(ord.id));
@@ -756,8 +821,12 @@ const Buy = () => {
           // success -> update local item's quantity and availability
           const updated = result.data;
           try {
-            setItems((prev = []) => prev.map((it) => (String(it._id) === String(updated._id) ? updated : it)));
-            setFilteredItems((prev = []) => prev.map((it) => (String(it._id) === String(updated._id) ? updated : it)));
+            setItems((prev = []) =>
+              prev.map((it) => (String(it._id) === String(updated._id) ? updated : it))
+            );
+            setFilteredItems((prev = []) =>
+              prev.map((it) => (String(it._id) === String(updated._id) ? updated : it))
+            );
           } catch (e) {
             console.warn("Failed to update local item after decrement:", e);
           }
@@ -768,19 +837,30 @@ const Buy = () => {
       if (insufficient.length > 0) {
         toast.error("Some items were out of stock and removed from your cart.");
         setItems((prev = []) => prev.filter((it) => !insufficient.includes(String(it._id))));
-        setFilteredItems((prev = []) => prev.filter((it) => !insufficient.includes(String(it._id))));
+        setFilteredItems((prev = []) =>
+          prev.filter((it) => !insufficient.includes(String(it._id)))
+        );
       }
 
       if (decrementFailures.length > 0) {
-        toast.success(`Order placed (but failed to update stock for ${decrementFailures.length} item(s)).`);
+        toast.success(
+          `Order placed (but failed to update stock for ${decrementFailures.length} item(s)).`
+        );
       }
 
       // remove item locally so UI updates correctly (if quantity reached 0 backend should set availability=false)
       try {
-        const removeIfZero = (updated) => String(updated._id);
         const removedIds = orderedIds.map((o) => String(o.id));
-        setItems((prev = []) => prev.filter((it) => !removedIds.includes(String(it._id)) || (it.quantity && it.quantity > 0)));
-        setFilteredItems((prev = []) => prev.filter((it) => !removedIds.includes(String(it._id)) || (it.quantity && it.quantity > 0)));
+        setItems((prev = []) =>
+          prev.filter(
+            (it) => !removedIds.includes(String(it._id)) || (it.quantity && it.quantity > 0)
+          )
+        );
+        setFilteredItems((prev = []) =>
+          prev.filter(
+            (it) => !removedIds.includes(String(it._id)) || (it.quantity && it.quantity > 0)
+          )
+        );
       } catch (e) {
         console.warn("Local cleanup failed:", e);
       }

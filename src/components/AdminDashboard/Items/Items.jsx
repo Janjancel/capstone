@@ -1,5 +1,4 @@
 
-
 // import React, { useState, useEffect, useCallback } from "react";
 // import {
 //   Button,
@@ -43,6 +42,7 @@
 //     age: "",
 //     category: "",
 //     images: [],
+//     quantity: 1,
 //   });
 //   const [loading, setLoading] = useState(false);
 //   const [fetching, setFetching] = useState(false);
@@ -210,6 +210,13 @@
 //       return;
 //     }
 
+//     // validate quantity
+//     const quantityNum = Number(newItem.quantity ?? 1);
+//     if (!Number.isInteger(quantityNum) || quantityNum < 0) {
+//       toast.error("Quantity must be an integer >= 0");
+//       return;
+//     }
+
 //     setLoading(true);
 //     try {
 //       const formData = new FormData();
@@ -221,6 +228,7 @@
 //       formData.append("age", newItem.age);
 //       // Keep single-field category (server will also map to categories array)
 //       formData.append("category", newItem.category);
+//       formData.append("quantity", String(quantityNum));
 
 //       if (newItem.images.length > 0) {
 //         newItem.images.forEach((file) => {
@@ -242,6 +250,7 @@
 //         age: "",
 //         category: "",
 //         images: [],
+//         quantity: 1,
 //       });
 //       setShowAddModal(false);
 //       fetchItems();
@@ -311,6 +320,50 @@
 //     }
 //   };
 
+//   // decrement stock (calls POST /:id/decrement)
+//   const decrementStock = async (item, amount = 1) => {
+//     const itemId = item._id;
+//     try {
+//       // optimistic local update (don't allow negative)
+//       setAllItems((prev) =>
+//         prev.map((it) =>
+//           String(it._id) === String(itemId)
+//             ? { ...it, quantity: Math.max(0, (it.quantity ?? 1) - amount), availability: ((it.quantity ?? 1) - amount) > 0 }
+//             : it
+//         )
+//       );
+//       setItems((prev) =>
+//         prev.map((it) =>
+//           String(it._id) === String(itemId)
+//             ? { ...it, quantity: Math.max(0, (it.quantity ?? 1) - amount), availability: ((it.quantity ?? 1) - amount) > 0 }
+//             : it
+//         )
+//       );
+
+//       const res = await axios.post(
+//         `${process.env.REACT_APP_API_URL}/api/items/${itemId}/decrement`,
+//         { amount }
+//       );
+
+//       // replace with authoritative server response
+//       const updated = res.data;
+//       setAllItems((prev) => prev.map((it) => (String(it._id) === String(updated._id) ? updated : it)));
+//       setItems((prev) => prev.map((it) => (String(it._id) === String(updated._id) ? updated : it)));
+
+//       toast.success(`Decremented ${amount} from ${item.name}`);
+//       window.dispatchEvent(new CustomEvent("itemUpdated", { detail: { itemId } }));
+//     } catch (err) {
+//       // On failure, refetch authoritative data and show message
+//       fetchItems();
+//       const msg =
+//         err?.response?.data?.error ||
+//         (err.response?.status === 404 ? "Item not found" : "Failed to decrement stock");
+//       toast.error(msg);
+//     } finally {
+//       handleMenuClose();
+//     }
+//   };
+
 //   // Render helper: readable category cell (keeps same column; shows comma list when array)
 //   const renderCategoryCell = (it) => {
 //     const cats = itemCategories(it);
@@ -331,7 +384,7 @@
 //   return (
 //     <Box sx={{ p: 3 }}>
 //       <Toaster position="top-right" />
-//       <h2>Items in Cart</h2>
+//       <h2>Items in Inventory</h2>
 
 //       <Box
 //         sx={{
@@ -398,6 +451,8 @@
 //                   </FormControl>
 //                 </TableCell>
 
+//                 <TableCell>Quantity</TableCell>
+
 //                 <TableCell align="center">Actions</TableCell>
 //               </TableRow>
 //             </TableHead>
@@ -434,6 +489,9 @@
 
 //                     {/* Availability display cell */}
 //                     <TableCell>{renderAvailabilityChip(item)}</TableCell>
+
+//                     {/* Quantity cell */}
+//                     <TableCell>{typeof item.quantity === "undefined" ? 1 : item.quantity}</TableCell>
 
 //                     <TableCell align="center">
 //                       <IconButton onClick={(e) => handleMenuOpen(e, item._id)}>
@@ -476,13 +534,22 @@
 //                         >
 //                           {item?.availability === false ? "Mark Available" : "Mark Unavailable"}
 //                         </MenuItem>
+
+//                         {/* Decrement stock by 1 */}
+//                         <MenuItem
+//                           onClick={() => {
+//                             decrementStock(item, 1);
+//                           }}
+//                         >
+//                           Decrement stock by 1
+//                         </MenuItem>
 //                       </Menu>
 //                     </TableCell>
 //                   </TableRow>
 //                 ))
 //               ) : (
 //                 <TableRow>
-//                   <TableCell colSpan={7} align="center">
+//                   <TableCell colSpan={8} align="center">
 //                     No items available.
 //                   </TableCell>
 //                 </TableRow>
@@ -572,16 +639,19 @@ const Items = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [menuItemId, setMenuItemId] = useState(null);
 
+  // Updated categories to match the server model
   const categories = [
     "Table",
     "Chair",
-    "Flooring",
     "Cabinet",
     "Post",
     "Scraps",
     "Stones",
     "Windows",
-    "Bed",
+    "Railings",
+    "Doors",
+    "Others",
+    "Uncategorized",
   ];
 
   // UI filters
