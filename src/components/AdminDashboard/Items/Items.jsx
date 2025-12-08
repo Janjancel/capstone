@@ -906,7 +906,7 @@ const Items = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Toaster position="top-right" />
-      <h2>Items in Cart</h2>
+      <h2>Items in Inventory</h2>
 
       <Box
         sx={{
