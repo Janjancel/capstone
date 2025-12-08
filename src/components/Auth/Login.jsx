@@ -224,7 +224,7 @@ import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { GoogleLogin } from "@react-oauth/google";
-import {jwtDecode} from "jwt-decode"; /// <-- correct import
+import { jwtDecode } from "jwt-decode";// <-- correct import
 import ForgotPassword from "./ForgotPassword";
 import { useAuth } from "../../context/AuthContext";
 
