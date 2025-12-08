@@ -1,4 +1,5 @@
 
+
 // import React, { useRef, useMemo } from "react";
 // import { Modal, Form, Button, Badge } from "react-bootstrap";
 
@@ -84,7 +85,7 @@
 //                     ? "number"
 //                     : "text"
 //                 }
-//                 value={newItem[field]}
+//                 value={newItem[field] ?? ""}
 //                 onChange={(e) =>
 //                   setNewItem({ ...newItem, [field]: e.target.value })
 //                 }
@@ -109,12 +110,12 @@
 //             </Form.Group>
 //           ))}
 
-//           {/* ✅ Condition (1–10) */}
+//           {/* Condition (1–10) */}
 //           <Form.Group className="mb-3">
 //             <Form.Label>Condition (1–10)</Form.Label>
 //             <Form.Control
 //               type="number"
-//               value={newItem.condition}
+//               value={newItem.condition ?? ""}
 //               onChange={(e) =>
 //                 setNewItem({ ...newItem, condition: e.target.value })
 //               }
@@ -129,7 +130,27 @@
 //             </Form.Text>
 //           </Form.Group>
 
-//           {/* ✅ Categories (Multi-select via checkboxes; backward-friendly) */}
+//           {/* Quantity */}
+//           <Form.Group className="mb-3">
+//             <Form.Label>Quantity</Form.Label>
+//             <Form.Control
+//               type="number"
+//               value={
+//                 typeof newItem.quantity === "undefined" ? 1 : newItem.quantity
+//               }
+//               onChange={(e) =>
+//                 setNewItem({ ...newItem, quantity: e.target.value })
+//               }
+//               min={0}
+//               step={1}
+//               required
+//             />
+//             <Form.Text muted>
+//               Enter the available quantity (integer ≥ 0). Defaults to 1.
+//             </Form.Text>
+//           </Form.Group>
+
+//           {/* Categories (Multi-select via checkboxes; backward-friendly) */}
 //           <Form.Group className="mb-3">
 //             <Form.Label>Categories</Form.Label>
 
@@ -190,7 +211,7 @@
 //             </Form.Text>
 //           </Form.Group>
 
-//           {/* ✅ Enhanced Images Input with dashed rectangle & previews */}
+//           {/* Enhanced Images Input with dashed rectangle & previews */}
 //           <Form.Group className="mb-3">
 //             <Form.Label>Images</Form.Label>
 
@@ -233,7 +254,7 @@
 //               {newItem.images?.length ? (
 //                 newItem.images.map((file, idx) => (
 //                   <div
-//                     key={`${file.name}-${idx}`}
+//                     key={`${file.name ?? idx}-${idx}`}
 //                     style={{
 //                       width: 80,
 //                       height: 80,

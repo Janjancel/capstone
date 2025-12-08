@@ -434,6 +434,7 @@ import {
   Col,
   Image,
   Badge,
+  Pagination,
 } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import { Box, Tooltip, IconButton } from '@mui/material';
@@ -444,6 +445,8 @@ const HeritageDashboard = () => {
   const [heritageItems, setHeritageItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showMap, setShowMap] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 3;
 
   // Add/Edit modal state
   const [showModal, setShowModal] = useState(false);
@@ -774,7 +777,7 @@ const HeritageDashboard = () => {
               </td>
             </tr>
           ) : (
-            heritageItems.map((item) => {
+            heritageItems.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((item) => {
               const lat = item.latitude ?? null;
               const lng = item.longitude ?? null;
               const coordinates =
@@ -862,6 +865,23 @@ const HeritageDashboard = () => {
           )}
         </tbody>
       </Table>
+
+      {/* Pagination */}
+      {heritageItems.length > 0 && (
+        <div className="d-flex justify-content-center mt-3">
+          <Pagination>
+            {Array.from({ length: Math.ceil(heritageItems.length / pageSize) }, (_, i) => (
+              <Pagination.Item
+                key={i + 1}
+                active={i + 1 === currentPage}
+                onClick={() => setCurrentPage(i + 1)}
+              >
+                {i + 1}
+              </Pagination.Item>
+            ))}
+          </Pagination>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       <Modal show={showModal} onHide={closeModal} backdrop="static" centered size="lg">
