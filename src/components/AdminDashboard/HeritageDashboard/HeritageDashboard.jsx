@@ -436,10 +436,14 @@ import {
   Badge,
 } from 'react-bootstrap';
 import toast from 'react-hot-toast';
+import { Box, Tooltip, IconButton } from '@mui/material';
+import MapIcon from '@mui/icons-material/Map';
+import MapComponent from '../../MapComponent';
 
 const HeritageDashboard = () => {
   const [heritageItems, setHeritageItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showMap, setShowMap] = useState(false);
 
   // Add/Edit modal state
   const [showModal, setShowModal] = useState(false);
@@ -726,12 +730,29 @@ const HeritageDashboard = () => {
 
   return (
     <div className="container-fluid p-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2 className="mb-0">Heritage Items Dashboard</h2>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <h2 className="mb-0" style={{ margin: 0 }}>Heritage Items Dashboard</h2>
+          <Tooltip title={showMap ? 'Hide Map' : 'Show Map'}>
+            <IconButton onClick={() => setShowMap((prev) => !prev)}>
+              <MapIcon color={showMap ? 'primary' : 'action'} />
+            </IconButton>
+          </Tooltip>
+        </Box>
         <Button variant="primary" onClick={openAddModal}>
           + Add Heritage
         </Button>
-      </div>
+      </Box>
+
+      {/* Map */}
+      {showMap && (
+        <Box sx={{ mb: 2 }}>
+          <div className="card p-4 rounded-4 shadow-sm" style={{ border: '1px solid rgba(0,0,0,0.05)' }}>
+            <MapComponent />
+          </div>
+        </Box>
+      )}
+
 
       <Table striped bordered hover responsive>
         <thead>
