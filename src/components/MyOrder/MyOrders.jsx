@@ -600,7 +600,7 @@ const pickAddress = (order) => {
 };
 
 // Timeline (Processing removed)
-const steps = ["Pending", "Shipped", "Delivered"];
+const steps = ["Pending", "Out for Delivery", "Delivered"];
 const getCurrentStepIndex = (status) => {
   const s = String(status || "").toLowerCase();
   if (s === "delivered" || s === "completed") return 2;
