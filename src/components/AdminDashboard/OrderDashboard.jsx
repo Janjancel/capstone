@@ -1230,14 +1230,30 @@ const OrderDashboard = () => {
             );
           })}
 
-          {/* Pagination (Bootstrap) */}
+          {/* Pagination (Bootstrap) - Sliding window of 20 pages */}
           <Box display="flex" justifyContent="center" mt={3}>
             <Pagination>
-              {Array.from({ length: totalPages }, (_, i) => (
-                <Pagination.Item key={i + 1} active={i + 1 === currentPage} onClick={() => setCurrentPage(i + 1)}>
-                  {i + 1}
-                </Pagination.Item>
-              ))}
+              {(() => {
+                const maxPagesToShow = 20;
+                const startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+                const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+                const adjustedStartPage = Math.max(1, endPage - maxPagesToShow + 1);
+
+                const pages = [];
+                for (let i = adjustedStartPage; i <= endPage; i++) {
+                  pages.push(i);
+                }
+
+                return pages.map((page) => (
+                  <Pagination.Item
+                    key={page}
+                    active={page === currentPage}
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </Pagination.Item>
+                ));
+              })()}
             </Pagination>
           </Box>
         </>

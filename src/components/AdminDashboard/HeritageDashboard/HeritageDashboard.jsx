@@ -870,15 +870,23 @@ const HeritageDashboard = () => {
       {heritageItems.length > 0 && (
         <div className="d-flex justify-content-center mt-3">
           <Pagination>
-            {Array.from({ length: Math.ceil(heritageItems.length / pageSize) }, (_, i) => (
-              <Pagination.Item
-                key={i + 1}
-                active={i + 1 === currentPage}
-                onClick={() => setCurrentPage(i + 1)}
-              >
-                {i + 1}
-              </Pagination.Item>
-            ))}
+            {Array.from(
+              {
+                length: Math.min(
+                  Math.ceil(heritageItems.length / pageSize),
+                  20
+                ),
+              },
+              (_, i) => (
+                <Pagination.Item
+                  key={i + 1}
+                  active={i + 1 === currentPage}
+                  onClick={() => setCurrentPage(i + 1)}
+                >
+                  {i + 1}
+                </Pagination.Item>
+              )
+            )}
           </Pagination>
         </div>
       )}
