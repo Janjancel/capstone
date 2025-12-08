@@ -1,3 +1,6 @@
+
+
+// // src/components/Auth/RegisterForm.jsx
 // import React, { useState } from "react";
 // import {
 //   Box,
@@ -15,6 +18,7 @@
 // import Swal from "sweetalert2";
 // import axios from "axios";
 // import { GoogleLogin } from "@react-oauth/google";
+// // import jwtDecode from "jwt-decode"; // <-- CORRECT import
 // import {jwtDecode} from "jwt-decode";
 // import toast from "react-hot-toast";
 // import { useAuth } from "../../context/AuthContext";
@@ -36,9 +40,7 @@
 //       confirmPassword: "",
 //     },
 //     validationSchema: Yup.object({
-//       username: Yup.string()
-//         .min(3, "Too short")
-//         .required("Username is required"),
+//       username: Yup.string().min(3, "Too short").required("Username is required"),
 //       email: Yup.string().email("Invalid email").required("Email is required"),
 //       password: Yup.string()
 //         .matches(
@@ -53,22 +55,35 @@
 //     onSubmit: async (values, { setSubmitting, resetForm, setFieldError }) => {
 //       setLoading(true);
 //       try {
-//         const res = await axios.post(
-//           `${process.env.REACT_APP_API_URL}/api/auth/register`,
-//           values
-//         );
+//         // Only send the required fields to the server
+//         const payload = {
+//           username: values.username,
+//           email: values.email,
+//           password: values.password,
+//         };
+
+//         const apiUrl = process.env.REACT_APP_API_URL || "";
+
+//         await axios.post(`${apiUrl}/api/auth/register`, payload, {
+//           headers: { "Content-Type": "application/json" },
+//         });
+
 //         Swal.fire(
 //           "Registration Successful",
 //           "Check your email to verify your account before logging in.",
 //           "success"
 //         );
+
 //         resetForm();
-//         toggleMode(); // switch to login form
+//         // switch to login form if provided
+//         if (typeof toggleMode === "function") toggleMode();
 //       } catch (err) {
-//         const msg = err?.response?.data?.message;
-//         if (msg?.includes("email")) setFieldError("email", msg);
-//         if (msg?.includes("username")) setFieldError("username", msg);
-//         Swal.fire("Error", msg || "Something went wrong.", "error");
+//         const msg = err?.response?.data?.message || err.message || "Something went wrong.";
+//         // map likely errors
+//         if (msg.toLowerCase().includes("email")) setFieldError("email", msg);
+//         if (msg.toLowerCase().includes("username")) setFieldError("username", msg);
+
+//         Swal.fire("Error", msg, "error");
 //       } finally {
 //         setSubmitting(false);
 //         setLoading(false);
@@ -78,27 +93,34 @@
 
 //   const handleGoogleSuccess = async (credentialResponse) => {
 //     try {
-//       if (!credentialResponse?.credential)
-//         throw new Error("No credential received");
+//       if (!credentialResponse?.credential) throw new Error("No credential received");
 
+//       // decode the credential safely (jwtDecode is default import)
 //       const decoded = jwtDecode(credentialResponse.credential);
 
-//       const res = await axios.post(
-//         `${process.env.REACT_APP_API_URL}/api/auth/google`,
-//         { token: credentialResponse.credential }
+//       const apiUrl = process.env.REACT_APP_API_URL || "";
+
+//       const { data } = await axios.post(
+//         `${apiUrl}/api/auth/google`,
+//         { token: credentialResponse.credential },
+//         { headers: { "Content-Type": "application/json" } }
 //       );
 
-//       const { token, user } = res.data;
+//       const { token, user } = data;
 
-//       localStorage.setItem("token", token);
-//       localStorage.setItem("userId", user._id);
+//       // persist token and user id
+//       if (token) localStorage.setItem("token", token);
+//       if (user?._id) localStorage.setItem("userId", user._id);
 
-//       setUser(user);
-//       navigate(user.role === "admin" ? "/admin" : "/", { replace: true });
-//       toast.success(`Welcome, ${user.username || decoded.name || "User"}!`);
+//       if (typeof setUser === "function") setUser(user);
+
+//       // navigate according to role
+//       navigate(user?.role === "admin" ? "/admin" : "/", { replace: true });
+
+//       toast.success(`Welcome, ${user?.username || decoded?.name || "User"}!`);
 //     } catch (err) {
 //       console.error("Google login failed:", err);
-//       toast.error(err?.response?.data?.message || "Google login failed.");
+//       toast.error(err?.response?.data?.message || err?.message || "Google login failed.");
 //     }
 //   };
 
@@ -145,10 +167,7 @@
 //         InputProps={{
 //           endAdornment: (
 //             <InputAdornment position="end">
-//               <IconButton
-//                 onClick={() => setShowPassword(!showPassword)}
-//                 edge="end"
-//               >
+//               <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
 //                 {showPassword ? <VisibilityOff /> : <Visibility />}
 //               </IconButton>
 //             </InputAdornment>
@@ -183,16 +202,14 @@
 //       <Button
 //         type="submit"
 //         variant="contained"
-//           sx={{
-//     backgroundColor: "black",
-//     color: "white",
-//     "&:hover": {
-//       backgroundColor: "#222", // slightly lighter black on hover
-//     },
-//   }}
+//         sx={{
+//           backgroundColor: "black",
+//           color: "white",
+//           "&:hover": { backgroundColor: "#222" },
+//         }}
 //         fullWidth
 //         disabled={formik.isSubmitting || loading}
-//         startIcon={loading && <CircularProgress size={20} />}
+//         startIcon={loading ? <CircularProgress size={20} /> : undefined}
 //       >
 //         {loading ? "Registering..." : "Register"}
 //       </Button>
@@ -242,11 +259,11 @@ import * as Yup from "yup";
 import Swal from "sweetalert2";
 import axios from "axios";
 import { GoogleLogin } from "@react-oauth/google";
-import {jwtDecode} from "jwt-decode";
+// Some builds of jwt-decode export a named export; adjust based on your package
+import { jwtDecode } from "jwt-decode";
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-
 
 export default function RegisterForm({ onSuccess, toggleMode }) {
   const [loading, setLoading] = useState(false);
@@ -254,7 +271,7 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { setUser } = useAuth?.() || {};
 
   const formik = useFormik({
     initialValues: {
@@ -264,9 +281,7 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
       confirmPassword: "",
     },
     validationSchema: Yup.object({
-      username: Yup.string()
-        .min(3, "Too short")
-        .required("Username is required"),
+      username: Yup.string().min(3, "Too short").required("Username is required"),
       email: Yup.string().email("Invalid email").required("Email is required"),
       password: Yup.string()
         .matches(
@@ -281,22 +296,38 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
     onSubmit: async (values, { setSubmitting, resetForm, setFieldError }) => {
       setLoading(true);
       try {
-        await axios.post(
-          `${process.env.REACT_APP_API_URL}/api/auth/register`,
-          values
-        );
-        Swal.fire(
-          "Registration Successful",
-          "Check your email to verify your account before logging in.",
-          "success"
-        );
+        const payload = {
+          username: values.username,
+          email: values.email,
+          password: values.password,
+        };
+
+        const apiUrl = process.env.REACT_APP_API_URL || "";
+
+        const { data } = await axios.post(`${apiUrl}/api/auth/register`, payload, {
+          headers: { "Content-Type": "application/json" },
+        });
+
+        Swal.fire("Registration Successful", "You can now log in.", "success");
+
+        // optionally persist token and user
+        if (data?.token) localStorage.setItem("token", data.token);
+        if (data?.user?._id) localStorage.setItem("userId", data.user._id);
+        if (typeof setUser === "function") setUser(data.user);
+
         resetForm();
-        toggleMode(); // switch to login form
+
+        // call onSuccess if provided
+        if (typeof onSuccess === "function") onSuccess(data);
+
+        // toggle to login or navigate
+        if (typeof toggleMode === "function") toggleMode();
+        else navigate("/", { replace: true });
       } catch (err) {
-        const msg = err?.response?.data?.message;
-        if (msg?.includes("email")) setFieldError("email", msg);
-        if (msg?.includes("username")) setFieldError("username", msg);
-        Swal.fire("Error", msg || "Something went wrong.", "error");
+        const msg = err?.response?.data?.message || err.message || "Something went wrong.";
+        if (msg.toLowerCase().includes("email")) setFieldError("email", msg);
+        if (msg.toLowerCase().includes("username")) setFieldError("username", msg);
+        Swal.fire("Error", msg, "error");
       } finally {
         setSubmitting(false);
         setLoading(false);
@@ -306,27 +337,29 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
 
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
-      if (!credentialResponse?.credential)
-        throw new Error("No credential received");
-
+      if (!credentialResponse?.credential) throw new Error("No credential received");
+      // decode the credential safely
       const decoded = jwtDecode(credentialResponse.credential);
 
+      const apiUrl = process.env.REACT_APP_API_URL || "";
+
       const { data } = await axios.post(
-        `${process.env.REACT_APP_API_URL}/api/auth/google`,
-        { token: credentialResponse.credential }
+        `${apiUrl}/api/auth/google`,
+        { token: credentialResponse.credential },
+        { headers: { "Content-Type": "application/json" } }
       );
 
-      const { token, user } = data;
+      const { token, user } = data || {};
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("userId", user._id);
+      if (token) localStorage.setItem("token", token);
+      if (user?._id) localStorage.setItem("userId", user._id);
+      if (typeof setUser === "function") setUser(user);
 
-      setUser(user);
-      navigate(user.role === "admin" ? "/admin" : "/", { replace: true });
-      toast.success(`Welcome, ${user.username || decoded.name || "User"}!`);
+      navigate(user?.role === "admin" ? "/admin" : "/", { replace: true });
+      toast.success(`Welcome, ${user?.username || decoded?.name || "User"}!`);
     } catch (err) {
       console.error("Google login failed:", err);
-      toast.error(err?.response?.data?.message || "Google login failed.");
+      toast.error(err?.response?.data?.message || err?.message || "Google login failed.");
     }
   };
 
@@ -340,7 +373,6 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
       onSubmit={formik.handleSubmit}
       sx={{ maxWidth: 400, mx: "auto", display: "flex", flexDirection: "column", gap: 2 }}
     >
-      {/* Username */}
       <TextField
         fullWidth
         label="Username"
@@ -350,7 +382,6 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
         helperText={formik.touched.username && formik.errors.username}
       />
 
-      {/* Email */}
       <TextField
         fullWidth
         label="Email"
@@ -361,7 +392,6 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
         helperText={formik.touched.email && formik.errors.email}
       />
 
-      {/* Password */}
       <TextField
         fullWidth
         label="Password"
@@ -373,10 +403,7 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">
-              <IconButton
-                onClick={() => setShowPassword(!showPassword)}
-                edge="end"
-              >
+              <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
                 {showPassword ? <VisibilityOff /> : <Visibility />}
               </IconButton>
             </InputAdornment>
@@ -384,7 +411,6 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
         }}
       />
 
-      {/* Confirm Password */}
       <TextField
         fullWidth
         label="Confirm Password"
@@ -407,37 +433,31 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
         }}
       />
 
-      {/* Register Button */}
       <Button
         type="submit"
         variant="contained"
         sx={{
           backgroundColor: "black",
           color: "white",
-          "&:hover": {
-            backgroundColor: "#222",
-          },
+          "&:hover": { backgroundColor: "#222" },
         }}
         fullWidth
         disabled={formik.isSubmitting || loading}
-        startIcon={loading && <CircularProgress size={20} />}
+        startIcon={loading ? <CircularProgress size={20} /> : undefined}
       >
         {loading ? "Registering..." : "Register"}
       </Button>
 
-      {/* Divider */}
       <Box sx={{ display: "flex", alignItems: "center", my: 2 }}>
         <Divider sx={{ flexGrow: 1 }} />
         <Typography sx={{ mx: 2, color: "text.secondary" }}>or</Typography>
         <Divider sx={{ flexGrow: 1 }} />
       </Box>
 
-      {/* Google Login */}
       <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
         <GoogleLogin onSuccess={handleGoogleSuccess} onError={handleGoogleFailure} />
       </Box>
 
-      {/* Toggle to Login */}
       <Typography align="center">
         Already have an account?{" "}
         <Box
