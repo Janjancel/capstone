@@ -37,7 +37,7 @@ export default function Section5() {
       <div className="container">
         <div className="row mb-4">
           <div className="col-md-6">
-            <h3 className="fw-bold">Educational Facts</h3>
+            <h3 className="fw-bold">Discover Where Antiques are from</h3>
             <p className="text-muted">
               Discover the heritage items we preserve and understand their stories through our interactive map.
             </p>

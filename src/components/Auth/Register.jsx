@@ -1,6 +1,4 @@
 
-
-// // src/components/Auth/RegisterForm.jsx
 // import React, { useState } from "react";
 // import {
 //   Box,
@@ -18,8 +16,7 @@
 // import Swal from "sweetalert2";
 // import axios from "axios";
 // import { GoogleLogin } from "@react-oauth/google";
-// // import jwtDecode from "jwt-decode"; // <-- CORRECT import
-// import {jwtDecode} from "jwt-decode";
+// import {jwtDecode} from "jwt-decode"; // default import; change to `import { jwtDecode } from "jwt-decode";` if your build requires named export
 // import toast from "react-hot-toast";
 // import { useAuth } from "../../context/AuthContext";
 // import { useNavigate } from "react-router-dom";
@@ -30,7 +27,7 @@
 //   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
 //   const navigate = useNavigate();
-//   const { setUser } = useAuth();
+//   const { setUser } = useAuth?.() || {};
 
 //   const formik = useFormik({
 //     initialValues: {
@@ -55,7 +52,6 @@
 //     onSubmit: async (values, { setSubmitting, resetForm, setFieldError }) => {
 //       setLoading(true);
 //       try {
-//         // Only send the required fields to the server
 //         const payload = {
 //           username: values.username,
 //           email: values.email,
@@ -64,25 +60,30 @@
 
 //         const apiUrl = process.env.REACT_APP_API_URL || "";
 
+//         // Register call
 //         await axios.post(`${apiUrl}/api/auth/register`, payload, {
 //           headers: { "Content-Type": "application/json" },
 //         });
 
+//         // Show success but DO NOT log user in or persist token/user
 //         Swal.fire(
 //           "Registration Successful",
-//           "Check your email to verify your account before logging in.",
+//           "Registration complete. Please log in to continue.",
 //           "success"
 //         );
 
+//         // Reset the form
 //         resetForm();
-//         // switch to login form if provided
+
+//         // call onSuccess callback if provided (pass nothing sensitive)
+//         if (typeof onSuccess === "function") onSuccess();
+
+//         // Switch to login view if toggleMode is provided, otherwise stay on the page
 //         if (typeof toggleMode === "function") toggleMode();
 //       } catch (err) {
 //         const msg = err?.response?.data?.message || err.message || "Something went wrong.";
-//         // map likely errors
 //         if (msg.toLowerCase().includes("email")) setFieldError("email", msg);
 //         if (msg.toLowerCase().includes("username")) setFieldError("username", msg);
-
 //         Swal.fire("Error", msg, "error");
 //       } finally {
 //         setSubmitting(false);
@@ -94,8 +95,7 @@
 //   const handleGoogleSuccess = async (credentialResponse) => {
 //     try {
 //       if (!credentialResponse?.credential) throw new Error("No credential received");
-
-//       // decode the credential safely (jwtDecode is default import)
+//       // decode the credential safely
 //       const decoded = jwtDecode(credentialResponse.credential);
 
 //       const apiUrl = process.env.REACT_APP_API_URL || "";
@@ -106,17 +106,14 @@
 //         { headers: { "Content-Type": "application/json" } }
 //       );
 
-//       const { token, user } = data;
+//       const { token, user } = data || {};
 
-//       // persist token and user id
+//       // Google sign-in should still persist/login the user as before
 //       if (token) localStorage.setItem("token", token);
 //       if (user?._id) localStorage.setItem("userId", user._id);
-
 //       if (typeof setUser === "function") setUser(user);
 
-//       // navigate according to role
 //       navigate(user?.role === "admin" ? "/admin" : "/", { replace: true });
-
 //       toast.success(`Welcome, ${user?.username || decoded?.name || "User"}!`);
 //     } catch (err) {
 //       console.error("Google login failed:", err);
@@ -134,7 +131,6 @@
 //       onSubmit={formik.handleSubmit}
 //       sx={{ maxWidth: 400, mx: "auto", display: "flex", flexDirection: "column", gap: 2 }}
 //     >
-//       {/* Username */}
 //       <TextField
 //         fullWidth
 //         label="Username"
@@ -144,7 +140,6 @@
 //         helperText={formik.touched.username && formik.errors.username}
 //       />
 
-//       {/* Email */}
 //       <TextField
 //         fullWidth
 //         label="Email"
@@ -155,7 +150,6 @@
 //         helperText={formik.touched.email && formik.errors.email}
 //       />
 
-//       {/* Password */}
 //       <TextField
 //         fullWidth
 //         label="Password"
@@ -175,7 +169,6 @@
 //         }}
 //       />
 
-//       {/* Confirm Password */}
 //       <TextField
 //         fullWidth
 //         label="Confirm Password"
@@ -198,7 +191,6 @@
 //         }}
 //       />
 
-//       {/* Register Button */}
 //       <Button
 //         type="submit"
 //         variant="contained"
@@ -214,19 +206,16 @@
 //         {loading ? "Registering..." : "Register"}
 //       </Button>
 
-//       {/* Divider */}
 //       <Box sx={{ display: "flex", alignItems: "center", my: 2 }}>
 //         <Divider sx={{ flexGrow: 1 }} />
 //         <Typography sx={{ mx: 2, color: "text.secondary" }}>or</Typography>
 //         <Divider sx={{ flexGrow: 1 }} />
 //       </Box>
 
-//       {/* Google Login */}
 //       <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
 //         <GoogleLogin onSuccess={handleGoogleSuccess} onError={handleGoogleFailure} />
 //       </Box>
 
-//       {/* Toggle to Login */}
 //       <Typography align="center">
 //         Already have an account?{" "}
 //         <Box
@@ -256,11 +245,9 @@ import {
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import Swal from "sweetalert2";
 import axios from "axios";
 import { GoogleLogin } from "@react-oauth/google";
-// Some builds of jwt-decode export a named export; adjust based on your package
-import { jwtDecode } from "jwt-decode";
+import {jwtDecode} from "jwt-decode"; // default import
 import toast from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -304,30 +291,33 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
 
         const apiUrl = process.env.REACT_APP_API_URL || "";
 
-        const { data } = await axios.post(`${apiUrl}/api/auth/register`, payload, {
+        // Register call
+        await axios.post(`${apiUrl}/api/auth/register`, payload, {
           headers: { "Content-Type": "application/json" },
         });
 
-        Swal.fire("Registration Successful", "You can now log in.", "success");
+        // Show success using react-hot-toast (no auto-login)
+        toast.success("Registration complete. Please log in to continue.", {
+          duration: 4000,
+        });
 
-        // optionally persist token and user
-        if (data?.token) localStorage.setItem("token", data.token);
-        if (data?.user?._id) localStorage.setItem("userId", data.user._id);
-        if (typeof setUser === "function") setUser(data.user);
-
+        // Reset the form
         resetForm();
 
-        // call onSuccess if provided
-        if (typeof onSuccess === "function") onSuccess(data);
+        // call onSuccess callback if provided (pass nothing sensitive)
+        if (typeof onSuccess === "function") onSuccess();
 
-        // toggle to login or navigate
+        // Switch to login view if toggleMode is provided, otherwise stay on the page
         if (typeof toggleMode === "function") toggleMode();
-        else navigate("/", { replace: true });
       } catch (err) {
         const msg = err?.response?.data?.message || err.message || "Something went wrong.";
+
+        // attach field-level errors for form fields
         if (msg.toLowerCase().includes("email")) setFieldError("email", msg);
         if (msg.toLowerCase().includes("username")) setFieldError("username", msg);
-        Swal.fire("Error", msg, "error");
+
+        // show general error toast
+        toast.error(msg, { duration: 6000 });
       } finally {
         setSubmitting(false);
         setLoading(false);
@@ -351,6 +341,7 @@ export default function RegisterForm({ onSuccess, toggleMode }) {
 
       const { token, user } = data || {};
 
+      // Google sign-in should still persist/login the user as before
       if (token) localStorage.setItem("token", token);
       if (user?._id) localStorage.setItem("userId", user._id);
       if (typeof setUser === "function") setUser(user);
