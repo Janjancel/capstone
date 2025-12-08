@@ -9,6 +9,7 @@ import {
   ExpandMore,
   Assessment as ReportIcon,
   AccountBalance as HeritageIcon,
+  RateReview as ReviewIcon,
 } from "@mui/icons-material";
 import {
   Box,
@@ -168,6 +169,19 @@ const Sidebar = () => {
             <HeritageIcon />
           </ListItemIcon>
           <ListItemText primary="Heritage" />
+        </ListItem>
+
+        {/* Reviews */}
+        <ListItem
+          button
+          component={NavLink}
+          to="/admin/reviews"
+          sx={activeStyle}
+        >
+          <ListItemIcon>
+            <ReviewIcon />
+          </ListItemIcon>
+          <ListItemText primary="Reviews" />
         </ListItem>
 
         {/* Reports */}
