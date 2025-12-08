@@ -669,7 +669,7 @@ const OrderDashboard = () => {
       case "processing":
         return "Processing";
       case "shipped":
-        return "Shipped";
+        return "Out for Delivery";
       case "delivered":
         return "Delivered";
       case "cancellation_requested":
@@ -1029,7 +1029,7 @@ const OrderDashboard = () => {
           "Pending",
           "Cancellation Request",
           "Cancelled",
-          "Shipped",
+          "Out for Delivery",
           "Delivered",
         ].map((status) => (
           <Tab key={status} label={status} value={status} />
@@ -1197,7 +1197,7 @@ const OrderDashboard = () => {
                             onClick={() => handleStatusChange(order, "Shipped")}
                             disabled={shippedDisabled}
                           >
-                            Mark Shipped
+                            OUT FOR DELIVERY
                           </Button>
                           <Button
                             variant="outlined"
