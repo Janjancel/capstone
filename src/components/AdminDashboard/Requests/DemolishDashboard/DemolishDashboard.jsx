@@ -961,6 +961,8 @@ import {
   IconButton,
   Tooltip,
   Divider,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import Loader from "./Loader";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -1647,31 +1649,6 @@ const DemolishDashboard = () => {
                 </IconButton>
               </Tooltip>
               <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={handleFilterClose}>
-                <MenuItem disabled>Filter by Status</MenuItem>
-                {[
-                  "",
-                  "pending",
-                  "scheduled",
-                  "ocular_scheduled",
-                  "awaiting_price_approval",
-                  "price_accepted",
-                  "price_declined",
-                  "declined",
-                ].map((status) => (
-                  <MenuItem
-                    key={status || "all"}
-                    onClick={() => {
-                      setStatusFilter(status);
-                      handleFilterClose();
-                    }}
-                    selected={statusFilter === status}
-                  >
-                    {status || "All"}
-                  </MenuItem>
-                ))}
-
-                <Divider />
-
                 <MenuItem disabled>Filter by Price</MenuItem>
                 {[{ label: "All", value: "" }, { label: "Below ₱5,000", value: "low" }, { label: "₱5,000 – ₱20,000", value: "mid" }, { label: "Above ₱20,000", value: "high" }].map((price) => (
                   <MenuItem
@@ -1724,6 +1701,25 @@ const DemolishDashboard = () => {
                 </MenuItem>
               </Menu>
             </Box>
+          </Box>
+
+          {/* Status Tabs */}
+          <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+            <Tabs
+              value={statusFilter || ""}
+              onChange={(e, newValue) => setStatusFilter(newValue)}
+              variant="scrollable"
+              scrollButtons="auto"
+            >
+              <Tab label="All" value="" />
+              <Tab label="Pending" value="pending" />
+              <Tab label="Scheduled" value="scheduled" />
+              <Tab label="Ocular Scheduled" value="ocular_scheduled" />
+              <Tab label="Awaiting Price Approval" value="awaiting_price_approval" />
+              <Tab label="Price Accepted" value="price_accepted" />
+              <Tab label="Price Declined" value="price_declined" />
+              <Tab label="Declined" value="declined" />
+            </Tabs>
           </Box>
 
           {showMap && (

@@ -773,6 +773,8 @@ import {
   IconButton,
   Tooltip,
   Divider,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import Loader from "./Loader";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -1379,6 +1381,22 @@ const SellDashboard = () => {
                 </MenuItem>
               </Menu>
             </Box>
+          </Box>
+
+          {/* Status Tabs */}
+          <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+            <Tabs
+              value={statusFilter || ""}
+              onChange={(e, newValue) => setStatusFilter(newValue)}
+              variant="scrollable"
+              scrollButtons="auto"
+            >
+              <Tab label="All" value="" />
+              <Tab label="Pending" value="pending" />
+              <Tab label="Accepted" value="accepted" />
+              <Tab label="Declined" value="declined" />
+              <Tab label="Ocular Scheduled" value="ocular_scheduled" />
+            </Tabs>
           </Box>
 
           {/* Map */}
