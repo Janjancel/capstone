@@ -659,6 +659,27 @@ export default function NavbarLayout() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // 🎯 Show ads on home page
+  useEffect(() => {
+    if (location.pathname === "/") {
+      // Show ads modal with auto-close after 5 seconds
+      setPurchaseModalOpen(true);
+
+      // Clear any previous timer
+      if (purchaseTimerRef.current) clearTimeout(purchaseTimerRef.current);
+
+      // Auto-close after 5 seconds
+      purchaseTimerRef.current = setTimeout(() => {
+        setPurchaseModalOpen(false);
+      }, 5000);
+    }
+
+    return () => {
+      // Cleanup timer on unmount or route change
+      if (purchaseTimerRef.current) clearTimeout(purchaseTimerRef.current);
+    };
+  }, [location.pathname]);
+
   // cleanup purchase timer on unmount
   useEffect(() => {
     return () => {
