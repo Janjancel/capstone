@@ -27,7 +27,7 @@ export const renderSalesTableRow = (r, idx) => (
   <tr key={idx}>
     <td>{r.saleId}</td>
     <td>{r.orderId}</td>
-    <td>{Number(r.total).toFixed(2)}</td>
+    <td>₱{Number(r.total).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
     <td>{r.deliveredAt ? new Date(r.deliveredAt).toLocaleString() : "—"}</td>
   </tr>
 );

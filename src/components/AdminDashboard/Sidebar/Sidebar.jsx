@@ -144,7 +144,7 @@ const Sidebar = () => {
                 to="/admin/sellDashboard"
                 sx={activeStyle}
               >
-                <ListItemText primary="Sell" />
+                <ListItemText primary="Acquisition" />
               </ListItem>
               <ListItem
                 button
@@ -152,7 +152,7 @@ const Sidebar = () => {
                 to="/admin/demolishDashboard"
                 sx={activeStyle}
               >
-                <ListItemText primary="Demolish" />
+                <ListItemText primary="Appraisal" />
               </ListItem>
             </List>
           </Collapse>

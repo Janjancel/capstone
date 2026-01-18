@@ -1325,17 +1325,17 @@ const DemolishDashboard = () => {
     }
   };
 
-  // PROPOSE PRICE (after ocular or after a decline)
+  // PROPOSE PRICE (after ocular visit, after client decline, or responding to client counter-offer)
   const handleProposePrice = async (req) => {
     const { _id: id } = req || {};
     if (!id) return;
 
-    // Allow proposing only after ocular or after a previous decline
+    // Allow proposing only after ocular or after a client decline/counter-offer
     const canPropose = req.status === "ocular_scheduled" || req.status === "price_declined";
     if (!canPropose) {
       Swal.fire(
         "Not allowed yet",
-        "You can propose a price after an ocular visit or re-propose after a decline.",
+        "You can propose a price after an ocular visit, after a client decline, or in response to a client counter-offer.",
         "info"
       );
       return;
@@ -1386,6 +1386,60 @@ const DemolishDashboard = () => {
     } catch (error) {
       console.error("Error proposing price:", error);
       const msg = error?.response?.data?.error || "Failed to propose price";
+      toast.error(msg);
+    }
+  };
+
+  // COUNTER OFFER (Admin responds to client's counter-offer with their own proposed price)
+  const handleCounterOffer = async (req) => {
+    const { _id: id } = req || {};
+    if (!id) return;
+
+    const { value: raw } = await Swal.fire({
+      title: "Counter Offer Price (₱)",
+      input: "number",
+      inputAttributes: { min: "1", step: "1" },
+      inputValue: req.proposedPrice || req.price || "",
+      showCancelButton: true,
+      confirmButtonText: "Send Counter Offer",
+      preConfirm: (v) => {
+        const n = Number(v);
+        if (!n || n <= 0) {
+          Swal.showValidationMessage("Please enter a valid price greater than 0.");
+          return false;
+        }
+        return n;
+      },
+    });
+
+    if (!raw) return;
+    const counterPrice = Number(raw);
+
+    try {
+      const res = await axios.patch(`${API_URL}/api/demolish/${id}`, {
+        proposedPrice: counterPrice,
+        status: "awaiting_price_approval",
+      });
+
+      setRequests((prev) =>
+        prev.map((r) =>
+          r._id === id ? { ...r, ...res.data, proposedPrice: counterPrice, status: "awaiting_price_approval" } : r
+        )
+      );
+
+      // Notify client about counter-offer
+      const targetUserId = res?.data?.userId || req.userId;
+      await createDemolishNotification({
+        userId: targetUserId,
+        requestId: res?.data?._id || id,
+        status: "awaiting_price_approval",
+        message: `Counter offer received: ₱${counterPrice.toLocaleString()}. Please accept or decline.`,
+      });
+
+      toast.success(`Counter offer sent: ₱${counterPrice.toLocaleString()}`);
+    } catch (error) {
+      console.error("Error sending counter offer:", error);
+      const msg = error?.response?.data?.error || "Failed to send counter offer";
       toast.error(msg);
     }
   };
@@ -1573,6 +1627,9 @@ const DemolishDashboard = () => {
     const proposeDisabled =
       !proposeAllowed || ["awaiting_price_approval", "scheduled", "completed", "declined"].includes(status);
 
+    // counter offer only allowed when client has sent a counter (status === "price_declined")
+    const counterOfferDisabled = false;
+
     // schedule demolition (final accept) only allowed after price_accepted
     const scheduleDemolitionDisabled = status !== "price_accepted";
 
@@ -1582,6 +1639,7 @@ const DemolishDashboard = () => {
     return {
       scheduleOcularDisabled,
       proposeDisabled,
+      counterOfferDisabled,
       scheduleDemolitionDisabled,
       declineDisabled,
     };
@@ -1774,6 +1832,7 @@ const DemolishDashboard = () => {
                       const {
                         scheduleOcularDisabled,
                         proposeDisabled,
+                        counterOfferDisabled,
                         scheduleDemolitionDisabled,
                         declineDisabled,
                       } = computeActionDisabled(request);
@@ -1878,6 +1937,23 @@ const DemolishDashboard = () => {
                                 }}
                               >
                                 Propose Price
+                              </MenuItem>
+
+                              {/* Counter Offer (respond to client counter) */}
+                              <MenuItem
+                                onClick={() => {
+                                  handleCounterOffer(request);
+                                  handleMenuClose();
+                                }}
+                                disabled={counterOfferDisabled}
+                                sx={{
+                                  color: "secondary.main",
+                                  fontWeight: 500,
+                                  "&.Mui-disabled": { color: "secondary.light" },
+                                  "&:hover": { bgcolor: "secondary.light", color: "white" },
+                                }}
+                              >
+                                Counter Offer
                               </MenuItem>
 
                               <MenuItem

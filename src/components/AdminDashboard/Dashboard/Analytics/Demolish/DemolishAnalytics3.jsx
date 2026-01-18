@@ -141,16 +141,6 @@
 
 import React from "react";
 import { Card } from "react-bootstrap";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-} from "recharts";
 
 const CURRENCY = (n) =>
   `₱${(Number.isFinite(Number(n)) ? Number(n) : 0).toLocaleString("en-PH", {
@@ -158,82 +148,77 @@ const CURRENCY = (n) =>
     maximumFractionDigits: 2,
   })}`;
 
-export default function DemolishAnalytics3({ demolitions = [], aggregated = {}, defaultGrouping = "day" }) {
-  // Build per-period values: avgProposed already in aggregated.periods,
-  // we will also compute avgAccepted per period from raw demolitions
-  const acceptedByPeriod = {};
-  (demolitions || []).forEach((d) => {
-    const date = d.createdAt ? new Date(d.createdAt) : new Date();
-    // key matching format used in aggregated.periods (aggregator uses startOfPeriod ISO)
-    // best-effort: use same label string if aggregated.periods contains same period value
-    // fallback: group by day label
-    const key = (aggregated.periods || []).find((p) => {
-      // match by label (cheap heuristic)
-      return new Date(p.period).toDateString() === new Date(date).setHours(0,0,0,0) ||
-             p.label === new Date(date).toLocaleDateString();
-    });
-    // Simpler safe approach: group by day ISO
-    const dayKey = new Date(date);
-    dayKey.setHours(0, 0, 0, 0);
-    const iso = dayKey.toISOString();
+export default function DemolishAnalytics3({ demolitions = [] }) {
+  const statusMap = {};
+  const statusColors = {
+    pending: "#f39c12",
+    approved: "#27ae60",
+    accepted: "#27ae60",
+    rejected: "#e74c3c",
+    completed: "#4e79a7",
+    cancelled: "#95a5a6",
+  };
 
-    acceptedByPeriod[iso] = acceptedByPeriod[iso] || { sum: 0, count: 0 };
-    if (d.price != null && Number.isFinite(Number(d.price))) {
-      acceptedByPeriod[iso].sum += Number(d.price);
-      acceptedByPeriod[iso].count += 1;
-    }
+  demolitions.forEach((d) => {
+    const status = String(d.status || "pending").toLowerCase().trim();
+    statusMap[status] = (statusMap[status] || 0) + 1;
   });
 
-  const data = (aggregated.periods || []).map((p) => {
-    // preference: aggregated.avgProposed from p.avgProposed
-    const avgProposed = p.avgProposed != null ? p.avgProposed : null;
-    // accepted: try to find matching ISO in acceptedByPeriod; fallback to aggregated.avgAcceptedOverall
-    const acceptedEntry = acceptedByPeriod[p.period];
-    const avgAccepted = acceptedEntry && acceptedEntry.count ? +(acceptedEntry.sum / acceptedEntry.count).toFixed(2) : null;
-    return {
-      label: p.label,
-      avgProposed,
-      avgAccepted,
-    };
-  });
-
-  // If no period-level accepted data, use aggregated.avgAcceptedOverall as single flat line
-  const fallbackAccepted = aggregated.avgAcceptedOverall || null;
+  const total = demolitions.length || 1;
+  const entries = Object.entries(statusMap)
+    .map(([status, count]) => ({
+      status: status.charAt(0).toUpperCase() + status.slice(1),
+      count,
+      percentage: ((count / total) * 100).toFixed(1),
+      color: statusColors[status] || "#999",
+    }))
+    .sort((a, b) => b.count - a.count);
 
   return (
     <Card className="p-3 mb-3 shadow-sm">
-      <h6 className="mb-2">Avg Proposed vs Avg Accepted Prices ({defaultGrouping})</h6>
+      <h6 className="mb-3">Demolition Request Status</h6>
 
-      {data.length === 0 ? (
-        <div className="text-muted">No price data available yet.</div>
+      {entries.length === 0 ? (
+        <div className="text-muted">No demolition requests yet.</div>
       ) : (
-        <div style={{ width: "100%", height: 300 }}>
-          <ResponsiveContainer>
-            <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="label" />
-              <YAxis />
-              <Tooltip formatter={(v) => (v == null ? "—" : CURRENCY(v))} />
-              <Legend />
-              <Line type="monotone" dataKey="avgProposed" stroke="#e15759" name="Avg Proposed" dot />
-              <Line
-                type="monotone"
-                dataKey="avgAccepted"
-                stroke="#59a14f"
-                name="Avg Accepted"
-                dot
-                connectNulls={false}
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+        <ul className="list-unstyled mb-0">
+          {entries.map((entry) => (
+            <li key={entry.status} className="mb-3">
+              <div className="d-flex justify-content-between mb-1">
+                <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                  {entry.status}
+                </span>
+                <span
+                  style={{
+                    fontSize: "0.9rem",
+                    color: entry.color,
+                    fontWeight: "bold",
+                  }}
+                >
+                  {entry.count} ({entry.percentage}%)
+                </span>
+              </div>
 
-      {(fallbackAccepted && !data.some((d) => d.avgAccepted != null)) && (
-        <div className="mt-2 text-muted small">
-          Note: no period-level accepted prices found — overall avg accepted = {CURRENCY(fallbackAccepted)}
-        </div>
+              <div
+                style={{
+                  background: "#e8e8e8",
+                  borderRadius: "4px",
+                  height: "8px",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    background: entry.color,
+                    height: "100%",
+                    width: `${entry.percentage}%`,
+                    transition: "width 0.3s ease",
+                  }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </Card>
   );

@@ -588,6 +588,7 @@
 
 // export default Items;
 
+
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Button,
@@ -617,6 +618,17 @@ import EditItemModal from "./EditItemModal";
 import AddItemModal from "./AddItemModal";
 
 const Items = () => {
+  // Format price to Philippine Peso with comma separators
+  const formatPrice = (price) => {
+    if (!price && price !== 0) return "0.00";
+    const num = parseFloat(price);
+    if (isNaN(num)) return "0.00";
+    return num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
   const [items, setItems] = useState([]);
   const [allItems, setAllItems] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1055,7 +1067,7 @@ const Items = () => {
                   <TableRow key={item._id}>
                     <TableCell>{item.name}</TableCell>
                     <TableCell>{renderCategoryCell(item)}</TableCell>
-                    <TableCell>₱{item.price}</TableCell>
+                    <TableCell>₱{formatPrice(item.price)}</TableCell>
                     <TableCell>{item.condition ?? "—"}</TableCell>
                     <TableCell>
                       {item.images && item.images.length > 0 ? (
@@ -1160,6 +1172,7 @@ const Items = () => {
         handleAddItem={handleAddItem}
         loading={loading}
         categories={categories}
+        allItems={allItems}
       />
 
       {/* Edit Item Modal (kept same props) */}

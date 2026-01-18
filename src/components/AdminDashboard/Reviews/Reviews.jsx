@@ -546,7 +546,6 @@ import {
   Box,
   Typography,
   Card,
-  CardContent,
   CircularProgress,
   Rating,
   Button,
@@ -554,6 +553,13 @@ import {
   Menu,
   MenuItem,
   Tooltip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import Swal from "sweetalert2";
@@ -688,7 +694,7 @@ const Reviews = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: "bold" }}>
-          Customer Reviews
+          Customer Reviews for Unika Antika
         </Typography>
 
         {/* Star Filter */}
@@ -723,33 +729,70 @@ const Reviews = () => {
           <CircularProgress />
         </Box>
       ) : error ? (
-        <Box sx={{ p: 2, bgcolor: "#fff3cd", borderRadius: 1 }}>
+        <Card sx={{ p: 2, bgcolor: "#fff3cd", borderRadius: 1 }}>
           <Typography color="error">{error}</Typography>
-        </Box>
+        </Card>
       ) : reviews.length === 0 ? (
-        <Box sx={{ p: 2, bgcolor: "#f8f9fa", borderRadius: 1, textAlign: "center" }}>
+        <Card sx={{ p: 2, bgcolor: "#f8f9fa", borderRadius: 1, textAlign: "center" }}>
           <Typography color="textSecondary">No reviews yet.</Typography>
-        </Box>
+        </Card>
       ) : (
-        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))", gap: 2 }}>
-          {reviews
-            .filter((review) => filterRating === null || review.rating === filterRating)
-            .map((review) => (
-              <Card key={review._id} sx={{ boxShadow: 1 }}>
-                <CardContent>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "start", mb: 2 }}>
-                    <Box>
-                      <Typography variant="caption" color="textSecondary">
-                        {review.userEmail}
+        <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                <TableCell sx={{ fontWeight: "bold", width: "20%" }}>Customer</TableCell>
+                <TableCell sx={{ fontWeight: "bold", width: "10%" }}>Rating</TableCell>
+                <TableCell sx={{ fontWeight: "bold", width: "50%" }}>Feedback</TableCell>
+                <TableCell sx={{ fontWeight: "bold", width: "15%" }}>Date</TableCell>
+                <TableCell sx={{ fontWeight: "bold", width: "5%", textAlign: "center" }}>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {reviews
+                .filter((review) => filterRating === null || review.rating === filterRating)
+                .map((review) => (
+                  <TableRow
+                    key={review._id}
+                    sx={{
+                      "&:hover": { backgroundColor: "#fafafa" },
+                      borderBottom: "1px solid #e0e0e0",
+                    }}
+                  >
+                    <TableCell sx={{ fontSize: "0.9rem" }}>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: "500" }}>
+                          {review.userName}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {review.userEmail}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Rating value={review.rating} readOnly size="small" />
+                      <Typography variant="caption" sx={{ display: "block", mt: 0.5 }}>
+                        {review.rating} / 5
                       </Typography>
-                    </Box>
-
-                    {/* Date + three-dots action */}
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <Typography variant="caption" color="textSecondary">
-                        {formatDate(review.createdAt)}
+                    </TableCell>
+                    <TableCell sx={{ fontSize: "0.9rem", maxWidth: "400px" }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                        }}
+                      >
+                        {review.feedback || "No feedback provided."}
                       </Typography>
-
+                    </TableCell>
+                    <TableCell sx={{ fontSize: "0.9rem" }}>
+                      <Typography variant="caption">{formatDate(review.createdAt)}</Typography>
+                    </TableCell>
+                    <TableCell sx={{ textAlign: "center" }}>
                       <Tooltip title="Actions">
                         <IconButton
                           size="small"
@@ -761,19 +804,11 @@ const Reviews = () => {
                           <MoreVertIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                    </Box>
-                  </Box>
-
-                  <Box sx={{ mb: 2 }}>
-                    <Rating value={review.rating} readOnly />
-                  </Box>
-
-                  <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
-                    {review.feedback || "No feedback provided."}
-                  </Typography>
-                </CardContent>
-              </Card>
-            ))}
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
 
           {/* Menu is rendered once and anchored to the clicked button */}
           <Menu
@@ -792,9 +827,8 @@ const Reviews = () => {
             >
               Delete
             </MenuItem>
-            {/* add more actions here if needed in future */}
           </Menu>
-        </Box>
+        </TableContainer>
       )}
     </Box>
   );

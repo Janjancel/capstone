@@ -149,30 +149,54 @@ Legend,
 
 
 // Top items by quantity (horizontal bar chart)
-export default function OrderAnalytics3({ aggregated = {} }) {
-const top = (aggregated.topItems || []).map((it) => ({ name: it.name, qty: it.quantity, revenue: it.revenue }));
+export default function OrderAnalytics3({ aggregated = {}, defaultGrouping = "day" }) {
+const periods = aggregated.periods || [];
+const values = periods.map((p) => (p.orders > 0 ? p.revenue / p.orders : 0));
+const width = Math.max(600, Math.min(1200, 120 + values.length * 60));
+const height = 200;
+const padding = 36;
+const max = Math.max(...values, 1);
 
+const points = values.map((v, i) => {
+  const x = padding + (i / Math.max(1, values.length - 1)) * (width - padding * 2);
+  const y = height - padding - (v / max) * (height - padding * 2);
+  return `${x},${y}`;
+});
 
-// Recharts horizontal bar: swap axes by using BarChart with layout="vertical"
+const areaPath = values.length ? `M ${points[0]} L ${points.slice(1).join(" ")} L ${width - padding},${height - padding} L ${padding},${height - padding} Z` : "";
+const linePath = values.length ? `M ${points.join(" L ")}` : "";
+
 return (
-<Card className="p-3 mb-3 shadow-sm">
-<h6 className="mb-2">Top Items (by quantity)</h6>
-{top.length === 0 ? (
-<div className="text-muted">No item sales yet.</div>
-) : (
-<div style={{ width: '100%', height: Math.min(60 + top.length * 36, 420) }}>
-<ResponsiveContainer>
-<BarChart layout="vertical" data={top} margin={{ top: 5, right: 20, left: 80, bottom: 5 }}>
-<CartesianGrid strokeDasharray="3 3" />
-<XAxis type="number" allowDecimals={false} />
-<YAxis dataKey="name" type="category" width={160} />
-<Tooltip formatter={(v) => (v == null ? v : v.toString())} />
-<Legend />
-<Bar dataKey="qty" fill="#e15759" barSize={16} name="Quantity" />
-</BarChart>
-</ResponsiveContainer>
-</div>
-)}
-</Card>
+  <Card className="p-3 mb-3 shadow-sm">
+    <h6 className="mb-2">Average Order Value - AOV ({defaultGrouping})</h6>
+    {periods.length === 0 ? (
+      <div className="text-muted">No AOV data yet.</div>
+    ) : (
+      <div style={{ overflowX: "auto" }}>
+        <svg width={width} height={height}>
+          <defs>
+            <linearGradient id="g_aov" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#e15759" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="#e15759" stopOpacity="0.04" />
+            </linearGradient>
+          </defs>
+          <path d={areaPath} fill="url(#g_aov)" stroke="none" />
+          <path d={linePath} fill="none" stroke="#e15759" strokeWidth={2} />
+          {points.map((pt, idx) => {
+            const [x, y] = pt.split(",");
+            return <circle key={idx} cx={x} cy={y} r={3} fill="#fff" stroke="#e15759" />;
+          })}
+          {periods.map((p, i) => {
+            const x = padding + (i / Math.max(1, periods.length - 1)) * (width - padding * 2);
+            return (
+              <text key={p.period} x={x} y={height - 8} textAnchor="middle" fontSize={10} fill="#333">
+                {p.label}
+              </text>
+            );
+          })}
+        </svg>
+      </div>
+    )}
+  </Card>
 );
 }

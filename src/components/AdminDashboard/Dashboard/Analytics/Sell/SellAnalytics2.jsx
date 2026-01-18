@@ -97,25 +97,48 @@ import React from "react";
 import { Card } from "react-bootstrap";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
-export default function SellAnalytics2({ aggregated = {} }) {
-  const data = (aggregated.topNames || []).map((t) => ({ name: t.name, count: t.count }));
+export default function SellAnalytics2({ sells = [] }) {
+  const total = sells.length || 1;
+  const pending = sells.filter((s) => String(s.status || "").toLowerCase() === "pending").length;
+  const accepted = sells.filter((s) => String(s.status || "").toLowerCase() !== "pending").length;
+  const successRate = ((accepted / total) * 100).toFixed(1);
+  const pendingRate = ((pending / total) * 100).toFixed(1);
+
+  const stats = [
+    { label: "Total Requests", value: total, color: "#8e44ad" },
+    { label: "Pending", value: pending, percentage: pendingRate, color: "#f39c12" },
+    { label: "Accepted/Completed", value: accepted, percentage: successRate, color: "#27ae60" },
+  ];
 
   return (
     <Card className="p-3 mb-3 shadow-sm">
-      <h6 className="mb-2">Top Listed Names (by count)</h6>
-      {data.length === 0 ? (
+      <h6 className="mb-3">Sell Request Status Summary</h6>
+      {total === 0 ? (
         <div className="text-muted">No sell requests yet.</div>
       ) : (
-        <div style={{ width: "100%", height: Math.min(60 + data.length * 36, 320) }}>
-          <ResponsiveContainer>
-            <BarChart layout="vertical" data={data} margin={{ top: 5, right: 20, left: 60, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
-              <YAxis dataKey="name" type="category" width={160} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#59a14f" barSize={16} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="d-flex flex-column gap-3">
+          {stats.map((stat) => (
+            <div key={stat.label}>
+              <div className="d-flex justify-content-between mb-2">
+                <span style={{ fontSize: "0.9rem", fontWeight: "500" }}>{stat.label}</span>
+                <span style={{ fontSize: "0.9rem", color: stat.color, fontWeight: "bold" }}>
+                  {stat.value} {stat.percentage && `(${stat.percentage}%)`}
+                </span>
+              </div>
+              {stat.percentage && (
+                <div style={{ background: "#e8e8e8", borderRadius: "4px", height: "8px", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      background: stat.color,
+                      height: "100%",
+                      width: `${stat.percentage}%`,
+                      transition: "width 0.3s ease",
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </Card>

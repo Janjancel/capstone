@@ -1231,7 +1231,10 @@ const CartModal = ({
     try {
       const res = await axios.post(
         `${API_URL}/api/items/${id}/decrement`,
-        { amount },
+        { 
+          amount,
+          user: user?.name || user?.email || "customer"
+        },
         { headers: { "Content-Type": "application/json", ...authHeaders() } }
       );
       return { ok: true, data: res.data };
