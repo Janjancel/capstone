@@ -9,6 +9,8 @@ import "bootstrap/dist/css/bootstrap.min.css";
 
 // KPI Summary
 import KPISummary from "../Dashboard/Analytics/KPISummary";
+import ReviewsAnalytics1 from "../Dashboard/Analytics/Reviews/ReviewsAnalytics1";
+import ReviewsAnalytics3 from "../Dashboard/Analytics/Reviews/ReviewsAnalytics3";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 
@@ -94,6 +96,7 @@ const Dashboard = () => {
   const [orders, setOrders] = useState([]);
   const [sells, setSells] = useState([]);
   const [demolitions, setDemolitions] = useState([]);
+  const [reviews, setReviews] = useState([]);
 
   // Summary metrics
   const [pendingOrders, setPendingOrders] = useState(0);
@@ -141,11 +144,13 @@ const Dashboard = () => {
       axios.get(`${API_URL}/api/demolish`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }),
       axios.get(`${API_URL}/api/sell`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }),
       axios.get(`${API_URL}/api/orders`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }),
+      axios.get(`${API_URL}/api/reviews`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }).catch(() => ({ data: [] })),
     ])
-      .then(([demolishRes, sellRes, ordersRes]) => {
+      .then(([demolishRes, sellRes, ordersRes, reviewsRes]) => {
         const demolish = demolishRes.data || [];
         const sell = sellRes.data || [];
         const fetchedOrders = ordersRes.data || [];
+        const fetchedReviews = reviewsRes.data || [];
 
         setDemolitionCount(demolish.length);
         setSellCount(sell.length);
@@ -154,6 +159,7 @@ const Dashboard = () => {
         setOrders(fetchedOrders);
         setSells(sell);
         setDemolitions(demolish);
+        setReviews(fetchedReviews);
 
         let pending = 0;
         let revenue = 0;
@@ -179,6 +185,7 @@ const Dashboard = () => {
         setOrders([]);
         setSells([]);
         setDemolitions([]);
+        setReviews([]);
         setPendingOrders(0);
         setTotalRevenue(0);
       });
@@ -283,6 +290,18 @@ const Dashboard = () => {
       </Row>
 
       <KPISummary orders={orders} sells={sells} demolitions={demolitions} />
+
+      <Row className="mt-4 mb-4">
+        <Col md={12}>
+          <h5 style={{ fontWeight: "600", marginBottom: "16px" }}>Reviews Analytics</h5>
+        </Col>
+        <Col md={6}>
+          <ReviewsAnalytics1 reviews={reviews} />
+        </Col>
+        <Col md={6}>
+          <ReviewsAnalytics3 reviews={reviews} />
+        </Col>
+      </Row>
 
       <small className="text-muted">
         Signed in as: <strong>{currentUser.email}</strong>
