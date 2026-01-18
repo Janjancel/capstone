@@ -1,5 +1,5 @@
 // src/pages/Dashboard.jsx
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { Container, Row, Col, Button, Card } from "react-bootstrap";
 import { BuildingFillX, HouseFill, CartFill } from "react-bootstrap-icons";
 import { useNavigate } from "react-router-dom";
@@ -46,42 +46,6 @@ function startOfPeriod(date, grouping = "day") {
 
 function safeNumber(v) {
   return Number.isFinite(Number(v)) ? Number(v) : 0;
-}
-
-// -----------------------------------------------------------------------------
-// Orders aggregation (USED by PDF summary)
-function computeOrderAggregates(orders = [], grouping = "day") {
-  let totalRevenue = 0;
-  let totalOrders = 0;
-  let pending = 0;
-
-  for (const o of orders) {
-    totalOrders++;
-
-    const status = String(o.status || "").toLowerCase();
-    if (status.includes("pending") || status.includes("processing") || status === "") {
-      pending++;
-    }
-
-    const created = o.createdAt ? new Date(o.createdAt) : new Date();
-    startOfPeriod(created, grouping);
-
-    let orderRevenue = 0;
-    if (Array.isArray(o.items)) {
-      o.items.forEach((it) => {
-        orderRevenue += safeNumber(it.price) * safeNumber(it.quantity);
-      });
-    } else {
-      orderRevenue += safeNumber(o.total);
-    }
-    totalRevenue += orderRevenue;
-  }
-
-  return {
-    totalOrders,
-    totalRevenue: +totalRevenue.toFixed(2),
-    pendingOrders: pending,
-  };
 }
 
 // -----------------------------------------------------------------------------
