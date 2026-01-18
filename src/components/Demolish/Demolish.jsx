@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import Swal from "sweetalert2"; // ✅ Only for confirmations
 import toast, { Toaster } from "react-hot-toast"; // ✅ General notifications
 import axios from "axios";
@@ -61,11 +62,14 @@ const LocationMarker = ({ formData, setFormData }) => {
 };
 
 const Demolition = () => {
+  const location = useLocation();
+  const demolishRequestData = location.state?.demolishRequest;
+
   const [formData, setFormData] = useState({
-    location: { lat: null, lng: null },
-    name: "",
-    contact: "",
-    description: "",
+    location: demolishRequestData?.location || { lat: null, lng: null },
+    name: demolishRequestData?.name || "",
+    contact: demolishRequestData?.contact || "",
+    description: demolishRequestData?.description || "",
     frontImage: null,
     sideImage: null,
     backImage: null,
@@ -73,9 +77,9 @@ const Demolition = () => {
   const [searchAddress, setSearchAddress] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewUrls, setPreviewUrls] = useState({
-    frontImage: null,
-    sideImage: null,
-    backImage: null,
+    frontImage: demolishRequestData?.images?.front || null,
+    sideImage: demolishRequestData?.images?.side || null,
+    backImage: demolishRequestData?.images?.back || null,
   });
 
   // ---- hidden file inputs (one per slot) ----
