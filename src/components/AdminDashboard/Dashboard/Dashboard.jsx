@@ -108,11 +108,6 @@ const Dashboard = () => {
   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
   const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
 
-  const aggregated = useMemo(
-    () => computeOrderAggregates(orders, "day"),
-    [orders]
-  );
-
   // Fetch current user
   useEffect(() => {
     if (!userId) return;
