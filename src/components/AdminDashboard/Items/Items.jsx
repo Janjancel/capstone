@@ -671,6 +671,40 @@ const Items = () => {
   const [availabilityFilter, setAvailabilityFilter] = useState("available"); // default to available
   const [searchTerm, setSearchTerm] = useState("");
 
+  // ----- Helpers for mixed category model (string vs array) -----
+  const itemCategories = useCallback((it) => {
+    if (Array.isArray(it?.categories)) return it.categories;
+    if (it?.category) return [it.category];
+    return []; // treat as uncategorized
+  }, []);
+
+  // memoize matchers so they are stable references for useEffect deps
+  const matchesCategory = useCallback(
+    (it, selected) => {
+      if (!selected) return true; // "All"
+      const cats = itemCategories(it);
+      // normalize case
+      return cats.some((c) => String(c).toLowerCase() === String(selected).toLowerCase());
+    },
+    [itemCategories]
+  );
+
+  const matchesSearch = useCallback((it, term) => {
+    if (!term) return true;
+    const name = (it?.name || "").toLowerCase();
+    const desc = (it?.description || "").toLowerCase();
+    return name.includes(term.toLowerCase()) || desc.includes(term.toLowerCase());
+  }, []);
+
+  const matchesAvailability = useCallback((it, filter) => {
+    // treat undefined availability as true (server default true)
+    const isAvailable = it?.availability === undefined ? true : Boolean(it.availability);
+    if (!filter || filter === "all") return true;
+    if (filter === "available") return isAvailable === true;
+    if (filter === "unavailable") return isAvailable === false;
+    return true;
+  }, []);
+
   // ----- Fetch items (memoized so effects can safely depend on it) -----
   const fetchItems = useCallback(async () => {
     setFetching(true);
@@ -721,40 +755,6 @@ const Items = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount
-
-  // ----- Helpers for mixed category model (string vs array) -----
-  const itemCategories = useCallback((it) => {
-    if (Array.isArray(it?.categories)) return it.categories;
-    if (it?.category) return [it.category];
-    return []; // treat as uncategorized
-  }, []);
-
-  // memoize matchers so they are stable references for useEffect deps
-  const matchesCategory = useCallback(
-    (it, selected) => {
-      if (!selected) return true; // "All"
-      const cats = itemCategories(it);
-      // normalize case
-      return cats.some((c) => String(c).toLowerCase() === String(selected).toLowerCase());
-    },
-    [itemCategories]
-  );
-
-  const matchesSearch = useCallback((it, term) => {
-    if (!term) return true;
-    const name = (it?.name || "").toLowerCase();
-    const desc = (it?.description || "").toLowerCase();
-    return name.includes(term.toLowerCase()) || desc.includes(term.toLowerCase());
-  }, []);
-
-  const matchesAvailability = useCallback((it, filter) => {
-    // treat undefined availability as true (server default true)
-    const isAvailable = it?.availability === undefined ? true : Boolean(it.availability);
-    if (!filter || filter === "all") return true;
-    if (filter === "available") return isAvailable === true;
-    if (filter === "unavailable") return isAvailable === false;
-    return true;
-  }, []);
 
   // Recompute visible items whenever data or filters change
   useEffect(() => {

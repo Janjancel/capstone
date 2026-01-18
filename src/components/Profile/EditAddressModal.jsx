@@ -400,32 +400,6 @@ const EditAddressModal = ({
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Local inputs for latitude and longitude so user can type freely
-  const [latInput, setLatInput] = useState(
-    coordinates && coordinates.lat !== null && coordinates.lat !== undefined
-      ? String(coordinates.lat)
-      : ""
-  );
-  const [lngInput, setLngInput] = useState(
-    coordinates && coordinates.lng !== null && coordinates.lng !== undefined
-      ? String(coordinates.lng)
-      : ""
-  );
-
-  // Keep local inputs in sync when parent coordinates prop changes
-  useEffect(() => {
-    setLatInput(
-      coordinates && coordinates.lat !== null && coordinates.lat !== undefined
-        ? String(coordinates.lat)
-        : ""
-    );
-    setLngInput(
-      coordinates && coordinates.lng !== null && coordinates.lng !== undefined
-        ? String(coordinates.lng)
-        : ""
-    );
-  }, [coordinates]);
-
   // Ensure address is an object
   const safeAddress =
     address || {
@@ -505,17 +479,6 @@ const EditAddressModal = ({
       setCoordsSaved(false);
       toast.error("No coordinates found for that query.");
     }
-  };
-
-  // Validate coordinate numeric ranges
-  const validateLatLng = (lat, lng) => {
-    if (lat === "" || lng === "" || lat === null || lng === null) return false;
-    const latNum = Number(lat);
-    const lngNum = Number(lng);
-    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return false;
-    if (latNum < -90 || latNum > 90) return false;
-    if (lngNum < -180 || lngNum > 180) return false;
-    return true;
   };
 
   const handleSave = () => {
