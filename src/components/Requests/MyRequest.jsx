@@ -756,11 +756,9 @@ import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from "../../context/AuthContext";
 import {
   Container,
-  Box,
   Typography,
   Tabs,
   Tab,
-  Button,
   CircularProgress,
 } from "@mui/material";
 
@@ -772,25 +770,6 @@ import DemolishRequestsTab from "./DemolishRequestsTab";
 import SellReqDetailModal from "../AdminDashboard/Requests/SellDashboard/ReqDetailModal";
 import DemolishReqDetailModal from "../AdminDashboard/Requests/DemolishDashboard/ReqDetailModal";
 
-function EmptyState({ onSell, onDemolish }) {
-  return (
-    <Box sx={{ textAlign: "center", py: 8 }}>
-      <Typography variant="h6">No requests yet</Typography>
-      <Typography variant="body2" color="text.secondary">
-        Start a new request to see it here.
-      </Typography>
-      <Box sx={{ mt: 2 }}>
-        <Button variant="contained" onClick={onSell} sx={{ mr: 1 }}>
-          Create Sell Request
-        </Button>
-        <Button variant="outlined" onClick={onDemolish}>
-          Create Demolition Request
-        </Button>
-      </Box>
-    </Box>
-  );
-}
-
 export default function MyRequest() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -800,7 +779,6 @@ export default function MyRequest() {
   const [loading, setLoading] = useState(true);
   const [sellRequests, setSellRequests] = useState([]);
   const [demoRequests, setDemoRequests] = useState([]);
-  const [error, setError] = useState("");
 
   const [openSellModal, setOpenSellModal] = useState(false);
   const [openDemoModal, setOpenDemoModal] = useState(false);
@@ -821,13 +799,14 @@ export default function MyRequest() {
           if (Array.isArray(data)) return data;
           if (Array.isArray(data?.data)) return data.data;
           if (Array.isArray(data?.requests)) return data.requests;
-        } catch {}
+        } catch {
+          /* try next */
+        }
       }
       throw new Error("No matching endpoint responded.");
     };
 
     setLoading(true);
-    setError("");
 
     try {
       const [sell, demo] = await Promise.all([
@@ -853,8 +832,7 @@ export default function MyRequest() {
       setSellRequests(byMe(sell));
       setDemoRequests(byMe(demo));
     } catch (e) {
-      setError(e.message);
-      toast.error(e.message);
+      toast.error(e.message || "Failed to load requests.");
     } finally {
       setLoading(false);
     }
@@ -927,6 +905,8 @@ export default function MyRequest() {
         : setDemoRequests(updater);
 
       toast.success("Counter offer sent.");
+    } catch {
+      toast.error("Failed to send counter offer.");
     } finally {
       setActingId(null);
     }
@@ -963,6 +943,8 @@ export default function MyRequest() {
         : setDemoRequests(updater);
 
       toast.success(accept ? "Price accepted." : "Price declined.");
+    } catch {
+      toast.error("Failed to submit response.");
     } finally {
       setActingId(null);
     }
