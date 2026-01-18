@@ -1,6 +1,6 @@
 // src/pages/Dashboard.jsx
 import React, { useState, useEffect, useMemo } from "react";
-import { Container, Row, Col, Button, Form, Card } from "react-bootstrap";
+import { Container, Row, Col, Button, Card } from "react-bootstrap";
 import { BuildingFillX, HouseFill, CartFill } from "react-bootstrap-icons";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -66,13 +66,15 @@ function computeOrderAggregates(orders = [], grouping = "day") {
     const created = o.createdAt ? new Date(o.createdAt) : new Date();
     startOfPeriod(created, grouping);
 
+    let orderRevenue = 0;
     if (Array.isArray(o.items)) {
       o.items.forEach((it) => {
-        totalRevenue += safeNumber(it.price) * safeNumber(it.quantity);
+        orderRevenue += safeNumber(it.price) * safeNumber(it.quantity);
       });
     } else {
-      totalRevenue += safeNumber(o.total);
+      orderRevenue += safeNumber(o.total);
     }
+    totalRevenue += orderRevenue;
   }
 
   return {
@@ -102,17 +104,13 @@ const Dashboard = () => {
   const [pendingOrders, setPendingOrders] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
 
-  // Filters
-  const [filter, setFilter] = useState("day");
-  const [analyticsView, setAnalyticsView] = useState("sell");
-
   // User
   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
   const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
 
   const aggregated = useMemo(
-    () => computeOrderAggregates(orders, filter),
-    [orders, filter]
+    () => computeOrderAggregates(orders, "day"),
+    [orders]
   );
 
   // Fetch current user

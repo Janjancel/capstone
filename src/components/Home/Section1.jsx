@@ -80,13 +80,9 @@
 
 
 import React from "react";
-import bgVideo from "../images/bedyo.mov"; // <-- add your video file here
-import avif from "../images/unika_logo.png";
 import Buy from "../Buy/Buy";
 
 export default function Section1() {
-  const title = "Unika Antika";
-  const subtitle = "Timeless antiques for collectors and dreamers.";
 
   return (
     <section

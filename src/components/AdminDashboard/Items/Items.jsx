@@ -695,7 +695,10 @@ const Items = () => {
   }, [
     searchTerm,
     categoryFilter,
-    availabilityFilter, // included so fetchItems applied filters instantly
+    availabilityFilter,
+    matchesSearch,
+    matchesCategory,
+    matchesAvailability,
   ]);
 
   useEffect(() => {
