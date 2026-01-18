@@ -226,7 +226,7 @@ const Buy = () => {
   };
 
   // Helper to call decrement endpoint
-  const decrementItem = async (id, amount = 1, headers = {}) => {
+  const decrementItem = useCallback(async (id, amount = 1, headers = {}) => {
     try {
       const res = await axios.post(
         `${API_URL}/api/items/${id}/decrement`,
@@ -237,7 +237,7 @@ const Buy = () => {
     } catch (err) {
       return { ok: false, err };
     }
-  };
+  }, [API_URL]);
 
   // ------------ NEW: parent-provided onConfirm handler ----------------
   // This lets the CartModal delegate order creation to Buy, which will

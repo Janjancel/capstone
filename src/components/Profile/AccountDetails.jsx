@@ -118,7 +118,7 @@ const AccountDetails = ({ username: propUsername, email: propEmail, personalInfo
 
   // API base (relative by default so it works in prod/dev without env)
   const API_URL = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
-  const buildUrl = (path) => `${API_URL}${path}`;
+  const buildUrl = useCallback((path) => `${API_URL}${path}`, [API_URL]);
 
   // Keep local state in sync with incoming props when they change
   useEffect(() => setUsername(propUsername || ""), [propUsername]);
