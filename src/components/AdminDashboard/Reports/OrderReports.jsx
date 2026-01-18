@@ -44,7 +44,7 @@ export const renderOrderTableRow = (r, idx) => (
     <td>{r.orderId}</td>
     <td style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>{r.email}</td>
     <td>{r.status}</td>
-    <td>{Number(r.amount).toFixed(2)}</td>
+    <td>₱{Number(r.amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
     <td style={{ maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis" }}>{r.address || "—"}</td>
   </tr>
 );

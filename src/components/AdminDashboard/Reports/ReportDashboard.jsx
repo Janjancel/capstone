@@ -1,6 +1,6 @@
 // ReportDashboard.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Card, Button, Form } from "react-bootstrap";
+import { Card, Button, Form, Row, Col } from "react-bootstrap";
 import axios from "axios";
 import Report from "./Report"; // original Report.jsx (unchanged)
 import {
@@ -460,8 +460,62 @@ const ReportDashboard = () => {
     return null;
   };
 
+  // Calculate summary statistics for visual display
+  const summaryStats = useMemo(() => {
+    const stats = {
+      totalCount: exportRowsAll.length,
+      totalAmount: 0,
+      avgAmount: 0,
+      statusBreakdown: {},
+      locationFrequency: {},
+    };
+
+    if (reportType === "orders") {
+      stats.totalAmount = exportRowsAll.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+      stats.avgAmount = stats.totalCount > 0 ? stats.totalAmount / stats.totalCount : 0;
+      exportRowsAll.forEach((r) => {
+        const status = r.status || "Unknown";
+        stats.statusBreakdown[status] = (stats.statusBreakdown[status] || 0) + 1;
+        // Location frequency for orders
+        if (r.address && r.address !== "—") {
+          const addr = r.address.split(",")[0].trim(); // Get first part of address
+          stats.locationFrequency[addr] = (stats.locationFrequency[addr] || 0) + 1;
+        }
+      });
+    } else if (reportType === "sales") {
+      stats.totalAmount = exportRowsAll.reduce((sum, r) => sum + Number(r.total || 0), 0);
+      stats.avgAmount = stats.totalCount > 0 ? stats.totalAmount / stats.totalCount : 0;
+    } else if (reportType === "sellRequests") {
+      stats.totalAmount = exportRowsAll.reduce((sum, r) => sum + Number(r.price || 0), 0);
+      stats.avgAmount = stats.totalCount > 0 ? stats.totalAmount / stats.totalCount : 0;
+      exportRowsAll.forEach((r) => {
+        const status = r.status || "Unknown";
+        stats.statusBreakdown[status] = (stats.statusBreakdown[status] || 0) + 1;
+        // Location frequency for sell requests
+        if (r.location && r.location !== "N/A") {
+          const loc = r.location.split(",")[0].trim();
+          stats.locationFrequency[loc] = (stats.locationFrequency[loc] || 0) + 1;
+        }
+      });
+    } else if (reportType === "demolitions") {
+      stats.totalAmount = exportRowsAll.reduce((sum, r) => sum + Number(r.price || 0), 0);
+      stats.avgAmount = stats.totalCount > 0 ? stats.totalAmount / stats.totalCount : 0;
+      exportRowsAll.forEach((r) => {
+        const status = r.status || "Unknown";
+        stats.statusBreakdown[status] = (stats.statusBreakdown[status] || 0) + 1;
+        // Location frequency for demolitions
+        if (r.location && r.location !== "N/A") {
+          const loc = r.location.split(",")[0].trim();
+          stats.locationFrequency[loc] = (stats.locationFrequency[loc] || 0) + 1;
+        }
+      });
+    }
+
+    return stats;
+  }, [exportRowsAll, reportType]);
+
   return (
-    <div className="container mt-4">
+    <div className="container-fluid mt-4">
       {/* Top control card: Generate Reports */}
       <Card className="shadow-sm mb-4">
         <Card.Body className="d-flex flex-wrap gap-3 align-items-end">
@@ -479,7 +533,7 @@ const ReportDashboard = () => {
             {reportType === "sales" && (
               <div style={{ marginTop: 8, fontSize: 13 }}>
                 <strong>Total sales (all time):</strong>{" "}
-                {salesTotal == null ? "—" : `₱${Number(salesTotal).toLocaleString()}`}
+                {salesTotal == null ? "—" : `₱${Number(salesTotal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 <div style={{ fontSize: 12, color: "#666" }}>
                   Note: server `/api/sales/total` returns overall total. Server-side range-total not implemented.
                 </div>
@@ -555,6 +609,245 @@ const ReportDashboard = () => {
         </Card.Body>
       </Card>
 
+      {/* Visual Summary Stats Section */}
+      {data.length > 0 && (
+        <Row className="mb-4">
+          <Col md={3} sm={6} xs={12} className="mb-3">
+            <Card className="shadow-sm h-100" style={{ borderLeft: "4px solid #0066cc" }}>
+              <Card.Body>
+                <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>Total Records</div>
+                <div style={{ fontSize: 32, fontWeight: "bold", color: "#0066cc" }}>
+                  {summaryStats.totalCount}
+                </div>
+                <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>items found in range</div>
+              </Card.Body>
+            </Card>
+          </Col>
+
+          <Col md={3} sm={6} xs={12} className="mb-3">
+            <Card className="shadow-sm h-100" style={{ borderLeft: "4px solid #28a745" }}>
+              <Card.Body>
+                <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>
+                  {reportType === "orders" || reportType === "sales" ? "Total Amount" : "Total Value"}
+                </div>
+                <div style={{ fontSize: 32, fontWeight: "bold", color: "#28a745" }}>
+                  ₱{Number(summaryStats.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>aggregate</div>
+              </Card.Body>
+            </Card>
+          </Col>
+
+          <Col md={3} sm={6} xs={12} className="mb-3">
+            <Card className="shadow-sm h-100" style={{ borderLeft: "4px solid #ff9800" }}>
+              <Card.Body>
+                <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>Average Value</div>
+                <div style={{ fontSize: 32, fontWeight: "bold", color: "#ff9800" }}>
+                  ₱{Number(summaryStats.avgAmount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>per item</div>
+              </Card.Body>
+            </Card>
+          </Col>
+
+          <Col md={3} sm={6} xs={12} className="mb-3">
+            <Card className="shadow-sm h-100" style={{ borderLeft: "4px solid #6c757d" }}>
+              <Card.Body>
+                <div style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>Status Types</div>
+                <div style={{ fontSize: 32, fontWeight: "bold", color: "#6c757d" }}>
+                  {Object.keys(summaryStats.statusBreakdown).length}
+                </div>
+                <div style={{ fontSize: 12, color: "#999", marginTop: 4 }}>different statuses</div>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      )}
+
+      {/* Status Breakdown Chart (if applicable) */}
+      {data.length > 0 && Object.keys(summaryStats.statusBreakdown).length > 0 && (
+        <Card className="shadow-sm mb-4">
+          <Card.Header style={{ backgroundColor: "#f8f9fa", borderBottom: "1px solid #dee2e6" }}>
+            <strong>Status Distribution</strong>
+          </Card.Header>
+          <Card.Body>
+            <Row>
+              {Object.entries(summaryStats.statusBreakdown).map(([status, count]) => {
+                const total = summaryStats.totalCount;
+                const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+                const colors = {
+                  pending: "#ffc107",
+                  accepted: "#28a745",
+                  declined: "#dc3545",
+                  ocular_scheduled: "#17a2b8",
+                  scheduled: "#17a2b8",
+                };
+                const barColor = colors[status] || "#6c757d";
+
+                return (
+                  <Col md={6} key={status} className="mb-3">
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ fontWeight: 500, textTransform: "capitalize" }}>{status}</span>
+                        <span style={{ color: "#666" }}>
+                          {count} ({percentage}%)
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          width: "100%",
+                          height: 24,
+                          backgroundColor: "#e9ecef",
+                          borderRadius: 4,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${percentage}%`,
+                            backgroundColor: barColor,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "white",
+                            fontSize: 12,
+                            fontWeight: 500,
+                          }}
+                        >
+                          {percentage > 10 && `${percentage}%`}
+                        </div>
+                      </div>
+                    </div>
+                  </Col>
+                );
+              })}
+            </Row>
+          </Card.Body>
+        </Card>
+      )}
+
+      {/* Location Frequency Chart */}
+      {data.length > 0 && Object.keys(summaryStats.locationFrequency).length > 0 && (
+        <Card className="shadow-sm mb-4">
+          <Card.Header style={{ backgroundColor: "#f8f9fa", borderBottom: "1px solid #dee2e6" }}>
+            <strong>Location Frequency</strong>
+          </Card.Header>
+          <Card.Body>
+            {(() => {
+              const sortedLocations = Object.entries(summaryStats.locationFrequency)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10); // Show top 10 locations
+
+              const maxCount = Math.max(...sortedLocations.map((loc) => loc[1]));
+
+              return (
+                <div>
+                  {sortedLocations.map(([location, count], idx) => {
+                    const percentage = (count / maxCount) * 100;
+                    const colors = [
+                      "#0066cc",
+                      "#0052a3",
+                      "#003d7a",
+                      "#002951",
+                      "#001a33",
+                      "#004080",
+                      "#0059b3",
+                      "#0073e6",
+                      "#3385ff",
+                      "#6699ff",
+                    ];
+                    const barColor = colors[idx] || "#6c757d";
+
+                    return (
+                      <div key={location} style={{ marginBottom: 16 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: 6,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontWeight: 500,
+                              fontSize: 14,
+                              flex: 1,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              marginRight: 12,
+                            }}
+                            title={location}
+                          >
+                            {location}
+                          </span>
+                          <span
+                            style={{
+                              color: "#666",
+                              fontWeight: 500,
+                              minWidth: 50,
+                              textAlign: "right",
+                            }}
+                          >
+                            {count}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            width: "100%",
+                            height: 28,
+                            backgroundColor: "#e9ecef",
+                            borderRadius: 6,
+                            overflow: "hidden",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: "100%",
+                              width: `${percentage}%`,
+                              backgroundColor: barColor,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "flex-end",
+                              paddingRight: 8,
+                              color: "white",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              transition: "width 0.3s ease",
+                            }}
+                          >
+                            {percentage > 15 && `${((count / summaryStats.totalCount) * 100).toFixed(1)}%`}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {Object.keys(summaryStats.locationFrequency).length > 10 && (
+                    <div
+                      style={{
+                        marginTop: 16,
+                        padding: 12,
+                        backgroundColor: "#f0f3f7",
+                        borderRadius: 6,
+                        fontSize: 13,
+                        color: "#666",
+                        textAlign: "center",
+                      }}
+                    >
+                      +{Object.keys(summaryStats.locationFrequency).length - 10} more locations
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </Card.Body>
+        </Card>
+      )}
+
       {/* Preview / table card */}
       <Card className="shadow-sm">
         <Card.Body>
@@ -613,6 +906,7 @@ const ReportDashboard = () => {
         toDate={toDate}
         title="Report"
         tableHtml={tableHtmlForPdf}
+        summaryStats={summaryStats}
       />
     </div>
   );

@@ -154,23 +154,44 @@ import { Card } from "react-bootstrap";
 
 // Delivery buckets list
 export default function OrderAnalytics4({ aggregated = {} }) {
-const buckets = aggregated.deliveryBuckets || {};
-const entries = Object.entries(buckets);
-return (
-<Card className="p-3 mb-3 shadow-sm">
-<h6 className="mb-2">Delivery Distance Distribution</h6>
-{entries.length === 0 ? (
-<div className="text-muted">No delivery data.</div>
-) : (
-<ul className="list-unstyled mb-0">
-{entries.map(([k, v]) => (
-<li key={k} className="d-flex justify-content-between py-1 border-bottom">
-<small>{k} km</small>
-<strong>{v}</strong>
-</li>
-))}
-</ul>
-)}
-</Card>
-);
+  const topItems = (aggregated.topItems || []).slice(0, 8);
+  const maxRevenue = topItems.length ? Math.max(...topItems.map((it) => it.revenue || 0)) : 1;
+
+  return (
+    <Card className="p-3 mb-3 shadow-sm">
+      <h6 className="mb-2">Top Products by Revenue</h6>
+      {topItems.length === 0 ? (
+        <div className="text-muted">No product revenue data yet.</div>
+      ) : (
+        <ul className="list-unstyled mb-0">
+          {topItems.map((item, idx) => {
+            const barWidth = ((item.revenue || 0) / maxRevenue) * 100;
+            return (
+              <li key={item.id} className="mb-3">
+                <div className="d-flex justify-content-between mb-1">
+                  <span style={{ fontSize: "0.85rem", fontWeight: "500" }}>
+                    {idx + 1}. {item.name}
+                  </span>
+                  <span style={{ fontSize: "0.85rem", color: "#666" }}>
+                    ₱{Number(item.revenue || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div style={{ background: "#e8e8e8", borderRadius: "4px", height: "6px", overflow: "hidden" }}>
+                  <div
+                    style={{
+                      background: `linear-gradient(90deg, #4e79a7 0%, #1f4e78 100%)`,
+                      height: "100%",
+                      width: `${barWidth}%`,
+                      transition: "width 0.3s ease",
+                    }}
+                  />
+                </div>
+                <small style={{ color: "#999" }}>Qty: {item.quantity}</small>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
 }

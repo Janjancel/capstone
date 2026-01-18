@@ -109,28 +109,61 @@ import { ResponsiveContainer, PieChart, Pie, Tooltip, Cell, Legend } from "recha
 const COLORS = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#b07aa1"];
 
 export default function DemolishAnalytics2({ aggregated = {} }) {
-  const statusCounts = aggregated.statusCounts || {};
-  const data = Object.entries(statusCounts).map(([k, v]) => ({ name: k, value: v }));
+  const avgProposed = aggregated.avgProposedOverall || 0;
+  const avgAccepted = aggregated.avgAcceptedOverall || 0;
+  const difference = avgAccepted > 0 ? avgProposed - avgAccepted : 0;
+  const diffPercent = avgProposed > 0 ? ((difference / avgProposed) * 100).toFixed(1) : 0;
+
+  const formatPrice = (p) => {
+    const num = Number.isFinite(Number(p)) ? Number(p) : 0;
+    return `₱${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
 
   return (
     <Card className="p-3 mb-3 shadow-sm">
-      <h6 className="mb-2">Demolition Status Distribution</h6>
-
-      {data.length === 0 ? (
-        <div className="text-muted">No demolition requests yet.</div>
+      <h6 className="mb-3">Price Negotiation Summary</h6>
+      {avgProposed === 0 ? (
+        <div className="text-muted">No price data yet.</div>
       ) : (
-        <div style={{ width: "100%", height: 280 }}>
-          <ResponsiveContainer>
-            <PieChart>
-              <Pie data={data} dataKey="value" nameKey="name" innerRadius={48} outerRadius={88} label>
-                {data.map((entry, idx) => (
-                  <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend verticalAlign="bottom" height={36} />
-            </PieChart>
-          </ResponsiveContainer>
+        <div className="d-flex flex-column gap-3">
+          <div>
+            <div className="d-flex justify-content-between mb-2">
+              <span style={{ fontSize: "0.9rem", fontWeight: "500" }}>Average Proposed Price</span>
+              <span style={{ fontSize: "0.9rem", color: "#f39c12", fontWeight: "bold" }}>
+                {formatPrice(avgProposed)}
+              </span>
+            </div>
+            <div style={{ background: "#e8e8e8", borderRadius: "4px", height: "8px", overflow: "hidden" }}>
+              <div style={{ background: "#f39c12", height: "100%", width: "100%" }} />
+            </div>
+          </div>
+
+          <div>
+            <div className="d-flex justify-content-between mb-2">
+              <span style={{ fontSize: "0.9rem", fontWeight: "500" }}>Average Accepted Price</span>
+              <span style={{ fontSize: "0.9rem", color: "#27ae60", fontWeight: "bold" }}>
+                {formatPrice(avgAccepted)}
+              </span>
+            </div>
+            <div style={{ background: "#e8e8e8", borderRadius: "4px", height: "8px", overflow: "hidden" }}>
+              <div
+                style={{
+                  background: "#27ae60",
+                  height: "100%",
+                  width: `${avgProposed > 0 ? (avgAccepted / avgProposed) * 100 : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 border-top">
+            <div className="d-flex justify-content-between">
+              <span style={{ fontSize: "0.85rem" }}>Price Negotiation Discount</span>
+              <span style={{ fontSize: "0.85rem", color: "#e74c3c", fontWeight: "bold" }}>
+                {formatPrice(difference)} ({diffPercent}%)
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </Card>

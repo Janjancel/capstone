@@ -812,6 +812,17 @@ const SellDashboard = () => {
 
   const fmtKey = (lat, lng) => `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`;
 
+  // Format price to Philippine Peso with comma separators
+  const formatPrice = (price) => {
+    if (!price && price !== 0) return "0.00";
+    const num = parseFloat(price);
+    if (isNaN(num)) return "0.00";
+    return num.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
   // simple HTML-escape helper to avoid using non-public Swal helpers
   const escapeHtml = (unsafe) =>
     String(unsafe || "")
@@ -1446,7 +1457,7 @@ const SellDashboard = () => {
                           <TableCell>{request.name}</TableCell>
                           <TableCell>{request.contact}</TableCell>
                           <TableCell>{renderLocation(request.location)}</TableCell>
-                          <TableCell>₱{request.price}</TableCell>
+                          <TableCell>₱{formatPrice(request.price)}</TableCell>
                           <TableCell>
                             <Typography
                               sx={{

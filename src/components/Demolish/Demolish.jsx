@@ -426,7 +426,8 @@ const Demolition = () => {
       <Toaster position="top-right" />
       <Box textAlign="center" mb={4}>
         <Typography variant="h4" fontWeight="bold">
-          Demolition Request
+          {/* Demolition Request */}
+          Appraisal Request Form
         </Typography>
         <Typography color="text.secondary">
           Click on the map or search to pin the demolition location
@@ -435,8 +436,8 @@ const Demolition = () => {
 
       <Grid container justifyContent="center">
         <Grid item xs={12} md={8} lg={6}>
-          <Card elevation={4}>
-            <CardContent>
+          <Card elevation={6} sx={{ backgroundColor: "#f8f9fa", borderRadius: 2 }}>
+            <CardContent sx={{ padding: 4 }}>
               <form onSubmit={handleSubmit}>
                 {/* Search Address */}
                 <Box display="flex" gap={2} mb={3}>
@@ -531,9 +532,9 @@ const Demolition = () => {
                   <Button
                     type="submit"
                     variant="contained"
-                    color="dark"
                     fullWidth
                     disabled={isSubmitting}
+                    sx={{ backgroundColor: "#212529", color: "white", "&:hover": { backgroundColor: "#1a1f26" } }}
                     startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
                   >
                     {isSubmitting ? "Submitting..." : "Submit Request"}

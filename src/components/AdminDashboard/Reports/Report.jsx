@@ -346,8 +346,8 @@ import logo from "../../images/logo.png";
  * - fromDate: "YYYY-MM-DD" (optional)
  * - toDate: "YYYY-MM-DD" (optional)
  * - title: optional title to show instead of "Report"
- * - tableHtml: optional raw HTML (string) captured from the dashboard preview; if present, this HTML is used
- *              as the table content so the PDF visually matches the preview exactly.
+ * - tableHtml: optional raw HTML (string) captured from the dashboard preview
+ * - summaryStats: optional stats object with totalCount, totalAmount, avgAmount, statusBreakdown, locationFrequency
  */
 const Report = ({
   show,
@@ -359,6 +359,7 @@ const Report = ({
   toDate,
   title = "Report",
   tableHtml = "",
+  summaryStats = {},
 }) => {
   const reportRef = useRef();
 
@@ -396,7 +397,7 @@ const Report = ({
   };
 
   const formatPHP = (n) =>
-    `₱${Number(n || 0).toLocaleString("en-PH", {
+    `₱${Number(n || 0).toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
@@ -553,8 +554,220 @@ const Report = ({
             </div>
           </div>
 
+          {/* Summary Statistics Cards */}
+          {summaryStats?.totalCount > 0 && (
+            <>
+              <h6 className="mb-3">Summary Statistics</h6>
+              <table style={{ width: "100%", marginBottom: 20, borderCollapse: "collapse" }}>
+                <tbody>
+                  <tr style={{ display: "flex", gap: 10 }}>
+                    <td
+                      style={{
+                        flex: 1,
+                        border: "1px solid #ddd",
+                        padding: 12,
+                        borderLeft: "4px solid #0066cc",
+                        backgroundColor: "#f9f9f9",
+                      }}
+                    >
+                      <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>Total Records</div>
+                      <div style={{ fontSize: 18, fontWeight: "bold", color: "#0066cc" }}>
+                        {summaryStats.totalCount}
+                      </div>
+                    </td>
+                    <td
+                      style={{
+                        flex: 1,
+                        border: "1px solid #ddd",
+                        padding: 12,
+                        borderLeft: "4px solid #28a745",
+                        backgroundColor: "#f9f9f9",
+                      }}
+                    >
+                      <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>Total Amount</div>
+                      <div style={{ fontSize: 18, fontWeight: "bold", color: "#28a745" }}>
+                        ₱{Number(summaryStats.totalAmount || 0).toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </div>
+                    </td>
+                    <td
+                      style={{
+                        flex: 1,
+                        border: "1px solid #ddd",
+                        padding: 12,
+                        borderLeft: "4px solid #ff9800",
+                        backgroundColor: "#f9f9f9",
+                      }}
+                    >
+                      <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>Average Value</div>
+                      <div style={{ fontSize: 18, fontWeight: "bold", color: "#ff9800" }}>
+                        ₱{Number(summaryStats.avgAmount || 0).toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {/* Status Distribution */}
+          {summaryStats?.statusBreakdown && Object.keys(summaryStats.statusBreakdown).length > 0 && (
+            <>
+              <h6 className="mb-3">Status Distribution</h6>
+              <table style={{ width: "100%", marginBottom: 20, borderCollapse: "collapse" }}>
+                <tbody>
+                  {Object.entries(summaryStats.statusBreakdown).map(([status, count]) => {
+                    const total = summaryStats.totalCount;
+                    const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+                    const colors = {
+                      pending: "#ffc107",
+                      accepted: "#28a745",
+                      declined: "#dc3545",
+                      ocular_scheduled: "#17a2b8",
+                      scheduled: "#17a2b8",
+                    };
+                    const barColor = colors[status] || "#6c757d";
+
+                    return (
+                      <tr key={status} style={{ marginBottom: 10, display: "flex", gap: 10 }}>
+                        <td
+                          style={{
+                            flex: 1,
+                            paddingBottom: 10,
+                            borderBottom: "1px solid #eee",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginBottom: 4,
+                              fontSize: 12,
+                            }}
+                          >
+                            <strong style={{ textTransform: "capitalize" }}>{status}</strong>
+                            <span>
+                              {count} ({percentage}%)
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              width: "100%",
+                              height: 12,
+                              backgroundColor: "#e9ecef",
+                              borderRadius: 2,
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: "100%",
+                                width: `${percentage}%`,
+                                backgroundColor: barColor,
+                              }}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {/* Location Frequency */}
+          {summaryStats?.locationFrequency &&
+            Object.keys(summaryStats.locationFrequency).length > 0 && (
+              <>
+                <h6 className="mb-3">Location Frequency (Top 8)</h6>
+                <table style={{ width: "100%", marginBottom: 20, borderCollapse: "collapse" }}>
+                  <tbody>
+                    {Object.entries(summaryStats.locationFrequency)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 8)
+                      .map(([location, count]) => {
+                        const total = summaryStats.totalCount;
+                        const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+                        const colors = [
+                          "#0066cc",
+                          "#0052a3",
+                          "#003d7a",
+                          "#002951",
+                          "#004080",
+                          "#0059b3",
+                          "#0073e6",
+                          "#3385ff",
+                        ];
+                        const barColor = colors[Object.keys(summaryStats.locationFrequency).indexOf(location)] ||
+                          "#6c757d";
+
+                        return (
+                          <tr key={location} style={{ marginBottom: 10 }}>
+                            <td
+                              style={{
+                                flex: 1,
+                                paddingBottom: 10,
+                                borderBottom: "1px solid #eee",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  marginBottom: 4,
+                                  fontSize: 12,
+                                }}
+                              >
+                                <strong
+                                  style={{
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                    flex: 1,
+                                    marginRight: 8,
+                                  }}
+                                  title={location}
+                                >
+                                  {location}
+                                </strong>
+                                <span style={{ minWidth: 50, textAlign: "right" }}>
+                                  {count} ({percentage}%)
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  width: "100%",
+                                  height: 12,
+                                  backgroundColor: "#e9ecef",
+                                  borderRadius: 2,
+                                  overflow: "hidden",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    height: "100%",
+                                    width: `${percentage}%`,
+                                    backgroundColor: barColor,
+                                  }}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </>
+            )}
+
           {/* Table */}
-          <h6 className="mb-2">Report Summary</h6>
+          <h6 className="mb-2">Report Details</h6>
 
           <div style={{ overflowX: "auto" }}>
             {/* If dashboard passed raw HTML, use it to mimic the preview exactly.
@@ -657,6 +870,7 @@ Report.propTypes = {
   toDate: PropTypes.string,
   title: PropTypes.string,
   tableHtml: PropTypes.string, // optional raw HTML captured from dashboard preview
+  summaryStats: PropTypes.object, // optional stats object with totalCount, totalAmount, avgAmount, statusBreakdown, locationFrequency
 };
 
 export default Report;

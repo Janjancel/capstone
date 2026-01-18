@@ -323,8 +323,28 @@ const AddItemModal = ({
   handleAddItem,
   loading,
   categories,
+  allItems = [],
 }) => {
   const fileInputRef = useRef(null);
+
+  // Handle item selection from dropdown
+  const handleSelectExistingItem = (selectedItem) => {
+    if (!selectedItem) return;
+
+    // Auto-fill fields except quantity and images
+    setNewItem({
+      ...newItem,
+      name: selectedItem.name || "",
+      description: selectedItem.description || "",
+      price: selectedItem.price || "",
+      origin: selectedItem.origin || "",
+      age: selectedItem.age || "",
+      condition: selectedItem.condition || "",
+      categories: Array.isArray(selectedItem.categories) ? selectedItem.categories : (selectedItem.category ? [selectedItem.category] : []),
+      category: selectedItem.category || (Array.isArray(selectedItem.categories) ? selectedItem.categories[0] : ""),
+      // Keep quantity and images as they are for user to specify
+    });
+  };
 
   // Backward + forward compatibility:
   // Prefer array newItem.categories; if absent, seed from legacy newItem.category
@@ -383,8 +403,48 @@ const AddItemModal = ({
       </Modal.Header>
       <Modal.Body>
         <Form>
-          {/* Name, Description, Price, Origin, Age */}
-          {["name", "description", "price", "origin", "age"].map((field) => (
+          {/* Name field with dropdown for existing items */}
+          <Form.Group className="mb-3">
+            <Form.Label>Name</Form.Label>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              {/* Dropdown to select existing items */}
+              {allItems.length > 0 && (
+                <Form.Select
+                  style={{ flex: 0.4 }}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const selected = allItems.find((item) => item._id === e.target.value);
+                      handleSelectExistingItem(selected);
+                      e.target.value = ""; // Reset dropdown
+                    }
+                  }}
+                  defaultValue=""
+                >
+                  <option value="">Add existing item...</option>
+                  {allItems.map((item) => (
+                    <option key={item._id} value={item._id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </Form.Select>
+              )}
+              {/* Text input for new item name */}
+              <Form.Control
+                type="text"
+                value={newItem.name ?? ""}
+                onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+                required
+                placeholder="Enter new item name"
+                style={{ flex: 0.6 }}
+              />
+            </div>
+            <Form.Text muted>
+              Type a new name or select from existing items to auto-fill other fields.
+            </Form.Text>
+          </Form.Group>
+
+          {/* Description, Price, Origin, Age */}
+          {["description", "price", "origin", "age"].map((field) => (
             <Form.Group className="mb-3" key={field}>
               <Form.Label>
                 {field.charAt(0).toUpperCase() + field.slice(1)}

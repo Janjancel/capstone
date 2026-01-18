@@ -143,43 +143,63 @@ Brush,
 
 
 // Recent orders timeline (line chart of count or amount depending on data)
-export default function OrderAnalytics5({ aggregated = {}, orders = [], defaultGrouping = 'day' }) {
-// We'll reuse aggregated.periods for timeline; if empty, fall back to recent orders per date
-let data = (aggregated.periods || []).map((p) => ({ label: p.label, orders: p.orders, revenue: p.revenue }));
+export default function OrderAnalytics5({ orders = [] }) {
+  const statusMap = {};
+  const statusColors = {
+    pending: "#ff9da7",
+    processing: "#f28e2b",
+    shipped: "#59a14f",
+    delivered: "#4e79a7",
+    cancelled: "#e15759",
+    "cancellation_requested": "#ffb569",
+  };
 
+  orders.forEach((o) => {
+    const status = String(o.status || "pending").toLowerCase().trim();
+    statusMap[status] = (statusMap[status] || 0) + 1;
+  });
 
-if (data.length === 0 && Array.isArray(orders) && orders.length > 0) {
-// build simple date->count map for last 14 days
-const map = new Map();
-for (const o of orders.slice().reverse()) {
-const d = new Date(o.createdAt || o.createdAt == 0 ? o.createdAt : Date.now());
-const label = d.toLocaleDateString();
-map.set(label, (map.get(label) || 0) + 1);
-}
-data = Array.from(map.entries()).slice(-14).map(([label, count]) => ({ label, orders: count }));
-}
+  const total = orders.length || 1;
+  const entries = Object.entries(statusMap)
+    .map(([status, count]) => ({
+      status: status.charAt(0).toUpperCase() + status.slice(1),
+      count,
+      percentage: ((count / total) * 100).toFixed(1),
+      color: statusColors[status] || "#999",
+    }))
+    .sort((a, b) => b.count - a.count);
 
-
-return (
-<Card className="p-3 mb-3 shadow-sm">
-<h6 className="mb-2">Orders Timeline</h6>
-{data.length === 0 ? (
-<div className="text-muted">No timeline data yet.</div>
-) : (
-<div style={{ width: '100%', height: 260 }}>
-<ResponsiveContainer>
-<LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-<CartesianGrid strokeDasharray="3 3" />
-<XAxis dataKey="label" minTickGap={12} />
-<YAxis />
-<Tooltip formatter={(v, k) => (k === 'revenue' ? `₱${Number(v).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : v)} />
-<Line type="monotone" dataKey="orders" stroke="#ff9da7" strokeWidth={2} dot={{ r: 3 }} />
-<Line type="monotone" dataKey="revenue" stroke="#4e79a7" strokeWidth={2} dot={false} yAxisId={1} />
-<Brush />
-</LineChart>
-</ResponsiveContainer>
-</div>
-)}
-</Card>
-);
+  return (
+    <Card className="p-3 mb-3 shadow-sm">
+      <h6 className="mb-3">Order Status Distribution</h6>
+      {entries.length === 0 ? (
+        <div className="text-muted">No order data yet.</div>
+      ) : (
+        <ul className="list-unstyled mb-0">
+          {entries.map((entry, idx) => (
+            <li key={entry.status} className="mb-3">
+              <div className="d-flex justify-content-between mb-1">
+                <span style={{ fontSize: "0.9rem", fontWeight: "500" }}>
+                  {entry.status}
+                </span>
+                <span style={{ fontSize: "0.9rem", color: entry.color, fontWeight: "bold" }}>
+                  {entry.count} ({entry.percentage}%)
+                </span>
+              </div>
+              <div style={{ background: "#e8e8e8", borderRadius: "4px", height: "8px", overflow: "hidden" }}>
+                <div
+                  style={{
+                    background: entry.color,
+                    height: "100%",
+                    width: `${entry.percentage}%`,
+                    transition: "width 0.3s ease",
+                  }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
 }

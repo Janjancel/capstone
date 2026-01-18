@@ -228,6 +228,109 @@ export default function MyRequest() {
     return next;
   };
 
+  // ---- Send Counter Offer (Client proposes their own price) ----
+  const handleCounterOffer = async (req) => {
+    const id = req?._id || req?.id;
+    if (!id) return;
+
+    const { value: raw } = await Swal.fire({
+      title: "Counter Offer Price (₱)",
+      input: "number",
+      inputAttributes: { min: "1", step: "1" },
+      inputValue: req.price || "",
+      showCancelButton: true,
+      confirmButtonText: "Send Counter Offer",
+      preConfirm: (v) => {
+        const n = Number(v);
+        if (!n || n <= 0) {
+          Swal.showValidationMessage("Please enter a valid price greater than 0.");
+          return false;
+        }
+        return n;
+      },
+    });
+
+    if (!raw) return;
+    const counterPrice = Number(raw);
+
+    try {
+      setActingId(id);
+
+      const token = localStorage.getItem("token");
+      const res = await axios.patch(
+        `${API_URL}/api/demolish/${id}`,
+        {
+          proposedPrice: counterPrice,
+          status: "awaiting_price_approval",
+        },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        }
+      );
+
+      // Notify admin about counter offer
+      try {
+        await axios.post(`${API_URL}/api/notifications`, {
+          role: "admin",
+          for: "demolish",
+          type: "client_counter_offer",
+          status: "awaiting_price_approval",
+          userId,
+          orderId: id,
+          read: false,
+          message: `Client sent a counter offer: ₱${counterPrice.toLocaleString(
+            "en-US",
+            { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+          )}`,
+          data: { counterPrice },
+        });
+      } catch (e) {
+        console.error("Failed to notify admin of counter offer:", e);
+      }
+
+      const patchFromServer =
+        res && res.data && typeof res.data === "object" ? res.data : null;
+
+      // Update list
+      setDemoRequests((prev) =>
+        prev.map((item) => {
+          if ((item._id || item.id) !== id) return item;
+          return {
+            ...item,
+            ...patchFromServer,
+            proposedPrice: counterPrice,
+            status: "awaiting_price_approval",
+          };
+        })
+      );
+
+      // Update modal if open
+      if (openDemoModal && selectedDemo && (selectedDemo._id || selectedDemo.id) === id) {
+        setSelectedDemo((cur) => {
+          if (!cur) return cur;
+          return {
+            ...cur,
+            ...patchFromServer,
+            proposedPrice: counterPrice,
+            status: "awaiting_price_approval",
+          };
+        });
+      }
+
+      toast.success(
+        `Counter offer sent: ₱${counterPrice.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      );
+    } catch (err) {
+      console.error("Error sending counter offer:", err);
+      toast.error("Failed to send counter offer.");
+    } finally {
+      setActingId(null);
+    }
+  };
+
   // ---- Accept or Decline proposed demolition price ----
   const handleRespondToPrice = async (req, accept) => {
     const id = req?._id || req?.id;
@@ -517,30 +620,45 @@ export default function MyRequest() {
                     )}
 
                     {waitingForApproval && (
-                      <Stack direction="row" spacing={1.5} sx={{ mt: 1 }}>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="success"
-                          disabled={actingId === idKey}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRespondToPrice(r, true);
-                          }}
-                        >
-                          {actingId === idKey ? "Working..." : "Accept"}
-                        </Button>
+                      <Stack direction="column" spacing={1} sx={{ mt: 1 }}>
+                        <Stack direction="row" spacing={1.5}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="success"
+                            disabled={actingId === idKey}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRespondToPrice(r, true);
+                            }}
+                          >
+                            {actingId === idKey ? "Working..." : "Accept"}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="warning"
+                            disabled={actingId === idKey}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRespondToPrice(r, false);
+                            }}
+                          >
+                            Decline
+                          </Button>
+                        </Stack>
                         <Button
                           size="small"
                           variant="outlined"
-                          color="warning"
+                          color="info"
                           disabled={actingId === idKey}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleRespondToPrice(r, false);
+                            handleCounterOffer(r);
                           }}
+                          sx={{ justifyContent: "flex-start" }}
                         >
-                          Decline
+                          {actingId === idKey ? "Sending..." : "Counter Offer"}
                         </Button>
                       </Stack>
                     )}

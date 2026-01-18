@@ -164,25 +164,52 @@ function buildBuckets(sells = []) {
   return buckets.map((b) => ({ bucket: b.name, count: b.count }));
 }
 
-export default function SellAnalytics3({ sells = [], aggregated = {} }) {
-  const data = buildBuckets(sells);
+export default function SellAnalytics3({ aggregated = {} }) {
+  const periods = aggregated.periods || [];
+  const values = periods.map((p) => (p.requests > 0 ? p.askingTotal / p.requests : 0));
+  const width = Math.max(600, Math.min(1200, 120 + values.length * 60));
+  const height = 200;
+  const padding = 36;
+  const max = Math.max(...values, 1);
+
+  const points = values.map((v, i) => {
+    const x = padding + (i / Math.max(1, values.length - 1)) * (width - padding * 2);
+    const y = height - padding - (v / max) * (height - padding * 2);
+    return `${x},${y}`;
+  });
+
+  const areaPath = values.length ? `M ${points[0]} L ${points.slice(1).join(" ")} L ${width - padding},${height - padding} L ${padding},${height - padding} Z` : "";
+  const linePath = values.length ? `M ${points.join(" L ")}` : "";
 
   return (
     <Card className="p-3 mb-3 shadow-sm">
-      <h6 className="mb-2">Asking Price Distribution</h6>
-      {data.length === 0 ? (
-        <div className="text-muted">No price data yet.</div>
+      <h6 className="mb-2">Average Asking Price Trend</h6>
+      {periods.length === 0 ? (
+        <div className="text-muted">No asking price data yet.</div>
       ) : (
-        <div style={{ width: "100%", height: 220 }}>
-          <ResponsiveContainer>
-            <BarChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="bucket" />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#76b7b2" barSize={36} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div style={{ overflowX: "auto" }}>
+          <svg width={width} height={height}>
+            <defs>
+              <linearGradient id="g_price" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#76b7b2" stopOpacity="0.28" />
+                <stop offset="100%" stopColor="#76b7b2" stopOpacity="0.04" />
+              </linearGradient>
+            </defs>
+            <path d={areaPath} fill="url(#g_price)" stroke="none" />
+            <path d={linePath} fill="none" stroke="#76b7b2" strokeWidth={2} />
+            {points.map((pt, idx) => {
+              const [x, y] = pt.split(",");
+              return <circle key={idx} cx={x} cy={y} r={3} fill="#fff" stroke="#76b7b2" />;
+            })}
+            {periods.map((p, i) => {
+              const x = padding + (i / Math.max(1, periods.length - 1)) * (width - padding * 2);
+              return (
+                <text key={p.period} x={x} y={height - 8} textAnchor="middle" fontSize={10} fill="#333">
+                  {p.label}
+                </text>
+              );
+            })}
+          </svg>
         </div>
       )}
     </Card>

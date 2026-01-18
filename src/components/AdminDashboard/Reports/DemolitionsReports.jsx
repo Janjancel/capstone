@@ -48,7 +48,7 @@ export const renderDemolitionsTableRow = (r, idx) => (
     <td>{r.name}</td>
     <td>{r.contact}</td>
     <td style={{ maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis" }}>{r.location || "N/A"}</td>
-    <td>{Number(r.price).toFixed(2)}</td>
+    <td>₱{Number(r.price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
     <td>{r.status}</td>
   </tr>
 );
