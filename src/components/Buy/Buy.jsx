@@ -18,7 +18,6 @@ import {
   Menu,
   MenuItem,
   Tooltip,
-  Divider,
   Tabs,
   Tab,
 } from "@mui/material";
@@ -66,11 +65,11 @@ const Buy = () => {
     return [];
   };
 
-  const itemMatchesCategory = (item, selected) => {
+  const itemMatchesCategory = useCallback((item, selected) => {
     if (!selected) return true;
     const cats = getItemCategories(item);
     return cats.some((c) => c && c.toLowerCase() === selected.toLowerCase());
-  };
+  }, []);
 
   useEffect(() => {
     const fetchUserAddress = async () => {
@@ -141,7 +140,7 @@ const Buy = () => {
     );
 
     setFilteredItems(filtered);
-  }, [searchQuery, priceFilter, categoryFilter, items]);
+  }, [searchQuery, priceFilter, categoryFilter, items, itemMatchesCategory]);
 
   const truncateText = (text, length) =>
     text?.length > length ? text.substring(0, length) + "..." : text;
@@ -282,7 +281,6 @@ const Buy = () => {
       });
 
       const created = orderRes.data;
-      const orderId = created?._id || created?.order?._id || created?.orderId;
 
       // decrement quantities atomically using backend endpoint
       const orderedIds = itemsPayload
@@ -369,7 +367,7 @@ const Buy = () => {
       // success — return created order so CartModal knows it succeeded
       return created;
     },
-    [API_URL, user, userAddress]
+    [API_URL, user, userAddress, decrementItem]
   );
 
   return (

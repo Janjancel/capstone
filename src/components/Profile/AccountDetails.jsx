@@ -106,7 +106,6 @@ const AccountDetails = ({ username: propUsername, email: propEmail, personalInfo
 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [loadingMe, setLoadingMe] = useState(false);
 
   // Local state for displayed account data (falls back to props)
@@ -119,6 +118,7 @@ const AccountDetails = ({ username: propUsername, email: propEmail, personalInfo
 
   // API base (relative by default so it works in prod/dev without env)
   const API_URL = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
+  const buildUrl = (path) => `${API_URL}${path}`;
 
   // Keep local state in sync with incoming props when they change
   useEffect(() => setUsername(propUsername || ""), [propUsername]);
@@ -150,7 +150,7 @@ const AccountDetails = ({ username: propUsername, email: propEmail, personalInfo
     })();
 
     return () => { mounted = false; };
-  }, [propUsername, propEmail, initialPersonalInfo]);
+  }, [propUsername, propEmail, initialPersonalInfo, buildUrl]);
 
   // Prefill form fields when opening dialog
   useEffect(() => {
@@ -180,8 +180,6 @@ const AccountDetails = ({ username: propUsername, email: propEmail, personalInfo
     const token = localStorage.getItem("token");
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
-
-  const buildUrl = (path) => `${API_URL}${path}`;
 
   const apiSavePersonalInfo = async (payload) => {
     const method = personalInfo ? "put" : "post"; // backend supports both on same endpoint

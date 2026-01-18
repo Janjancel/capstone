@@ -1225,27 +1225,6 @@ const CartModal = ({
     const amount = parseFloat(((percent / 100) * total).toFixed(2));
     return { percent, amount };
   }
-
-  // Helper: decrement a single item using backend atomic endpoint
-  const decrementItem = async (id, amount = 1) => {
-    try {
-      const res = await axios.post(
-        `${API_URL}/api/items/${id}/decrement`,
-        { 
-          amount,
-          user: user?.name || user?.email || "customer"
-        },
-        { headers: { "Content-Type": "application/json", ...authHeaders() } }
-      );
-      return { ok: true, data: res.data };
-    } catch (err) {
-      // Extract meaningful info
-      const status = err?.response?.status;
-      const body = err?.response?.data || {};
-      return { ok: false, status, body, message: err?.message };
-    }
-  };
-
   // --- Order confirmation (internal default) ---
   const handleOrderConfirmation = async () => {
     if (!user) return toast.error("User not found.");

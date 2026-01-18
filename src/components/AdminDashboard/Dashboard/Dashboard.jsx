@@ -1,6 +1,6 @@
 // src/pages/Dashboard.jsx
 import React, { useState, useEffect, useMemo } from "react";
-import { Container, Row, Col, Button, Form, Card } from "react-bootstrap";
+import { Container, Row, Col, Button, Card } from "react-bootstrap";
 import { BuildingFillX, HouseFill, CartFill } from "react-bootstrap-icons";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -9,6 +9,8 @@ import "bootstrap/dist/css/bootstrap.min.css";
 
 // KPI Summary
 import KPISummary from "../Dashboard/Analytics/KPISummary";
+import ReviewsAnalytics1 from "../Dashboard/Analytics/Reviews/ReviewsAnalytics1";
+import ReviewsAnalytics3 from "../Dashboard/Analytics/Reviews/ReviewsAnalytics3";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 
@@ -64,13 +66,15 @@ function computeOrderAggregates(orders = [], grouping = "day") {
     const created = o.createdAt ? new Date(o.createdAt) : new Date();
     startOfPeriod(created, grouping);
 
+    let orderRevenue = 0;
     if (Array.isArray(o.items)) {
       o.items.forEach((it) => {
-        totalRevenue += safeNumber(it.price) * safeNumber(it.quantity);
+        orderRevenue += safeNumber(it.price) * safeNumber(it.quantity);
       });
     } else {
-      totalRevenue += safeNumber(o.total);
+      orderRevenue += safeNumber(o.total);
     }
+    totalRevenue += orderRevenue;
   }
 
   return {
@@ -94,22 +98,19 @@ const Dashboard = () => {
   const [orders, setOrders] = useState([]);
   const [sells, setSells] = useState([]);
   const [demolitions, setDemolitions] = useState([]);
+  const [reviews, setReviews] = useState([]);
 
   // Summary metrics
   const [pendingOrders, setPendingOrders] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
-
-  // Filters
-  const [filter, setFilter] = useState("day");
-  const [analyticsView, setAnalyticsView] = useState("sell");
 
   // User
   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
   const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
 
   const aggregated = useMemo(
-    () => computeOrderAggregates(orders, filter),
-    [orders, filter]
+    () => computeOrderAggregates(orders, "day"),
+    [orders]
   );
 
   // Fetch current user
@@ -141,11 +142,13 @@ const Dashboard = () => {
       axios.get(`${API_URL}/api/demolish`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }),
       axios.get(`${API_URL}/api/sell`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }),
       axios.get(`${API_URL}/api/orders`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }),
+      axios.get(`${API_URL}/api/reviews`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }).catch(() => ({ data: [] })),
     ])
-      .then(([demolishRes, sellRes, ordersRes]) => {
+      .then(([demolishRes, sellRes, ordersRes, reviewsRes]) => {
         const demolish = demolishRes.data || [];
         const sell = sellRes.data || [];
         const fetchedOrders = ordersRes.data || [];
+        const fetchedReviews = reviewsRes.data || [];
 
         setDemolitionCount(demolish.length);
         setSellCount(sell.length);
@@ -154,6 +157,7 @@ const Dashboard = () => {
         setOrders(fetchedOrders);
         setSells(sell);
         setDemolitions(demolish);
+        setReviews(fetchedReviews);
 
         let pending = 0;
         let revenue = 0;
@@ -179,6 +183,7 @@ const Dashboard = () => {
         setOrders([]);
         setSells([]);
         setDemolitions([]);
+        setReviews([]);
         setPendingOrders(0);
         setTotalRevenue(0);
       });
@@ -283,6 +288,18 @@ const Dashboard = () => {
       </Row>
 
       <KPISummary orders={orders} sells={sells} demolitions={demolitions} />
+
+      <Row className="mt-4 mb-4">
+        <Col md={12}>
+          <h5 style={{ fontWeight: "600", marginBottom: "16px" }}>Reviews Analytics</h5>
+        </Col>
+        <Col md={6}>
+          <ReviewsAnalytics1 reviews={reviews} />
+        </Col>
+        <Col md={6}>
+          <ReviewsAnalytics3 reviews={reviews} />
+        </Col>
+      </Row>
 
       <small className="text-muted">
         Signed in as: <strong>{currentUser.email}</strong>

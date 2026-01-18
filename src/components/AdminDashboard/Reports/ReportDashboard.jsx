@@ -37,7 +37,6 @@ import {
 import {
   fmtKey,
   getCachedAddress,
-  setCachedAddress,
   reverseGeocode,
 } from "../../../utils/reverseGeocode";
 

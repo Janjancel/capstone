@@ -364,7 +364,7 @@ const Report = ({
   const reportRef = useRef();
 
   // Ensure file name safe characters
-  const sanitize = (s = "") => String(s).replace(/[^a-z0-9_\-\.]/gi, "_");
+  const sanitize = (s = "") => String(s).replace(/[^a-z0-9_\-.]/gi, "_");
 
   const handleDownload = () => {
     const element = reportRef.current;

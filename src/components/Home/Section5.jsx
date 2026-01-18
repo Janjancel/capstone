@@ -6,21 +6,22 @@ export default function Section5() {
   const contentRef = useRef(null);
 
   useEffect(() => {
-    if (!contentRef.current) return;
+    const currentRef = contentRef.current;
+    if (!currentRef) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          contentRef.current.classList.add("fade-in");
-          observer.unobserve(contentRef.current);
+          currentRef.classList.add("fade-in");
+          observer.unobserve(currentRef);
         }
       },
       { threshold: 0.3 }
     );
 
-    observer.observe(contentRef.current);
+    observer.observe(currentRef);
     return () => {
-      if (contentRef.current) observer.unobserve(contentRef.current);
+      observer.unobserve(currentRef);
     };
   }, []);
 

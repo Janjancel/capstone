@@ -518,30 +518,6 @@ const EditAddressModal = ({
     return true;
   };
 
-  // Apply numeric lat/lng inputs to parent coordinates state
-  const handleApplyCoordinates = () => {
-    if (!validateLatLng(latInput, lngInput)) {
-      toast.error("Please enter valid latitude (-90 to 90) and longitude (-180 to 180).");
-      return;
-    }
-    const latNum = Number(latInput);
-    const lngNum = Number(lngInput);
-    setCoordinates({ lat: latNum, lng: lngNum });
-    setIsCoordinatesFound(true);
-    // Mark coords as not saved — user must press Save Address to persist
-    setCoordsSaved(false);
-    toast.success("Coordinates applied (will be saved when you press Save Address). ✅");
-  };
-
-  const handleClearCoordinates = () => {
-    setLatInput("");
-    setLngInput("");
-    setCoordinates({ lat: null, lng: null });
-    setIsCoordinatesFound(false);
-    setCoordsSaved(false);
-    toast("Coordinates cleared");
-  };
-
   const handleSave = () => {
     // Call parent's save; parent is responsible for persisting coordinates
     handleSaveAddress?.();
