@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import Swal from "sweetalert2"; // ✅ Only for confirmations
 import toast, { Toaster } from "react-hot-toast"; // ✅ General notifications
 import axios from "axios";
@@ -61,21 +62,24 @@ const LocationMarker = ({ formData, setFormData }) => {
 };
 
 const Sell = () => {
+  const location = useLocation();
+  const sellRequestData = location.state?.sellRequest;
+
   const [formData, setFormData] = useState({
-    location: { lat: null, lng: null },
-    name: "",
-    contact: "",
-    price: "",
-    description: "",
+    location: sellRequestData?.location || { lat: null, lng: null },
+    name: sellRequestData?.name || "",
+    contact: sellRequestData?.contact || "",
+    price: sellRequestData?.price || "",
+    description: sellRequestData?.description || "",
     frontImage: null,
     sideImage: null,
     backImage: null,
   });
 
   const [previewUrls, setPreviewUrls] = useState({
-    frontImage: null,
-    sideImage: null,
-    backImage: null,
+    frontImage: sellRequestData?.images?.front || null,
+    sideImage: sellRequestData?.images?.side || null,
+    backImage: sellRequestData?.images?.back || null,
   });
 
   const [searchAddress, setSearchAddress] = useState("");

@@ -1137,6 +1137,72 @@ const SellDashboard = () => {
     }
   };
 
+  const handleProposePrice = async (req) => {
+    const { _id: id } = req || {};
+    if (!id) return;
+
+    // Allow proposing only after ocular or after a client decline
+    const canPropose = req.status === "ocular_scheduled" || req.status === "price_declined";
+    if (!canPropose) {
+      Swal.fire(
+        "Not allowed yet",
+        "You can propose a price after an ocular visit or after a client decline.",
+        "info"
+      );
+      return;
+    }
+
+    const { value: raw } = await Swal.fire({
+      title: "Propose Price (₱)",
+      input: "number",
+      inputAttributes: { min: "1", step: "1" },
+      inputValue: req.proposedPrice || req.price || "",
+      showCancelButton: true,
+      confirmButtonText: "Send to Client",
+      preConfirm: (v) => {
+        const n = Number(v);
+        if (!n || n <= 0) {
+          Swal.showValidationMessage("Please enter a valid price greater than 0.");
+          return false;
+        }
+        return n;
+      },
+    });
+
+    if (!raw) return;
+    const proposed = Number(raw);
+
+    try {
+      const res = await axios.patch(`${API_URL}/api/sell/${id}`, {
+        proposedPrice: proposed,
+        status: "awaiting_price_approval",
+      });
+
+      setRequests((prev) =>
+        prev.map((r) =>
+          r._id === id ? { ...r, ...res.data, proposedPrice: proposed, status: "awaiting_price_approval" } : r
+        )
+      );
+
+      // Notify client to review price
+      const targetUserId = res?.data?.userId || req.userId;
+      await axios.post(`${API_URL}/api/notifications`, {
+        userId: targetUserId,
+        orderId: res?.data?._id || id,
+        for: "sell",
+        role: "client",
+        status: "awaiting_price_approval",
+        message: `Proposed sell price: ₱${proposed.toLocaleString()}. Please accept or decline.`,
+      });
+
+      toast.success(`Proposed price sent: ₱${proposed.toLocaleString()}`);
+    } catch (error) {
+      console.error("Error proposing price:", error);
+      const msg = error?.response?.data?.message || "Failed to propose price";
+      toast.error(msg);
+    }
+  };
+
   const handleScheduleOcular = async (id) => {
     const { value: date } = await Swal.fire({
       title: "Schedule Ocular Visit",
@@ -1545,6 +1611,19 @@ const SellDashboard = () => {
                                 }}
                               >
                                 Schedule Ocular Visit
+                              </MenuItem>
+                              <MenuItem
+                                onClick={() => {
+                                  handleProposePrice(request);
+                                  handleMenuClose();
+                                }}
+                                sx={{
+                                  color: "primary.main",
+                                  fontWeight: 500,
+                                  "&:hover": { bgcolor: "primary.light", color: "white" },
+                                }}
+                              >
+                                Propose Price
                               </MenuItem>
                               <MenuItem
                                 onClick={() => {

@@ -530,10 +530,22 @@ export default function MyRequest() {
                           size="small"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate("/sell");
+                            navigate("/sell", {
+                              state: {
+                                sellRequest: {
+                                  _id: r._id,
+                                  name: r.name,
+                                  description: r.description,
+                                  price: r.price,
+                                  location: r.location,
+                                  images: r.images,
+                                  contact: r.contact,
+                                },
+                              },
+                            });
                           }}
                         >
-                          New Sell Request
+                          Resubmit
                         </Button>
                       </Stack>
                     </CardContent>
@@ -631,8 +643,22 @@ export default function MyRequest() {
                               e.stopPropagation();
                               handleRespondToPrice(r, true);
                             }}
+                            sx={{ flex: 1 }}
                           >
                             {actingId === idKey ? "Working..." : "Accept"}
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                            disabled={actingId === idKey}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCounterOffer(r);
+                            }}
+                            sx={{ flex: 1 }}
+                          >
+                            {actingId === idKey ? "Sending..." : "Counter Offer"}
                           </Button>
                           <Button
                             size="small"
@@ -643,23 +669,11 @@ export default function MyRequest() {
                               e.stopPropagation();
                               handleRespondToPrice(r, false);
                             }}
+                            sx={{ flex: 1 }}
                           >
                             Decline
                           </Button>
                         </Stack>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="info"
-                          disabled={actingId === idKey}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCounterOffer(r);
-                          }}
-                          sx={{ justifyContent: "flex-start" }}
-                        >
-                          {actingId === idKey ? "Sending..." : "Counter Offer"}
-                        </Button>
                       </Stack>
                     )}
 
@@ -688,10 +702,22 @@ export default function MyRequest() {
                         size="small"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate("/demolish");
+                          navigate("/demolish", {
+                            state: {
+                              demolishRequest: {
+                                _id: r._id,
+                                name: r.name,
+                                description: r.description,
+                                price: r.price,
+                                location: r.location,
+                                images: r.images,
+                                contact: r.contact,
+                              },
+                            },
+                          });
                         }}
                       >
-                        New Demolition Request
+                        Resubmit
                       </Button>
                     </Stack>
                   </CardContent>
