@@ -22,28 +22,6 @@ const CURRENCY = (n) =>
 
 // -----------------------------------------------------------------------------
 // Helpers
-function startOfPeriod(date, grouping = "day") {
-  const d = new Date(date);
-  if (grouping === "day") {
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
-  }
-  if (grouping === "week") {
-    const day = d.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    const monday = new Date(d);
-    monday.setDate(d.getDate() + diff);
-    monday.setHours(0, 0, 0, 0);
-    return monday.toISOString();
-  }
-  if (grouping === "month") {
-    const m = new Date(d.getFullYear(), d.getMonth(), 1);
-    m.setHours(0, 0, 0, 0);
-    return m.toISOString();
-  }
-  return d.toISOString();
-}
-
 function safeNumber(v) {
   return Number.isFinite(Number(v)) ? Number(v) : 0;
 }
