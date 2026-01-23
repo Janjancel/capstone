@@ -1,3 +1,4 @@
+
 // // src/pages/Dashboard.jsx
 // import React, { useState, useEffect, useRef } from "react";
 // import { Container, Row, Col, Button, Card, ProgressBar } from "react-bootstrap";
@@ -7,7 +8,7 @@
 // import html2pdf from "html2pdf.js";
 // import "bootstrap/dist/css/bootstrap.min.css";
 
-// // Leaflet (Heatmap)
+// // NEW: Leaflet for heat map (no extra plugin required)
 // import L from "leaflet";
 // import "leaflet/dist/leaflet.css";
 
@@ -117,7 +118,9 @@
 //   const top = entries && entries.length ? entries[0] : null;
 //   if (top && totalWithLocation > 0) {
 //     const pct = (safeNumber(top[1]) / totalWithLocation) * 100;
-//     list.push(`Top location: ${top[0]} (${top[1]} record${top[1] > 1 ? "s" : ""}, ${pct.toFixed(1)}%).`);
+//     list.push(
+//       `Top location: ${top[0]} (${top[1]} record${top[1] > 1 ? "s" : ""}, ${pct.toFixed(1)}%).`
+//     );
 //   }
 
 //   if (entries && entries.length >= 3 && totalWithLocation > 0) {
@@ -139,90 +142,30 @@
 // }
 
 // // -----------------------------------------------------------------------------
-// // Heatmap Helpers (lat/lng extraction + points)
-// function pickLatLng(obj) {
-//   if (!obj || typeof obj !== "object") return null;
-
-//   // direct lat/lng
-//   const lat = obj.lat ?? obj.latitude ?? (obj.coords && obj.coords.lat) ?? (obj.coordinates && obj.coordinates.lat);
-//   const lng = obj.lng ?? obj.lon ?? obj.longitude ?? (obj.coords && obj.coords.lng) ?? (obj.coordinates && obj.coordinates.lng);
-
-//   const nLat = Number(lat);
-//   const nLng = Number(lng);
-//   if (Number.isFinite(nLat) && Number.isFinite(nLng)) return { lat: nLat, lng: nLng };
-
-//   // arrays [lng, lat] (geojson common)
-//   if (Array.isArray(obj.coordinates) && obj.coordinates.length >= 2) {
-//     const a0 = Number(obj.coordinates[0]);
-//     const a1 = Number(obj.coordinates[1]);
-//     if (Number.isFinite(a0) && Number.isFinite(a1)) return { lat: a1, lng: a0 };
-//   }
-
-//   return null;
-// }
-
-// function extractLatLng(record) {
-//   if (!record || typeof record !== "object") return null;
-
-//   // Common shapes from your pages:
-//   // - sell/demolish: record.location {lat,lng}
-//   // - orders: sometimes has deliveryLocation / shippingLocation / address objects
-//   // - sales: sometimes nested under record.order
-//   const candidates = [
-//     record.location,
-//     record.deliveryLocation,
-//     record.shippingLocation,
-//     record.pickupLocation,
-//     record.siteLocation,
-//     record.mapLocation,
-//     record.address,
-//     record.deliveryAddress,
-//     record.shippingAddress,
-//     record.pickupAddress,
-//     record.siteAddress,
-//     record.order && record.order.location,
-//     record.order && record.order.deliveryLocation,
-//     record.order && record.order.shippingLocation,
-//     record.order && record.order.address,
-//     record.order && record.order.deliveryAddress,
-//     record.order && record.order.shippingAddress,
-//     record,
-//   ];
-
-//   for (const c of candidates) {
-//     const ll = pickLatLng(c);
-//     if (ll) return ll;
-//   }
-//   return null;
-// }
-
-// function buildHeatPoints(records = []) {
-//   const points = [];
-//   let missing = 0;
-
-//   (records || []).forEach((r) => {
-//     const ll = extractLatLng(r);
-//     if (!ll) {
-//       missing += 1;
-//       return;
-//     }
-//     // Leaflet heat expects [lat, lng, intensity]
-//     points.push([ll.lat, ll.lng, 1]);
-//   });
-
-//   return { points, missing, total: (records || []).length };
-// }
-
-// // -----------------------------------------------------------------------------
 // // Top 10 Ordered Items
 // function extractItemLabel(it) {
 //   if (!it || typeof it !== "object") return "Unknown Item";
-//   return it.name || it.title || it.itemName || (it.item && (it.item.name || it.item.title)) || (it.product && (it.product.name || it.product.title)) || "Unknown Item";
+//   return (
+//     it.name ||
+//     it.title ||
+//     it.itemName ||
+//     (it.item && (it.item.name || it.item.title)) ||
+//     (it.product && (it.product.name || it.product.title)) ||
+//     "Unknown Item"
+//   );
 // }
 
 // function extractItemKey(it) {
 //   if (!it || typeof it !== "object") return extractItemLabel(it);
-//   return it.itemId || it.productId || it._id || it.id || (it.item && (it.item._id || it.item.id)) || (it.product && (it.product._id || it.product.id)) || extractItemLabel(it);
+//   return (
+//     it.itemId ||
+//     it.productId ||
+//     it._id ||
+//     it.id ||
+//     (it.item && (it.item._id || it.item.id)) ||
+//     (it.product && (it.product._id || it.product.id)) ||
+//     extractItemLabel(it)
+//   );
 // }
 
 // function buildTopOrderedItems(orders = []) {
@@ -267,153 +210,87 @@
 // }
 
 // // -----------------------------------------------------------------------------
-// // Heatmap Component (Leaflet + optional leaflet.heat)
-// const HeatmapCard = ({ title, points, missing, total }) => {
-//   const mapRef = useRef(null);
-//   const mapInstanceRef = useRef(null);
-//   const layerRef = useRef(null);
-//   const fallbackLayerRef = useRef(null);
+// // Heatmap helpers (Leaflet circles + 3-color intensity)
+// function extractLatLng(record) {
+//   if (!record || typeof record !== "object") return null;
 
-//   // init + update
-//   useEffect(() => {
-//     let disposed = false;
+//   // Common: { location: { lat, lng } }
+//   const loc = record.location;
+//   if (loc && typeof loc === "object" && loc.lat != null && loc.lng != null) {
+//     const lat = Number(loc.lat);
+//     const lng = Number(loc.lng);
+//     if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+//   }
 
-//     const initOrUpdate = async () => {
-//       if (!mapRef.current) return;
+//   // Sometimes nested under address/map objects
+//   const candidates = [
+//     record.map,
+//     record.geo,
+//     record.coords,
+//     record.coordinate,
+//     record.coordinates,
+//     record.deliveryAddress,
+//     record.shippingAddress,
+//     record.address,
+//     record.siteAddress,
+//     record.pickupAddress,
+//   ];
 
-//       // Init map once
-//       if (!mapInstanceRef.current) {
-//         const map = L.map(mapRef.current, {
-//           center: [12.8797, 121.774], // PH default
-//           zoom: 6,
-//           zoomControl: true,
-//         });
+//   for (const c of candidates) {
+//     if (!c || typeof c !== "object") continue;
 
-//         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-//           attribution: "&copy; OpenStreetMap contributors",
-//         }).addTo(map);
+//     // { lat, lng }
+//     if (c.lat != null && c.lng != null) {
+//       const lat = Number(c.lat);
+//       const lng = Number(c.lng);
+//       if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+//     }
 
-//         mapInstanceRef.current = map;
-//       }
+//     // GeoJSON-ish: { coordinates: [lng, lat] }
+//     if (Array.isArray(c.coordinates) && c.coordinates.length >= 2) {
+//       const lng = Number(c.coordinates[0]);
+//       const lat = Number(c.coordinates[1]);
+//       if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+//     }
+//   }
 
-//       const map = mapInstanceRef.current;
+//   return null;
+// }
 
-//       // Remove old layers
-//       if (layerRef.current) {
-//         try {
-//           map.removeLayer(layerRef.current);
-//         } catch {}
-//         layerRef.current = null;
-//       }
-//       if (fallbackLayerRef.current) {
-//         try {
-//           map.removeLayer(fallbackLayerRef.current);
-//         } catch {}
-//         fallbackLayerRef.current = null;
-//       }
+// function buildHeatBins(records = [], precision = 3) {
+//   const bins = new Map(); // key -> { lat, lng, count }
+//   let totalPoints = 0;
 
-//       const safePoints = Array.isArray(points) ? points : [];
-//       const hasPoints = safePoints.length > 0;
+//   (records || []).forEach((r) => {
+//     const ll = extractLatLng(r);
+//     if (!ll) return;
 
-//       // Fit bounds if we have points
-//       if (hasPoints) {
-//         const latLngs = safePoints.map((p) => L.latLng(p[0], p[1]));
-//         const bounds = L.latLngBounds(latLngs);
-//         if (bounds.isValid()) map.fitBounds(bounds.pad(0.2));
-//       } else {
-//         map.setView([12.8797, 121.774], 6);
-//       }
+//     const lat = Number(ll.lat);
+//     const lng = Number(ll.lng);
+//     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-//       // Try leaflet.heat if installed; otherwise fallback to circle markers
-//       let heatAvailable = false;
-//       try {
-//         // If you installed leaflet.heat, this will work:
-//         //   npm i leaflet.heat
-//         await import("leaflet.heat");
-//         heatAvailable = true;
-//       } catch {
-//         heatAvailable = false;
-//       }
+//     const kLat = Number(lat.toFixed(precision));
+//     const kLng = Number(lng.toFixed(precision));
+//     const key = `${kLat},${kLng}`;
 
-//       if (disposed) return;
+//     totalPoints += 1;
 
-//       if (heatAvailable && hasPoints && typeof L.heatLayer === "function") {
-//         const heat = L.heatLayer(safePoints, {
-//           radius: 25,
-//           blur: 18,
-//           maxZoom: 17,
-//         });
-//         heat.addTo(map);
-//         layerRef.current = heat;
-//       } else if (hasPoints) {
-//         // Fallback: circle markers (still gives a "heat-ish" density feel)
-//         const group = L.layerGroup(
-//           safePoints.map((p) =>
-//             L.circleMarker([p[0], p[1]], {
-//               radius: 6,
-//               weight: 1,
-//               opacity: 0.7,
-//               fillOpacity: 0.35,
-//             })
-//           )
-//         );
-//         group.addTo(map);
-//         fallbackLayerRef.current = group;
-//       }
-//     };
+//     if (!bins.has(key)) bins.set(key, { lat: kLat, lng: kLng, count: 0 });
+//     bins.get(key).count += 1;
+//   });
 
-//     initOrUpdate();
+//   const list = Array.from(bins.values()).sort((a, b) => b.count - a.count);
+//   const maxCount = list.reduce((m, x) => Math.max(m, safeNumber(x.count)), 0);
 
-//     return () => {
-//       disposed = true;
-//     };
-//   }, [points]);
+//   return { list, maxCount, totalPoints, uniqueBins: list.length };
+// }
 
-//   // cleanup on unmount
-//   useEffect(() => {
-//     return () => {
-//       const map = mapInstanceRef.current;
-//       if (map) {
-//         try {
-//           map.remove();
-//         } catch {}
-//         mapInstanceRef.current = null;
-//       }
-//     };
-//   }, []);
-
-//   const usable = safeNumber(total) - safeNumber(missing);
-
-//   return (
-//     <Card className="shadow-sm bg-light h-100">
-//       <Card.Body>
-//         <h6 className="mb-2">{title}</h6>
-//         <div className="d-flex flex-wrap gap-2 mb-2" style={{ fontSize: 12 }}>
-//           <span className="text-muted">
-//             Plotted: <strong>{usable}</strong> / {safeNumber(total)}
-//           </span>
-//           <span className="text-muted">
-//             Missing coords: <strong>{safeNumber(missing)}</strong>
-//           </span>
-//           <span className="text-muted">
-//             Tip: for true heat effect, install <strong>leaflet.heat</strong>.
-//           </span>
-//         </div>
-
-//         <div
-//           ref={mapRef}
-//           style={{
-//             width: "100%",
-//             height: 320,
-//             borderRadius: 10,
-//             overflow: "hidden",
-//             border: "1px solid rgba(0,0,0,0.08)",
-//           }}
-//         />
-//       </Card.Body>
-//     </Card>
-//   );
-// };
+// function intensityColor(ratio01) {
+//   // 3-color ramp: yellow (low) -> orange (mid) -> red (high)
+//   if (ratio01 >= 0.67) return "#ff0000"; // red
+//   if (ratio01 >= 0.34) return "#ff8c00"; // orange
+//   return "#ffd700"; // yellow
+// }
 
 // // -----------------------------------------------------------------------------
 // // Dashboard Component
@@ -448,11 +325,8 @@
 //     maxQty: 0,
 //   });
 
-//   // NEW: Heatmap data (under Top 10 items)
-//   const [heatTab, setHeatTab] = useState("all"); // all | orders | sells | demolitions
-//   const [heatOrders, setHeatOrders] = useState({ points: [], missing: 0, total: 0 });
-//   const [heatSells, setHeatSells] = useState({ points: [], missing: 0, total: 0 });
-//   const [heatDemolitions, setHeatDemolitions] = useState({ points: [], missing: 0, total: 0 });
+//   // Heatmap tab (below Top 10)
+//   const [heatTab, setHeatTab] = useState("sell"); // "orders" | "sell" | "demolish"
 
 //   // User
 //   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
@@ -546,11 +420,6 @@
 
 //         // Top ordered items
 //         setTopOrderedItems(buildTopOrderedItems(fetchedOrders));
-
-//         // Heatmaps (uses actual lat/lng; if your Orders don't store coords, they'll show "missing coords")
-//         setHeatOrders(buildHeatPoints(fetchedOrders));
-//         setHeatSells(buildHeatPoints(sell));
-//         setHeatDemolitions(buildHeatPoints(demolish));
 //       })
 //       .catch(() => {
 //         setDemolitionCount(0);
@@ -573,10 +442,6 @@
 //           totalQtyAll: 0,
 //           maxQty: 0,
 //         });
-
-//         setHeatOrders({ points: [], missing: 0, total: 0 });
-//         setHeatSells({ points: [], missing: 0, total: 0 });
-//         setHeatDemolitions({ points: [], missing: 0, total: 0 });
 //       });
 //   }, []);
 
@@ -586,7 +451,10 @@
 //     const rows = orders
 //       .map((o) => {
 //         const totalItems = (o.items || []).reduce((s, i) => s + safeNumber(i.quantity), 0);
-//         const totalAmount = (o.items || []).reduce((s, i) => s + safeNumber(i.price) * safeNumber(i.quantity), 0);
+//         const totalAmount = (o.items || []).reduce(
+//           (s, i) => s + safeNumber(i.price) * safeNumber(i.quantity),
+//           0
+//         );
 //         return `${o._id || ""},${o.userEmail || ""},${o.status || ""},${totalItems},${totalAmount},${o.createdAt || ""}`;
 //       })
 //       .join("\n");
@@ -693,8 +561,6 @@
 //               {list.map((it) => {
 //                 const qty = safeNumber(it.qty);
 //                 const pctAll = totalQtyAll > 0 ? (qty / totalQtyAll) * 100 : 0;
-
-//                 // Use max-based bar for nicer visual comparison
 //                 const pctBar = maxQty > 0 ? (qty / maxQty) * 100 : 0;
 
 //                 return (
@@ -751,25 +617,190 @@
 //     );
 //   };
 
-//   // Heatmap selection
-//   const combinedHeat = (() => {
-//     const allPoints = []
-//       .concat(heatOrders.points || [])
-//       .concat(heatSells.points || [])
-//       .concat(heatDemolitions.points || []);
+//   // ---------------------------------------------------------------------------
+//   // Heat Map Card (Region IV-A only, 3 colors: Yellow -> Orange -> Red)
+//   const HeatMapCard = ({ title, records }) => {
+//     const mapElRef = useRef(null);
+//     const mapRef = useRef(null);
+//     const layerRef = useRef(null);
+//     const legendRef = useRef(null);
 
-//     const total = safeNumber(heatOrders.total) + safeNumber(heatSells.total) + safeNumber(heatDemolitions.total);
-//     const missing = safeNumber(heatOrders.missing) + safeNumber(heatSells.missing) + safeNumber(heatDemolitions.missing);
+//     // Region IV-A (CALABARZON) bounding box (approx) – restrict map within this region
+//     // You can tighten these later if you want stricter bounds.
+//     const REGION_IVA_BOUNDS = L.latLngBounds(
+//       L.latLng(12.70, 120.40), // SW
+//       L.latLng(15.90, 122.80)  // NE
+//     );
 
-//     return { points: allPoints, total, missing };
-//   })();
+//     const { list: bins, maxCount, totalPoints, uniqueBins } = buildHeatBins(records, 3);
 
-//   const currentHeat = (() => {
-//     if (heatTab === "orders") return { title: "Orders Heatmap", ...heatOrders };
-//     if (heatTab === "sells") return { title: "Sell Requests Heatmap", ...heatSells };
-//     if (heatTab === "demolitions") return { title: "Demolition Requests Heatmap", ...heatDemolitions };
-//     return { title: "All Requests Heatmap", ...combinedHeat };
-//   })();
+//     useEffect(() => {
+//       if (!mapElRef.current) return;
+
+//       // init once
+//       if (!mapRef.current) {
+//         const m = L.map(mapElRef.current, {
+//           center: [14.20, 121.40],
+//           zoom: 8,
+//           minZoom: 7,
+//           maxZoom: 16,
+//           zoomControl: true,
+//           scrollWheelZoom: true,
+//           maxBounds: REGION_IVA_BOUNDS,
+//           maxBoundsViscosity: 1.0,
+//         });
+
+//         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+//           attribution: "&copy; OpenStreetMap contributors",
+//         }).addTo(m);
+
+//         // layer group for circles
+//         const g = L.layerGroup().addTo(m);
+
+//         // legend
+//         const Legend = L.Control.extend({
+//           options: { position: "bottomright" },
+//           onAdd: function () {
+//             const div = L.DomUtil.create("div", "heatmap-legend");
+//             div.style.background = "rgba(255,255,255,0.92)";
+//             div.style.padding = "10px 10px";
+//             div.style.borderRadius = "10px";
+//             div.style.boxShadow = "0 6px 16px rgba(0,0,0,0.15)";
+//             div.style.fontSize = "12px";
+//             div.style.lineHeight = "1.2";
+//             div.innerHTML = `
+//               <div style="font-weight:700; margin-bottom:6px;">Intensity</div>
+//               <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+//                 <span style="display:inline-block; width:14px; height:14px; background:#ffd700; border:1px solid rgba(0,0,0,0.2); border-radius:3px;"></span>
+//                 <span>Low</span>
+//               </div>
+//               <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+//                 <span style="display:inline-block; width:14px; height:14px; background:#ff8c00; border:1px solid rgba(0,0,0,0.2); border-radius:3px;"></span>
+//                 <span>Medium</span>
+//               </div>
+//               <div style="display:flex; align-items:center; gap:8px;">
+//                 <span style="display:inline-block; width:14px; height:14px; background:#ff0000; border:1px solid rgba(0,0,0,0.2); border-radius:3px;"></span>
+//                 <span>High</span>
+//               </div>
+//             `;
+//             legendRef.current = div;
+//             return div;
+//           },
+//         });
+
+//         const legend = new Legend();
+//         legend.addTo(m);
+
+//         mapRef.current = m;
+//         layerRef.current = g;
+
+//         // Ensure proper sizing after mount
+//         setTimeout(() => {
+//           try {
+//             m.invalidateSize();
+//             m.fitBounds(REGION_IVA_BOUNDS);
+//           } catch {}
+//         }, 0);
+//       }
+
+//       return () => {
+//         // Keep map instance (don’t destroy) to avoid re-init flicker
+//       };
+//       // eslint-disable-next-line react-hooks/exhaustive-deps
+//     }, []);
+
+//     // update points whenever records change
+//     useEffect(() => {
+//       const m = mapRef.current;
+//       const g = layerRef.current;
+//       if (!m || !g) return;
+
+//       g.clearLayers();
+
+//       // Draw "heat" circles (aggregated bins)
+//       if (bins.length > 0 && maxCount > 0) {
+//         bins.forEach((p) => {
+//           const ratio = safeNumber(p.count) / maxCount; // 0..1
+//           const color = intensityColor(ratio);
+
+//           // radius in meters: bigger for higher intensity
+//           const radius = 700 + ratio * 1800; // 700m .. 2500m
+
+//           const circle = L.circle([p.lat, p.lng], {
+//             radius,
+//             color,
+//             fillColor: color,
+//             weight: 0,
+//             fillOpacity: 0.22 + ratio * 0.25, // 0.22 .. 0.47
+//           });
+
+//           circle.bindTooltip(
+//             `<div style="font-size:12px;"><strong>${p.count}</strong> record${p.count > 1 ? "s" : ""}</div>`,
+//             { sticky: true }
+//           );
+
+//           circle.addTo(g);
+//         });
+
+//         // Keep map constrained to Region IV-A; also try to zoom to points but clamp inside region
+//         try {
+//           const ptsBounds = L.latLngBounds(bins.map((p) => [p.lat, p.lng]));
+//           const clamped = ptsBounds.isValid() ? ptsBounds.pad(0.15) : REGION_IVA_BOUNDS;
+//           m.fitBounds(REGION_IVA_BOUNDS); // always keep region framing
+//           // If you want to zoom closer when points exist, uncomment:
+//           // m.fitBounds(clamped, { maxZoom: 12 });
+//         } catch {
+//           // ignore
+//         }
+//       } else {
+//         // No points: just show the region bounds
+//         try {
+//           m.fitBounds(REGION_IVA_BOUNDS);
+//         } catch {}
+//       }
+//     }, [records, bins, maxCount]);
+
+//     return (
+//       <Card className="shadow-sm bg-light h-100">
+//         <Card.Body>
+//           <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
+//             <h6 className="mb-0">{title}</h6>
+//             <div className="text-muted" style={{ fontSize: 12 }}>
+//               Points: <strong>{safeNumber(totalPoints)}</strong> &nbsp;|&nbsp; Clusters:{" "}
+//               <strong>{safeNumber(uniqueBins)}</strong>
+//             </div>
+//           </div>
+
+//           <div className="text-muted mt-1" style={{ fontSize: 12 }}>
+//             Map is restricted to Region IV-A (CALABARZON). Colors: Yellow (low) → Orange → Red (high).
+//           </div>
+
+//           <div
+//             ref={mapElRef}
+//             style={{
+//               marginTop: 10,
+//               height: 360,
+//               width: "100%",
+//               borderRadius: 12,
+//               overflow: "hidden",
+//               border: "1px solid rgba(0,0,0,0.08)",
+//             }}
+//           />
+//         </Card.Body>
+//       </Card>
+//     );
+//   };
+
+//   // pick dataset for heat map
+//   const heatRecords =
+//     heatTab === "orders" ? orders : heatTab === "demolish" ? demolitions : sells;
+
+//   const heatTitle =
+//     heatTab === "orders"
+//       ? "Heat Map: Orders (Region IV-A)"
+//       : heatTab === "demolish"
+//       ? "Heat Map: Demolition Requests (Region IV-A)"
+//       : "Heat Map: Sell Requests (Region IV-A)";
 
 //   return (
 //     <Container className="mt-4 p-3 bg-white border-bottom shadow-sm" id="dashboard-report-content">
@@ -886,52 +917,48 @@
 //         </Col>
 //       </Row>
 
-//       {/* NEW: Heatmaps (placed under Top 10 items) */}
+//       {/* HEAT MAPS - placed under Top 10 items */}
 //       <Row className="mb-4">
-//         <Col md={12} className="mb-2">
-//           <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-//             <h5 style={{ fontWeight: "600", marginBottom: 0 }}>Heatmaps</h5>
-
-//             <div className="d-flex gap-2 flex-wrap">
-//               <Button
-//                 size="sm"
-//                 variant={heatTab === "all" ? "dark" : "outline-dark"}
-//                 onClick={() => setHeatTab("all")}
-//               >
-//                 All
-//               </Button>
-//               <Button
-//                 size="sm"
-//                 variant={heatTab === "orders" ? "primary" : "outline-primary"}
-//                 onClick={() => setHeatTab("orders")}
-//               >
-//                 Orders
-//               </Button>
-//               <Button
-//                 size="sm"
-//                 variant={heatTab === "sells" ? "success" : "outline-success"}
-//                 onClick={() => setHeatTab("sells")}
-//               >
-//                 Sell
-//               </Button>
-//               <Button
-//                 size="sm"
-//                 variant={heatTab === "demolitions" ? "danger" : "outline-danger"}
-//                 onClick={() => setHeatTab("demolitions")}
-//               >
-//                 Demolish
-//               </Button>
-//             </div>
-//           </div>
-//         </Col>
-
 //         <Col md={12}>
-//           <HeatmapCard
-//             title={currentHeat.title}
-//             points={currentHeat.points}
-//             missing={currentHeat.missing}
-//             total={currentHeat.total}
-//           />
+//           <Card className="shadow-sm bg-light">
+//             <Card.Body>
+//               <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+//                 <h5 style={{ fontWeight: "600", marginBottom: 0 }}>Heat Maps</h5>
+//                 <div className="d-flex gap-2 flex-wrap">
+//                   <Button
+//                     size="sm"
+//                     variant={heatTab === "orders" ? "danger" : "outline-danger"}
+//                     onClick={() => setHeatTab("orders")}
+//                   >
+//                     Orders
+//                   </Button>
+//                   <Button
+//                     size="sm"
+//                     variant={heatTab === "sell" ? "warning" : "outline-warning"}
+//                     onClick={() => setHeatTab("sell")}
+//                   >
+//                     Sell
+//                   </Button>
+//                   <Button
+//                     size="sm"
+//                     variant={heatTab === "demolish" ? "dark" : "outline-dark"}
+//                     onClick={() => setHeatTab("demolish")}
+//                   >
+//                     Demolish
+//                   </Button>
+//                 </div>
+//               </div>
+
+//               <div className="mt-3">
+//                 <HeatMapCard title={heatTitle} records={heatRecords} />
+//               </div>
+
+//               <div className="text-muted mt-2" style={{ fontSize: 12 }}>
+//                 Tip: If some datasets don’t show points, it usually means those records don’t have <code>lat/lng</code>{" "}
+//                 stored (only text addresses).
+//               </div>
+//             </Card.Body>
+//           </Card>
 //         </Col>
 //       </Row>
 
@@ -944,8 +971,9 @@
 
 // export default Dashboard;
 
+
 // src/pages/Dashboard.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Container, Row, Col, Button, Card, ProgressBar } from "react-bootstrap";
 import { BuildingFillX, HouseFill, CartFill } from "react-bootstrap-icons";
 import { useNavigate } from "react-router-dom";
@@ -953,7 +981,7 @@ import axios from "axios";
 import html2pdf from "html2pdf.js";
 import "bootstrap/dist/css/bootstrap.min.css";
 
-// NEW: Leaflet for heat map (no extra plugin required)
+// Leaflet for heat map (no extra plugin required)
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -1080,7 +1108,8 @@ function buildInsights(freqObj) {
 
   if (typeof missing === "number" && totalRecords > 0) {
     const missPct = (missing / totalRecords) * 100;
-    if (missing > 0) list.push(`Missing location on ${missing} of ${totalRecords} record(s) (${missPct.toFixed(1)}%).`);
+    if (missing > 0)
+      list.push(`Missing location on ${missing} of ${totalRecords} record(s) (${missPct.toFixed(1)}%).`);
   }
 
   return list;
@@ -1251,7 +1280,6 @@ const Dashboard = () => {
   const [orders, setOrders] = useState([]);
   const [sells, setSells] = useState([]);
   const [demolitions, setDemolitions] = useState([]);
-  const [sales, setSales] = useState([]);
   const [reviews, setReviews] = useState([]);
 
   // Summary metrics
@@ -1312,23 +1340,16 @@ const Dashboard = () => {
       axios.get(`${API_URL}/api/orders`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       }),
-      // sales might not exist in some setups; keep dashboard resilient
-      axios
-        .get(`${API_URL}/api/sales`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
-        .catch(() => ({ data: [] })),
       axios
         .get(`${API_URL}/api/reviews`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
         .catch(() => ({ data: [] })),
     ])
-      .then(([demolishRes, sellRes, ordersRes, salesRes, reviewsRes]) => {
+      .then(([demolishRes, sellRes, ordersRes, reviewsRes]) => {
         const demolish = demolishRes.data || [];
         const sell = sellRes.data || [];
         const fetchedOrders = ordersRes.data || [];
-        const fetchedSales = salesRes.data || [];
         const fetchedReviews = reviewsRes.data || [];
 
         setDemolitionCount(demolish.length);
@@ -1338,14 +1359,13 @@ const Dashboard = () => {
         setOrders(fetchedOrders);
         setSells(sell);
         setDemolitions(demolish);
-        setSales(fetchedSales);
         setReviews(fetchedReviews);
 
         let pending = 0;
         let revenue = 0;
 
         fetchedOrders.forEach((o) => {
-          if (String(o.status).toLowerCase().includes("pending")) pending++;
+          if (String(o.status).toLowerCase().includes("pending")) pending += 1;
           if (Array.isArray(o.items)) {
             o.items.forEach((it) => {
               revenue += safeNumber(it.price) * safeNumber(it.quantity);
@@ -1373,7 +1393,6 @@ const Dashboard = () => {
         setOrders([]);
         setSells([]);
         setDemolitions([]);
-        setSales([]);
         setReviews([]);
         setPendingOrders(0);
         setTotalRevenue(0);
@@ -1570,11 +1589,14 @@ const Dashboard = () => {
     const layerRef = useRef(null);
     const legendRef = useRef(null);
 
-    // Region IV-A (CALABARZON) bounding box (approx) – restrict map within this region
-    // You can tighten these later if you want stricter bounds.
-    const REGION_IVA_BOUNDS = L.latLngBounds(
-      L.latLng(12.70, 120.40), // SW
-      L.latLng(15.90, 122.80)  // NE
+    // memoized so react-hooks/exhaustive-deps is happy and bounds is stable
+    const REGION_IVA_BOUNDS = useMemo(
+      () =>
+        L.latLngBounds(
+          L.latLng(12.7, 120.4), // SW
+          L.latLng(15.9, 122.8) // NE
+        ),
+      []
     );
 
     const { list: bins, maxCount, totalPoints, uniqueBins } = buildHeatBins(records, 3);
@@ -1585,7 +1607,7 @@ const Dashboard = () => {
       // init once
       if (!mapRef.current) {
         const m = L.map(mapElRef.current, {
-          center: [14.20, 121.40],
+          center: [14.2, 121.4],
           zoom: 8,
           minZoom: 7,
           maxZoom: 16,
@@ -1633,13 +1655,11 @@ const Dashboard = () => {
           },
         });
 
-        const legend = new Legend();
-        legend.addTo(m);
+        new Legend().addTo(m);
 
         mapRef.current = m;
         layerRef.current = g;
 
-        // Ensure proper sizing after mount
         setTimeout(() => {
           try {
             m.invalidateSize();
@@ -1647,12 +1667,7 @@ const Dashboard = () => {
           } catch {}
         }, 0);
       }
-
-      return () => {
-        // Keep map instance (don’t destroy) to avoid re-init flicker
-      };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [REGION_IVA_BOUNDS]);
 
     // update points whenever records change
     useEffect(() => {
@@ -1662,13 +1677,11 @@ const Dashboard = () => {
 
       g.clearLayers();
 
-      // Draw "heat" circles (aggregated bins)
       if (bins.length > 0 && maxCount > 0) {
         bins.forEach((p) => {
           const ratio = safeNumber(p.count) / maxCount; // 0..1
           const color = intensityColor(ratio);
 
-          // radius in meters: bigger for higher intensity
           const radius = 700 + ratio * 1800; // 700m .. 2500m
 
           const circle = L.circle([p.lat, p.lng], {
@@ -1687,23 +1700,16 @@ const Dashboard = () => {
           circle.addTo(g);
         });
 
-        // Keep map constrained to Region IV-A; also try to zoom to points but clamp inside region
+        // Always frame Region IV-A (restriction stays intact)
         try {
-          const ptsBounds = L.latLngBounds(bins.map((p) => [p.lat, p.lng]));
-          const clamped = ptsBounds.isValid() ? ptsBounds.pad(0.15) : REGION_IVA_BOUNDS;
-          m.fitBounds(REGION_IVA_BOUNDS); // always keep region framing
-          // If you want to zoom closer when points exist, uncomment:
-          // m.fitBounds(clamped, { maxZoom: 12 });
-        } catch {
-          // ignore
-        }
+          m.fitBounds(REGION_IVA_BOUNDS);
+        } catch {}
       } else {
-        // No points: just show the region bounds
         try {
           m.fitBounds(REGION_IVA_BOUNDS);
         } catch {}
       }
-    }, [records, bins, maxCount]);
+    }, [bins, maxCount, REGION_IVA_BOUNDS]);
 
     return (
       <Card className="shadow-sm bg-light h-100">
@@ -1737,8 +1743,7 @@ const Dashboard = () => {
   };
 
   // pick dataset for heat map
-  const heatRecords =
-    heatTab === "orders" ? orders : heatTab === "demolish" ? demolitions : sells;
+  const heatRecords = heatTab === "orders" ? orders : heatTab === "demolish" ? demolitions : sells;
 
   const heatTitle =
     heatTab === "orders"
@@ -1855,7 +1860,7 @@ const Dashboard = () => {
         </Col>
       </Row>
 
-      {/* Top 10 Ordered Items - NOW BELOW Location Frequency */}
+      {/* Top 10 Ordered Items - below Location Frequency */}
       <Row className="mb-4">
         <Col md={12}>
           <TopOrderedItemsCard data={topOrderedItems} />
@@ -1899,8 +1904,8 @@ const Dashboard = () => {
               </div>
 
               <div className="text-muted mt-2" style={{ fontSize: 12 }}>
-                Tip: If some datasets don’t show points, it usually means those records don’t have <code>lat/lng</code>{" "}
-                stored (only text addresses).
+                Tip: If some datasets don’t show points, it usually means those records don’t have{" "}
+                <code>lat/lng</code> stored (only text addresses).
               </div>
             </Card.Body>
           </Card>
