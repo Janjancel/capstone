@@ -229,7 +229,7 @@ export default function SellRequestsTab({
                         handleCounterOffer(r);
                       }}
                     >
-                      {actingId === idKey ? "Sending..." : "Counter"}
+                      {actingId === idKey ? "Sending..." : "Counter Offer"}
                     </Button>
 
                     <Button
