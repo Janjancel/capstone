@@ -609,8 +609,7 @@ const Reviews = () => {
             "N/A",
           userName:
             (r.userId && userMap[String(r.userId)] && userMap[String(r.userId)].name) ||
-            r.userName ||
-            "Anonymous",
+            r.userName ,
         }));
 
         const sorted = enriched.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));

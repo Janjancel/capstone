@@ -109,7 +109,7 @@ export default function DemolishRequestsTab({
                         handleCounterOffer(r);
                       }}
                     >
-                      Counter
+                      Counter Offer
                     </Button>
                     <Button
                       fullWidth

@@ -1,4 +1,5 @@
 
+
 // import React, { useEffect, useState, useCallback } from "react";
 // import axios from "axios";
 // import Swal from "sweetalert2";
@@ -20,6 +21,8 @@
 //   IconButton,
 //   Tooltip,
 //   Divider,
+//   Tabs,
+//   Tab,
 // } from "@mui/material";
 // import Loader from "./Loader";
 // import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -88,6 +91,17 @@
 //       localStorage.setItem("geo_address_cache", JSON.stringify(json));
 //     } catch {}
 //   }, []);
+
+//   // simple HTML-escape helper used when showing decline reason in a Swal html confirm
+//   const escapeHtml = useCallback((unsafe) =>
+//     String(unsafe || "")
+//       .replace(/&/g, "&amp;")
+//       .replace(/</g, "&lt;")
+//       .replace(/>/g, "&gt;")
+//       .replace(/"/g, "&quot;")
+//       .replace(/'/g, "&#39;")
+//       .replace(/`/g, "&#96;"),
+//   []);
 
 //   const reverseGeocode = useCallback(
 //     async (lat, lng) => {
@@ -371,17 +385,17 @@
 //     }
 //   };
 
-//   // PROPOSE PRICE (after ocular or after a decline)
+//   // PROPOSE PRICE (after ocular visit, after client decline, or responding to client counter-offer)
 //   const handleProposePrice = async (req) => {
 //     const { _id: id } = req || {};
 //     if (!id) return;
 
-//     // Allow proposing only after ocular or after a previous decline
+//     // Allow proposing only after ocular or after a client decline/counter-offer
 //     const canPropose = req.status === "ocular_scheduled" || req.status === "price_declined";
 //     if (!canPropose) {
 //       Swal.fire(
 //         "Not allowed yet",
-//         "You can propose a price after an ocular visit or re-propose after a decline.",
+//         "You can propose a price after an ocular visit, after a client decline, or in response to a client counter-offer.",
 //         "info"
 //       );
 //       return;
@@ -436,28 +450,141 @@
 //     }
 //   };
 
-//   const handleStatusUpdate = async (id, newStatus) => {
-//     const confirm = await Swal.fire({
-//       title: `Update status to "${newStatus}"?`,
-//       icon: "question",
+//   // COUNTER OFFER (Admin responds to client's counter-offer with their own proposed price)
+//   const handleCounterOffer = async (req) => {
+//     const { _id: id } = req || {};
+//     if (!id) return;
+
+//     const { value: raw } = await Swal.fire({
+//       title: "Counter Offer Price (₱)",
+//       input: "number",
+//       inputAttributes: { min: "1", step: "1" },
+//       inputValue: req.proposedPrice || req.price || "",
 //       showCancelButton: true,
-//       confirmButtonText: "Yes, update it!",
-//       cancelButtonText: "Cancel",
+//       confirmButtonText: "Send Counter Offer",
+//       preConfirm: (v) => {
+//         const n = Number(v);
+//         if (!n || n <= 0) {
+//           Swal.showValidationMessage("Please enter a valid price greater than 0.");
+//           return false;
+//         }
+//         return n;
+//       },
 //     });
-//     if (!confirm.isConfirmed) return;
+
+//     if (!raw) return;
+//     const counterPrice = Number(raw);
 
 //     try {
 //       const res = await axios.patch(`${API_URL}/api/demolish/${id}`, {
-//         status: newStatus,
+//         proposedPrice: counterPrice,
+//         status: "awaiting_price_approval",
 //       });
-//       setRequests((prev) => prev.map((req) => (req._id === id ? { ...req, status: res.data.status } : req)));
-//       toast.success(`Request ${newStatus}`);
 
-//       // Notify client on key status changes
-//       const targetUserId = res?.data?.userId || requests.find((r) => r._id === id)?.userId;
+//       setRequests((prev) =>
+//         prev.map((r) =>
+//           r._id === id ? { ...r, ...res.data, proposedPrice: counterPrice, status: "awaiting_price_approval" } : r
+//         )
+//       );
+
+//       // Notify client about counter-offer
+//       const targetUserId = res?.data?.userId || req.userId;
+//       await createDemolishNotification({
+//         userId: targetUserId,
+//         requestId: res?.data?._id || id,
+//         status: "awaiting_price_approval",
+//         message: `Counter offer received: ₱${counterPrice.toLocaleString()}. Please accept or decline.`,
+//       });
+
+//       toast.success(`Counter offer sent: ₱${counterPrice.toLocaleString()}`);
+//     } catch (error) {
+//       console.error("Error sending counter offer:", error);
+//       const msg = error?.response?.data?.error || "Failed to send counter offer";
+//       toast.error(msg);
+//     }
+//   };
+
+//   // UPDATED: handleStatusUpdate with decline reason support
+//   const handleStatusUpdate = async (id, newStatus) => {
+//     // If declining, prompt for reason first (required)
+//     let declineReason = null;
+
+//     if (newStatus === "declined") {
+//       const { value: reason } = await Swal.fire({
+//         title: "Reason for decline",
+//         input: "textarea",
+//         inputLabel: "Please provide a reason for declining this demolition request.",
+//         inputPlaceholder: "Type the reason here...",
+//         inputAttributes: {
+//           "aria-label": "Reason for decline",
+//         },
+//         showCancelButton: true,
+//         confirmButtonText: "Decline request",
+//         cancelButtonText: "Cancel",
+//         preConfirm: (val) => {
+//           if (!val || !val.trim()) {
+//             Swal.showValidationMessage("Reason is required to decline the request.");
+//             return false;
+//           }
+//           return val.trim();
+//         },
+//       });
+
+//       if (!reason) {
+//         return; // user cancelled or validation failed
+//       }
+//       declineReason = reason.trim();
+
+//       // final confirmation showing escaped reason
+//       const confirmDecline = await Swal.fire({
+//         title: "Confirm decline",
+//         html: `Are you sure you want to decline this request with the reason:<br/><em>${escapeHtml(declineReason)}</em>`,
+//         icon: "warning",
+//         showCancelButton: true,
+//         confirmButtonText: "Yes, decline",
+//         cancelButtonText: "Cancel",
+//       });
+
+//       if (!confirmDecline.isConfirmed) return;
+//     } else {
+//       const confirm = await Swal.fire({
+//         title: `Update status to "${newStatus}"?`,
+//         icon: "question",
+//         showCancelButton: true,
+//         confirmButtonText: "Yes, update it!",
+//         cancelButtonText: "Cancel",
+//       });
+//       if (!confirm.isConfirmed) return;
+//     }
+
+//     try {
+//       const payload = { status: newStatus };
+//       if (declineReason) payload.declineReason = declineReason;
+
+//       const res = await axios.patch(`${API_URL}/api/demolish/${id}`, payload);
+
+//       // Update local state: include declineReason if present
+//       setRequests((prev) =>
+//         prev.map((req) =>
+//           req._id === id
+//             ? {
+//                 ...req,
+//                 status: res.data.status || newStatus,
+//                 declineReason: res.data.declineReason !== undefined ? res.data.declineReason : declineReason || null,
+//               }
+//             : req
+//         )
+//       );
+
+//       toast.success(newStatus === "declined" ? "Request declined" : `Request ${newStatus}`);
+
+//       // Notify client when possible (include reason if declined)
+//       const reqObj = requests.find((r) => r._id === id);
+//       const targetUserId = res?.data?.userId || reqObj?.userId;
+
 //       if (targetUserId) {
 //         let msg = "Your demolition request has been updated.";
-//         if (newStatus === "declined") msg = "Your demolition request was declined.";
+//         if (newStatus === "declined") msg = `Your demolition request was declined. Reason: ${declineReason}`;
 //         if (newStatus === "price_accepted") msg = "Price accepted. We will proceed with next steps.";
 //         if (newStatus === "price_declined") msg = "Price declined. Please contact support if needed.";
 //         if (newStatus === "completed") msg = "Your demolition request has been completed.";
@@ -560,6 +687,9 @@
 //     const proposeDisabled =
 //       !proposeAllowed || ["awaiting_price_approval", "scheduled", "completed", "declined"].includes(status);
 
+//     // counter offer only allowed when client has sent a counter (status === "price_declined")
+//     const counterOfferDisabled = false;
+
 //     // schedule demolition (final accept) only allowed after price_accepted
 //     const scheduleDemolitionDisabled = status !== "price_accepted";
 
@@ -569,6 +699,7 @@
 //     return {
 //       scheduleOcularDisabled,
 //       proposeDisabled,
+//       counterOfferDisabled,
 //       scheduleDemolitionDisabled,
 //       declineDisabled,
 //     };
@@ -636,31 +767,6 @@
 //                 </IconButton>
 //               </Tooltip>
 //               <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={handleFilterClose}>
-//                 <MenuItem disabled>Filter by Status</MenuItem>
-//                 {[
-//                   "",
-//                   "pending",
-//                   "scheduled",
-//                   "ocular_scheduled",
-//                   "awaiting_price_approval",
-//                   "price_accepted",
-//                   "price_declined",
-//                   "declined",
-//                 ].map((status) => (
-//                   <MenuItem
-//                     key={status || "all"}
-//                     onClick={() => {
-//                       setStatusFilter(status);
-//                       handleFilterClose();
-//                     }}
-//                     selected={statusFilter === status}
-//                   >
-//                     {status || "All"}
-//                   </MenuItem>
-//                 ))}
-
-//                 <Divider />
-
 //                 <MenuItem disabled>Filter by Price</MenuItem>
 //                 {[{ label: "All", value: "" }, { label: "Below ₱5,000", value: "low" }, { label: "₱5,000 – ₱20,000", value: "mid" }, { label: "Above ₱20,000", value: "high" }].map((price) => (
 //                   <MenuItem
@@ -715,6 +821,25 @@
 //             </Box>
 //           </Box>
 
+//           {/* Status Tabs */}
+//           <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+//             <Tabs
+//               value={statusFilter || ""}
+//               onChange={(e, newValue) => setStatusFilter(newValue)}
+//               variant="scrollable"
+//               scrollButtons="auto"
+//             >
+//               <Tab label="All" value="" />
+//               <Tab label="Pending" value="pending" />
+//               <Tab label="Scheduled" value="scheduled" />
+//               <Tab label="Ocular Scheduled" value="ocular_scheduled" />
+//               <Tab label="Awaiting Price Approval" value="awaiting_price_approval" />
+//               <Tab label="Price Accepted" value="price_accepted" />
+//               <Tab label="Price Declined" value="price_declined" />
+//               <Tab label="Declined" value="declined" />
+//             </Tabs>
+//           </Box>
+
 //           {showMap && (
 //             <Box sx={{ mb: 2 }}>
 //               <DemolishDashboardMap requests={filteredRequests} onClose={() => setShowMap(false)} />
@@ -728,7 +853,16 @@
 //               <Table stickyHeader>
 //                 <TableHead>
 //                   <TableRow sx={{ bgcolor: "grey.900" }}>
-//                     {["ID", "Name", "Contact", "Location", "Price", "Status", "Scheduled Date", "Actions"].map((head) => (
+//                     {[
+//                       "ID",
+//                       "Name",
+//                       "Contact",
+//                       "Location",
+//                       "Price",
+//                       "Status",
+//                       "Scheduled Date",
+//                       "Actions",
+//                     ].map((head) => (
 //                       <TableCell
 //                         key={head}
 //                         sx={{
@@ -758,6 +892,7 @@
 //                       const {
 //                         scheduleOcularDisabled,
 //                         proposeDisabled,
+//                         counterOfferDisabled,
 //                         scheduleDemolitionDisabled,
 //                         declineDisabled,
 //                       } = computeActionDisabled(request);
@@ -862,6 +997,23 @@
 //                                 }}
 //                               >
 //                                 Propose Price
+//                               </MenuItem>
+
+//                               {/* Counter Offer (respond to client counter) */}
+//                               <MenuItem
+//                                 onClick={() => {
+//                                   handleCounterOffer(request);
+//                                   handleMenuClose();
+//                                 }}
+//                                 disabled={counterOfferDisabled}
+//                                 sx={{
+//                                   color: "secondary.main",
+//                                   fontWeight: 500,
+//                                   "&.Mui-disabled": { color: "secondary.light" },
+//                                   "&:hover": { bgcolor: "secondary.light", color: "white" },
+//                                 }}
+//                               >
+//                                 Counter Offer
 //                               </MenuItem>
 
 //                               <MenuItem
@@ -1007,6 +1159,10 @@ const DemolishDashboard = () => {
   const [dateFrom, setDateFrom] = useState(""); // "YYYY-MM-DD"
   const [dateTo, setDateTo] = useState(""); // "YYYY-MM-DD"
 
+  // NEW: Sort control
+  const [sortOrder, setSortOrder] = useState("newest"); // "newest" | "oldest"
+  const [sortAnchor, setSortAnchor] = useState(null);
+
   // ===== Reverse Geocoding State & Helpers =====
   const [addressMap, setAddressMap] = useState({}); // { "lat,lng": "Pretty address" }
 
@@ -1033,15 +1189,17 @@ const DemolishDashboard = () => {
   }, []);
 
   // simple HTML-escape helper used when showing decline reason in a Swal html confirm
-  const escapeHtml = useCallback((unsafe) =>
-    String(unsafe || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;")
-      .replace(/`/g, "&#96;"),
-  []);
+  const escapeHtml = useCallback(
+    (unsafe) =>
+      String(unsafe || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;")
+        .replace(/`/g, "&#96;"),
+    []
+  );
 
   const reverseGeocode = useCallback(
     async (lat, lng) => {
@@ -1074,6 +1232,57 @@ const DemolishDashboard = () => {
     return addressMap[key] || `${loc.lat}, ${loc.lng} (looking up...)`;
   };
   // =============================================
+
+  // =========================
+  // Duration logic (dashboard)
+  // =========================
+  const parseDate = (v) => {
+    if (!v) return null;
+    const d = v instanceof Date ? v : new Date(v);
+    if (isNaN(d.getTime())) return null;
+    return d;
+  };
+
+  const formatDuration = (ms) => {
+    if (ms == null || isNaN(ms)) return "N/A";
+    if (ms < 1000) return `${ms} ms`;
+
+    const totalSeconds = Math.floor(ms / 1000);
+    const days = Math.floor(totalSeconds / (24 * 3600));
+    const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const parts = [];
+    if (days) parts.push(`${days}d`);
+    if (hours) parts.push(`${hours}h`);
+    if (minutes) parts.push(`${minutes}m`);
+    if (!days && !hours && !minutes) parts.push(`${seconds}s`);
+    return parts.join(" ");
+  };
+
+  // Terminal statuses for demolish flow (same spirit as your modal)
+  const TERMINAL_STATUSES = ["scheduled", "ocular_scheduled", "declined", "price_declined", "cancelled", "completed"];
+
+  const getDurationText = (req) => {
+    const start = parseDate(req?.createdAt);
+    if (!start) return "N/A";
+
+    const status = String(req?.status || "").toLowerCase();
+    const isTerminal = TERMINAL_STATUSES.some((t) => status.includes(t));
+
+    // If terminal, prefer updatedAt, otherwise scheduledDate if it exists, fallback to updatedAt
+    const end =
+      isTerminal
+        ? parseDate(req?.updatedAt) || parseDate(req?.scheduledDate) || start
+        : new Date();
+
+    const ms = end ? end - start : null;
+    if (ms == null) return "N/A";
+    const txt = formatDuration(ms);
+    return isTerminal ? txt : `${txt} (so far)`;
+  };
+  // =========================
 
   useEffect(() => {
     const fetchRequests = async () => {
@@ -1201,7 +1410,7 @@ const DemolishDashboard = () => {
       filtered = filtered.filter((req) => (req.proposedPrice ?? req.price ?? -Infinity) > 20000);
     }
 
-    // NEW: Date range filter (by createdAt)
+    // Date range filter (by createdAt)
     if (dateFrom || dateTo) {
       const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
       const toDate = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
@@ -1215,8 +1424,15 @@ const DemolishDashboard = () => {
       });
     }
 
+    // NEW: Sort by createdAt
+    filtered = [...filtered].sort((a, b) => {
+      const da = parseDate(a?.createdAt)?.getTime() ?? 0;
+      const db = parseDate(b?.createdAt)?.getTime() ?? 0;
+      return sortOrder === "newest" ? db - da : da - db;
+    });
+
     setFilteredRequests(filtered);
-  }, [searchQuery, statusFilter, priceFilter, requests, addressMap, dateFrom, dateTo, fmtKey]);
+  }, [searchQuery, statusFilter, priceFilter, requests, addressMap, dateFrom, dateTo, fmtKey, sortOrder]);
 
   // ===== Minimal notification helper (FOR: "demolish") =====
   const createDemolishNotification = async ({ userId, requestId, status, message }) => {
@@ -1240,11 +1456,7 @@ const DemolishDashboard = () => {
   const handleScheduleDemolition = async (id) => {
     const current = requests.find((r) => r._id === id);
     if (!current || current.status !== "price_accepted" || current.price == null) {
-      Swal.fire(
-        "Price not accepted yet",
-        "You can only schedule demolition after the client accepts the proposed price.",
-        "info"
-      );
+      Swal.fire("Price not accepted yet", "You can only schedule demolition after the client accepts the proposed price.", "info");
       return;
     }
 
@@ -1368,9 +1580,7 @@ const DemolishDashboard = () => {
       });
 
       setRequests((prev) =>
-        prev.map((r) =>
-          r._id === id ? { ...r, ...res.data, proposedPrice: proposed, status: "awaiting_price_approval" } : r
-        )
+        prev.map((r) => (r._id === id ? { ...r, ...res.data, proposedPrice: proposed, status: "awaiting_price_approval" } : r))
       );
 
       // Notify client to review price
@@ -1563,14 +1773,15 @@ const DemolishDashboard = () => {
   };
 
   const handleDownloadExcel = () => {
-    // Export with a human-readable location
+    // Export with a human-readable location + duration
     const exportData = filteredRequests.map(({ images, location, ...rest }) => {
       let address = "N/A";
       if (location?.lat && location?.lng) {
         const key = fmtKey(location.lat, location.lng);
         address = addressMap[key] || `${location.lat}, ${location.lng}`;
       }
-      return { ...rest, location: address };
+      const duration = getDurationText(rest);
+      return { ...rest, location: address, duration };
     });
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -1611,7 +1822,6 @@ const DemolishDashboard = () => {
   const computeActionDisabled = (request) => {
     const status = request?.status || "pending";
 
-    // scheduleOcular disabled if ocular already scheduled OR has moved past ocular stage
     const scheduleOcularDisabled = [
       "ocular_scheduled",
       "awaiting_price_approval",
@@ -1621,19 +1831,13 @@ const DemolishDashboard = () => {
       "declined",
     ].includes(status);
 
-    // propose price only allowed when ocular scheduled or after price_declined (re-propose)
-    // disabled while waiting for client approval or after schedule/completion/decline
     const proposeAllowed = status === "ocular_scheduled" || status === "price_declined";
-    const proposeDisabled =
-      !proposeAllowed || ["awaiting_price_approval", "scheduled", "completed", "declined"].includes(status);
+    const proposeDisabled = !proposeAllowed || ["awaiting_price_approval", "scheduled", "completed", "declined"].includes(status);
 
-    // counter offer only allowed when client has sent a counter (status === "price_declined")
     const counterOfferDisabled = false;
 
-    // schedule demolition (final accept) only allowed after price_accepted
     const scheduleDemolitionDisabled = status !== "price_accepted";
 
-    // decline disabled when already declined or when final scheduled/completed/price_accepted
     const declineDisabled = ["declined", "scheduled", "completed", "price_accepted"].includes(status);
 
     return {
@@ -1663,14 +1867,9 @@ const DemolishDashboard = () => {
             </Box>
 
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-              <TextField
-                size="small"
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+              <TextField size="small" placeholder="Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
 
-              {/* NEW: Date range inputs */}
+              {/* Date range inputs */}
               <TextField
                 size="small"
                 type="date"
@@ -1701,6 +1900,39 @@ const DemolishDashboard = () => {
                 </Button>
               )}
 
+              {/* NEW: Sort button */}
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={(e) => setSortAnchor(e.currentTarget)}
+              >
+                Sort: {sortOrder === "newest" ? "Newest → Oldest" : "Oldest → Newest"}
+              </Button>
+              <Menu
+                anchorEl={sortAnchor}
+                open={Boolean(sortAnchor)}
+                onClose={() => setSortAnchor(null)}
+              >
+                <MenuItem
+                  selected={sortOrder === "newest"}
+                  onClick={() => {
+                    setSortOrder("newest");
+                    setSortAnchor(null);
+                  }}
+                >
+                  Newest → Oldest
+                </MenuItem>
+                <MenuItem
+                  selected={sortOrder === "oldest"}
+                  onClick={() => {
+                    setSortOrder("oldest");
+                    setSortAnchor(null);
+                  }}
+                >
+                  Oldest → Newest
+                </MenuItem>
+              </Menu>
+
               <Tooltip title="Filter">
                 <IconButton onClick={handleFilterOpen}>
                   <FilterListIcon />
@@ -1708,7 +1940,12 @@ const DemolishDashboard = () => {
               </Tooltip>
               <Menu anchorEl={filterAnchor} open={Boolean(filterAnchor)} onClose={handleFilterClose}>
                 <MenuItem disabled>Filter by Price</MenuItem>
-                {[{ label: "All", value: "" }, { label: "Below ₱5,000", value: "low" }, { label: "₱5,000 – ₱20,000", value: "mid" }, { label: "Above ₱20,000", value: "high" }].map((price) => (
+                {[
+                  { label: "All", value: "" },
+                  { label: "Below ₱5,000", value: "low" },
+                  { label: "₱5,000 – ₱20,000", value: "mid" },
+                  { label: "Above ₱20,000", value: "high" },
+                ].map((price) => (
                   <MenuItem
                     key={price.value}
                     onClick={() => {
@@ -1723,7 +1960,6 @@ const DemolishDashboard = () => {
 
                 <Divider />
 
-                {/* NEW: Quick Date Ranges */}
                 <MenuItem disabled>Quick Date Range</MenuItem>
                 <MenuItem
                   onClick={() => {
@@ -1763,12 +1999,7 @@ const DemolishDashboard = () => {
 
           {/* Status Tabs */}
           <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
-            <Tabs
-              value={statusFilter || ""}
-              onChange={(e, newValue) => setStatusFilter(newValue)}
-              variant="scrollable"
-              scrollButtons="auto"
-            >
+            <Tabs value={statusFilter || ""} onChange={(e, newValue) => setStatusFilter(newValue)} variant="scrollable" scrollButtons="auto">
               <Tab label="All" value="" />
               <Tab label="Pending" value="pending" />
               <Tab label="Scheduled" value="scheduled" />
@@ -1801,6 +2032,7 @@ const DemolishDashboard = () => {
                       "Price",
                       "Status",
                       "Scheduled Date",
+                      "Duration",
                       "Actions",
                     ].map((head) => (
                       <TableCell
@@ -1828,7 +2060,6 @@ const DemolishDashboard = () => {
                       const proposed = Number(request.proposedPrice || 0);
                       const waiting = request.status === "awaiting_price_approval";
 
-                      // compute disabled states
                       const {
                         scheduleOcularDisabled,
                         proposeDisabled,
@@ -1837,13 +2068,10 @@ const DemolishDashboard = () => {
                         declineDisabled,
                       } = computeActionDisabled(request);
 
+                      const durationText = getDurationText(request);
+
                       return (
-                        <TableRow
-                          key={request._id}
-                          hover
-                          sx={{ cursor: "pointer" }}
-                          onClick={() => setSelectedRequest(request)}
-                        >
+                        <TableRow key={request._id} hover sx={{ cursor: "pointer" }} onClick={() => setSelectedRequest(request)}>
                           <TableCell>{displayId}</TableCell>
                           <TableCell>{request.name}</TableCell>
                           <TableCell>{request.contact}</TableCell>
@@ -1879,6 +2107,10 @@ const DemolishDashboard = () => {
                           <TableCell>
                             {request.scheduledDate ? new Date(request.scheduledDate).toLocaleDateString() : "N/A"}
                           </TableCell>
+
+                          {/* NEW: Duration column */}
+                          <TableCell>{durationText}</TableCell>
+
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <IconButton onClick={(e) => handleMenuOpen(e, request._id)}>
                               <MoreVertIcon />
@@ -1922,7 +2154,6 @@ const DemolishDashboard = () => {
                                 Schedule Ocular Visit
                               </MenuItem>
 
-                              {/* Propose Price (after ocular or after decline) */}
                               <MenuItem
                                 onClick={() => {
                                   handleProposePrice(request);
@@ -1939,7 +2170,6 @@ const DemolishDashboard = () => {
                                 Propose Price
                               </MenuItem>
 
-                              {/* Counter Offer (respond to client counter) */}
                               <MenuItem
                                 onClick={() => {
                                   handleCounterOffer(request);
@@ -2006,7 +2236,7 @@ const DemolishDashboard = () => {
                     })
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ color: "grey.500" }}>
+                      <TableCell colSpan={9} align="center" sx={{ color: "grey.500" }}>
                         No results found.
                       </TableCell>
                     </TableRow>

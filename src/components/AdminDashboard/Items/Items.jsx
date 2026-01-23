@@ -28,6 +28,17 @@
 // import AddItemModal from "./AddItemModal";
 
 // const Items = () => {
+//   // Format price to Philippine Peso with comma separators
+//   const formatPrice = (price) => {
+//     if (!price && price !== 0) return "0.00";
+//     const num = parseFloat(price);
+//     if (isNaN(num)) return "0.00";
+//     return num.toLocaleString('en-US', {
+//       minimumFractionDigits: 2,
+//       maximumFractionDigits: 2,
+//     });
+//   };
+
 //   const [items, setItems] = useState([]);
 //   const [allItems, setAllItems] = useState([]);
 //   const [showAddModal, setShowAddModal] = useState(false);
@@ -50,70 +61,25 @@
 //   const [anchorEl, setAnchorEl] = useState(null);
 //   const [menuItemId, setMenuItemId] = useState(null);
 
+//   // Updated categories to match the server model
 //   const categories = [
 //     "Table",
 //     "Chair",
-//     "Flooring",
 //     "Cabinet",
 //     "Post",
 //     "Scraps",
 //     "Stones",
 //     "Windows",
-//     "Bed",
+//     "Railings",
+//     "Doors",
+//     "Others",
+//     "Uncategorized",
 //   ];
 
 //   // UI filters
 //   const [categoryFilter, setCategoryFilter] = useState("");
 //   const [availabilityFilter, setAvailabilityFilter] = useState("available"); // default to available
 //   const [searchTerm, setSearchTerm] = useState("");
-
-//   // ----- Fetch items (memoized so effects can safely depend on it) -----
-//   const fetchItems = useCallback(async () => {
-//     setFetching(true);
-//     try {
-//       const response = await axios.get(
-//         `${process.env.REACT_APP_API_URL}/api/items`
-//       );
-//       const data = Array.isArray(response.data) ? response.data : [];
-//       setAllItems(data);
-//       // apply current filters immediately
-//       const filtered = data.filter((it) =>
-//         matchesSearch(it, searchTerm) &&
-//         matchesCategory(it, categoryFilter) &&
-//         matchesAvailability(it, availabilityFilter)
-//       );
-//       setItems(filtered);
-//     } catch (error) {
-//       toast.error("Failed to fetch items");
-//     } finally {
-//       setFetching(false);
-//     }
-//   }, [
-//     searchTerm,
-//     categoryFilter,
-//     availabilityFilter, // included so fetchItems applied filters instantly
-//   ]);
-
-//   useEffect(() => {
-//     fetchItems();
-//     // subscribe to global cart updates so admin list reflects items added to cart
-//     const cartHandler = () => {
-//       // Re-fetch to get authoritative availability state from server
-//       fetchItems();
-//     };
-//     window.addEventListener("cartUpdated", cartHandler);
-//     // also listen for item changes from other admin panels if you dispatch 'itemUpdated' with detail { itemId }
-//     const itemUpdatedHandler = () => {
-//       fetchItems();
-//     };
-//     window.addEventListener("itemUpdated", itemUpdatedHandler);
-
-//     return () => {
-//       window.removeEventListener("cartUpdated", cartHandler);
-//       window.removeEventListener("itemUpdated", itemUpdatedHandler);
-//     };
-//     // eslint-disable-next-line react-hooks/exhaustive-deps
-//   }, []); // run once on mount
 
 //   // ----- Helpers for mixed category model (string vs array) -----
 //   const itemCategories = useCallback((it) => {
@@ -148,6 +114,57 @@
 //     if (filter === "unavailable") return isAvailable === false;
 //     return true;
 //   }, []);
+
+//   // ----- Fetch items (memoized so effects can safely depend on it) -----
+//   const fetchItems = useCallback(async () => {
+//     setFetching(true);
+//     try {
+//       const response = await axios.get(
+//         `${process.env.REACT_APP_API_URL}/api/items`
+//       );
+//       const data = Array.isArray(response.data) ? response.data : [];
+//       setAllItems(data);
+//       // apply current filters immediately
+//       const filtered = data.filter((it) =>
+//         matchesSearch(it, searchTerm) &&
+//         matchesCategory(it, categoryFilter) &&
+//         matchesAvailability(it, availabilityFilter)
+//       );
+//       setItems(filtered);
+//     } catch (error) {
+//       toast.error("Failed to fetch items");
+//     } finally {
+//       setFetching(false);
+//     }
+//   }, [
+//     searchTerm,
+//     categoryFilter,
+//     availabilityFilter,
+//     matchesSearch,
+//     matchesCategory,
+//     matchesAvailability,
+//   ]);
+
+//   useEffect(() => {
+//     fetchItems();
+//     // subscribe to global cart updates so admin list reflects items added to cart
+//     const cartHandler = () => {
+//       // Re-fetch to get authoritative availability state from server
+//       fetchItems();
+//     };
+//     window.addEventListener("cartUpdated", cartHandler);
+//     // also listen for item changes from other admin panels if you dispatch 'itemUpdated' with detail { itemId }
+//     const itemUpdatedHandler = () => {
+//       fetchItems();
+//     };
+//     window.addEventListener("itemUpdated", itemUpdatedHandler);
+
+//     return () => {
+//       window.removeEventListener("cartUpdated", cartHandler);
+//       window.removeEventListener("itemUpdated", itemUpdatedHandler);
+//     };
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
+//   }, []); // run once on mount
 
 //   // Recompute visible items whenever data or filters change
 //   useEffect(() => {
@@ -377,7 +394,7 @@
 //     return isAvailable ? (
 //       <Chip label="Available" size="small" color="success" />
 //     ) : (
-//       <Chip label="Unavailable" size="small" color="default" sx={{ bgcolor: "grey.300" }} />
+//       <Chip label="Sold" size="small" color="default" sx={{ bgcolor: "grey.300" }} />
 //     );
 //   };
 
@@ -445,7 +462,7 @@
 //                       onChange={(e) => setAvailabilityFilter(e.target.value)}
 //                     >
 //                       <MenuItem value="available">Available</MenuItem>
-//                       <MenuItem value="unavailable">Unavailable</MenuItem>
+//                       <MenuItem value="unavailable">Sold</MenuItem>
 //                       <MenuItem value="all">All</MenuItem>
 //                     </Select>
 //                   </FormControl>
@@ -463,7 +480,7 @@
 //                   <TableRow key={item._id}>
 //                     <TableCell>{item.name}</TableCell>
 //                     <TableCell>{renderCategoryCell(item)}</TableCell>
-//                     <TableCell>₱{item.price}</TableCell>
+//                     <TableCell>₱{formatPrice(item.price)}</TableCell>
 //                     <TableCell>{item.condition ?? "—"}</TableCell>
 //                     <TableCell>
 //                       {item.images && item.images.length > 0 ? (
@@ -568,6 +585,7 @@
 //         handleAddItem={handleAddItem}
 //         loading={loading}
 //         categories={categories}
+//         allItems={allItems}
 //       />
 
 //       {/* Edit Item Modal (kept same props) */}
@@ -623,10 +641,18 @@ const Items = () => {
     if (!price && price !== 0) return "0.00";
     const num = parseFloat(price);
     if (isNaN(num)) return "0.00";
-    return num.toLocaleString('en-US', {
+    return num.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
+  };
+
+  // NEW: CreatedAt formatter (safe)
+  const formatCreatedAt = (value) => {
+    if (!value) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString();
   };
 
   const [items, setItems] = useState([]);
@@ -684,7 +710,9 @@ const Items = () => {
       if (!selected) return true; // "All"
       const cats = itemCategories(it);
       // normalize case
-      return cats.some((c) => String(c).toLowerCase() === String(selected).toLowerCase());
+      return cats.some(
+        (c) => String(c).toLowerCase() === String(selected).toLowerCase()
+      );
     },
     [itemCategories]
   );
@@ -693,12 +721,15 @@ const Items = () => {
     if (!term) return true;
     const name = (it?.name || "").toLowerCase();
     const desc = (it?.description || "").toLowerCase();
-    return name.includes(term.toLowerCase()) || desc.includes(term.toLowerCase());
+    return (
+      name.includes(term.toLowerCase()) || desc.includes(term.toLowerCase())
+    );
   }, []);
 
   const matchesAvailability = useCallback((it, filter) => {
     // treat undefined availability as true (server default true)
-    const isAvailable = it?.availability === undefined ? true : Boolean(it.availability);
+    const isAvailable =
+      it?.availability === undefined ? true : Boolean(it.availability);
     if (!filter || filter === "all") return true;
     if (filter === "available") return isAvailable === true;
     if (filter === "unavailable") return isAvailable === false;
@@ -709,16 +740,15 @@ const Items = () => {
   const fetchItems = useCallback(async () => {
     setFetching(true);
     try {
-      const response = await axios.get(
-        `${process.env.REACT_APP_API_URL}/api/items`
-      );
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/items`);
       const data = Array.isArray(response.data) ? response.data : [];
       setAllItems(data);
       // apply current filters immediately
-      const filtered = data.filter((it) =>
-        matchesSearch(it, searchTerm) &&
-        matchesCategory(it, categoryFilter) &&
-        matchesAvailability(it, availabilityFilter)
+      const filtered = data.filter(
+        (it) =>
+          matchesSearch(it, searchTerm) &&
+          matchesCategory(it, categoryFilter) &&
+          matchesAvailability(it, availabilityFilter)
       );
       setItems(filtered);
     } catch (error) {
@@ -785,9 +815,7 @@ const Items = () => {
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
-          await axios.delete(
-            `${process.env.REACT_APP_API_URL}/api/items/${itemId}`
-          );
+          await axios.delete(`${process.env.REACT_APP_API_URL}/api/items/${itemId}`);
           toast.success("Item deleted successfully");
           fetchItems();
           window.dispatchEvent(new CustomEvent("itemUpdated", { detail: { itemId } }));
@@ -863,9 +891,7 @@ const Items = () => {
       fetchItems();
       window.dispatchEvent(new CustomEvent("itemUpdated"));
     } catch (error) {
-      toast.error(
-        error?.response?.data?.error || "There was an issue adding the item"
-      );
+      toast.error(error?.response?.data?.error || "There was an issue adding the item");
     } finally {
       setLoading(false);
     }
@@ -895,14 +921,24 @@ const Items = () => {
   // toggle availability on server and update UI immediately
   const toggleAvailability = async (item) => {
     const itemId = item._id;
-    const newAvailability = !(item?.availability === undefined ? true : Boolean(item.availability));
+    const newAvailability = !(
+      item?.availability === undefined ? true : Boolean(item.availability)
+    );
     try {
       // optimistic UI update
       setAllItems((prev) =>
-        prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: newAvailability } : it))
+        prev.map((it) =>
+          String(it._id) === String(itemId)
+            ? { ...it, availability: newAvailability }
+            : it
+        )
       );
       setItems((prev) =>
-        prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: newAvailability } : it))
+        prev.map((it) =>
+          String(it._id) === String(itemId)
+            ? { ...it, availability: newAvailability }
+            : it
+        )
       );
 
       // persist change
@@ -916,10 +952,18 @@ const Items = () => {
     } catch (err) {
       // revert optimistic update on failure
       setAllItems((prev) =>
-        prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: item.availability } : it))
+        prev.map((it) =>
+          String(it._id) === String(itemId)
+            ? { ...it, availability: item.availability }
+            : it
+        )
       );
       setItems((prev) =>
-        prev.map((it) => (String(it._id) === String(itemId) ? { ...it, availability: item.availability } : it))
+        prev.map((it) =>
+          String(it._id) === String(itemId)
+            ? { ...it, availability: item.availability }
+            : it
+        )
       );
       toast.error("Failed to update availability");
     } finally {
@@ -935,14 +979,22 @@ const Items = () => {
       setAllItems((prev) =>
         prev.map((it) =>
           String(it._id) === String(itemId)
-            ? { ...it, quantity: Math.max(0, (it.quantity ?? 1) - amount), availability: ((it.quantity ?? 1) - amount) > 0 }
+            ? {
+                ...it,
+                quantity: Math.max(0, (it.quantity ?? 1) - amount),
+                availability: (it.quantity ?? 1) - amount > 0,
+              }
             : it
         )
       );
       setItems((prev) =>
         prev.map((it) =>
           String(it._id) === String(itemId)
-            ? { ...it, quantity: Math.max(0, (it.quantity ?? 1) - amount), availability: ((it.quantity ?? 1) - amount) > 0 }
+            ? {
+                ...it,
+                quantity: Math.max(0, (it.quantity ?? 1) - amount),
+                availability: (it.quantity ?? 1) - amount > 0,
+              }
             : it
         )
       );
@@ -954,8 +1006,12 @@ const Items = () => {
 
       // replace with authoritative server response
       const updated = res.data;
-      setAllItems((prev) => prev.map((it) => (String(it._id) === String(updated._id) ? updated : it)));
-      setItems((prev) => prev.map((it) => (String(it._id) === String(updated._id) ? updated : it)));
+      setAllItems((prev) =>
+        prev.map((it) => (String(it._id) === String(updated._id) ? updated : it))
+      );
+      setItems((prev) =>
+        prev.map((it) => (String(it._id) === String(updated._id) ? updated : it))
+      );
 
       toast.success(`Decremented ${amount} from ${item.name}`);
       window.dispatchEvent(new CustomEvent("itemUpdated", { detail: { itemId } }));
@@ -980,11 +1036,12 @@ const Items = () => {
   };
 
   const renderAvailabilityChip = (it) => {
-    const isAvailable = it?.availability === undefined ? true : Boolean(it.availability);
+    const isAvailable =
+      it?.availability === undefined ? true : Boolean(it.availability);
     return isAvailable ? (
       <Chip label="Available" size="small" color="success" />
     ) : (
-      <Chip label="Unavailable" size="small" color="default" sx={{ bgcolor: "grey.300" }} />
+      <Chip label="Sold" size="small" color="default" sx={{ bgcolor: "grey.300" }} />
     );
   };
 
@@ -1052,13 +1109,16 @@ const Items = () => {
                       onChange={(e) => setAvailabilityFilter(e.target.value)}
                     >
                       <MenuItem value="available">Available</MenuItem>
-                      <MenuItem value="unavailable">Unavailable</MenuItem>
+                      <MenuItem value="unavailable">Sold</MenuItem>
                       <MenuItem value="all">All</MenuItem>
                     </Select>
                   </FormControl>
                 </TableCell>
 
                 <TableCell>Quantity</TableCell>
+
+                {/* NEW: CreatedAt column */}
+                <TableCell>Created At</TableCell>
 
                 <TableCell align="center">Actions</TableCell>
               </TableRow>
@@ -1098,7 +1158,14 @@ const Items = () => {
                     <TableCell>{renderAvailabilityChip(item)}</TableCell>
 
                     {/* Quantity cell */}
-                    <TableCell>{typeof item.quantity === "undefined" ? 1 : item.quantity}</TableCell>
+                    <TableCell>
+                      {typeof item.quantity === "undefined" ? 1 : item.quantity}
+                    </TableCell>
+
+                    {/* NEW: CreatedAt cell */}
+                    <TableCell>
+                      {formatCreatedAt(item?.createdAt || item?.created_at)}
+                    </TableCell>
 
                     <TableCell align="center">
                       <IconButton onClick={(e) => handleMenuOpen(e, item._id)}>
@@ -1123,8 +1190,7 @@ const Items = () => {
                               toast.success("Item added as featured");
                             } catch (error) {
                               toast.error(
-                                error.response?.data?.error ||
-                                  "Failed to add as featured"
+                                error.response?.data?.error || "Failed to add as featured"
                               );
                             }
                             handleMenuClose();
@@ -1139,7 +1205,9 @@ const Items = () => {
                             toggleAvailability(item);
                           }}
                         >
-                          {item?.availability === false ? "Mark Available" : "Mark Unavailable"}
+                          {item?.availability === false
+                            ? "Mark Available"
+                            : "Mark Unavailable"}
                         </MenuItem>
 
                         {/* Decrement stock by 1 */}
@@ -1156,7 +1224,7 @@ const Items = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={9} align="center">
                     No items available.
                   </TableCell>
                 </TableRow>
