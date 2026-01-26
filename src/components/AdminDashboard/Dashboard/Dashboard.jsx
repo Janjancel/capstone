@@ -1,6 +1,5 @@
-
 // // src/pages/Dashboard.jsx
-// import React, { useState, useEffect, useRef } from "react";
+// import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 // import { Container, Row, Col, Button, Card, ProgressBar } from "react-bootstrap";
 // import { BuildingFillX, HouseFill, CartFill } from "react-bootstrap-icons";
 // import { useNavigate } from "react-router-dom";
@@ -8,7 +7,7 @@
 // import html2pdf from "html2pdf.js";
 // import "bootstrap/dist/css/bootstrap.min.css";
 
-// // NEW: Leaflet for heat map (no extra plugin required)
+// // Leaflet for heat map (no extra plugin required)
 // import L from "leaflet";
 // import "leaflet/dist/leaflet.css";
 
@@ -85,12 +84,16 @@
 //   );
 // }
 
-// function buildLocationFrequency(records = []) {
+// /**
+//  * Build location frequency using a custom extractor when needed.
+//  * Default extractor keeps existing behavior intact.
+//  */
+// function buildLocationFrequency(records = [], extractor = extractLocation) {
 //   const freq = {};
 //   let missing = 0;
 
 //   (records || []).forEach((r) => {
-//     const loc = (extractLocation(r) || "").trim();
+//     const loc = (extractor(r) || "").trim();
 //     if (!loc) {
 //       missing += 1;
 //       return;
@@ -118,9 +121,7 @@
 //   const top = entries && entries.length ? entries[0] : null;
 //   if (top && totalWithLocation > 0) {
 //     const pct = (safeNumber(top[1]) / totalWithLocation) * 100;
-//     list.push(
-//       `Top location: ${top[0]} (${top[1]} record${top[1] > 1 ? "s" : ""}, ${pct.toFixed(1)}%).`
-//     );
+//     list.push(`Top location: ${top[0]} (${top[1]} record${top[1] > 1 ? "s" : ""}, ${pct.toFixed(1)}%).`);
 //   }
 
 //   if (entries && entries.length >= 3 && totalWithLocation > 0) {
@@ -145,27 +146,12 @@
 // // Top 10 Ordered Items
 // function extractItemLabel(it) {
 //   if (!it || typeof it !== "object") return "Unknown Item";
-//   return (
-//     it.name ||
-//     it.title ||
-//     it.itemName ||
-//     (it.item && (it.item.name || it.item.title)) ||
-//     (it.product && (it.product.name || it.product.title)) ||
-//     "Unknown Item"
-//   );
+//   return it.name || it.title || it.itemName || (it.item && (it.item.name || it.item.title)) || (it.product && (it.product.name || it.product.title)) || "Unknown Item";
 // }
 
 // function extractItemKey(it) {
 //   if (!it || typeof it !== "object") return extractItemLabel(it);
-//   return (
-//     it.itemId ||
-//     it.productId ||
-//     it._id ||
-//     it.id ||
-//     (it.item && (it.item._id || it.item.id)) ||
-//     (it.product && (it.product._id || it.product.id)) ||
-//     extractItemLabel(it)
-//   );
+//   return it.itemId || it.productId || it._id || it.id || (it.item && (it.item._id || it.item.id)) || (it.product && (it.product._id || it.product.id)) || extractItemLabel(it);
 // }
 
 // function buildTopOrderedItems(orders = []) {
@@ -202,11 +188,7 @@
 //   const list = Object.values(map).sort((a, b) => b.qty - a.qty).slice(0, 10);
 //   const maxQty = list.reduce((m, x) => Math.max(m, safeNumber(x.qty)), 0);
 
-//   return {
-//     list,
-//     totalQtyAll,
-//     maxQty,
-//   };
+//   return { list, totalQtyAll, maxQty };
 // }
 
 // // -----------------------------------------------------------------------------
@@ -306,7 +288,6 @@
 //   const [orders, setOrders] = useState([]);
 //   const [sells, setSells] = useState([]);
 //   const [demolitions, setDemolitions] = useState([]);
-//   const [sales, setSales] = useState([]);
 //   const [reviews, setReviews] = useState([]);
 
 //   // Summary metrics
@@ -331,6 +312,141 @@
 //   // User
 //   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
 //   const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+
+//   // ===== Reverse Geocoding State & Helpers (Sell pretty place names) =====
+//   const [addressMap, setAddressMap] = useState({}); // { "lat,lng": "Pretty address" }
+
+//   const fmtKey = useCallback((lat, lng) => `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`, []);
+
+//   const getCachedAddress = useCallback((key) => {
+//     try {
+//       const raw = localStorage.getItem("geo_address_cache");
+//       if (!raw) return null;
+//       const json = JSON.parse(raw);
+//       return json[key] || null;
+//     } catch {
+//       return null;
+//     }
+//   }, []);
+
+//   const setCachedAddress = useCallback((key, val) => {
+//     try {
+//       const raw = localStorage.getItem("geo_address_cache");
+//       const json = raw ? JSON.parse(raw) : {};
+//       json[key] = val;
+//       localStorage.setItem("geo_address_cache", JSON.stringify(json));
+//     } catch {}
+//   }, []);
+
+//   const reverseGeocodeInline = useCallback(
+//     async (lat, lng) => {
+//       const key = fmtKey(lat, lng);
+//       const cached = getCachedAddress(key);
+//       if (cached) return cached;
+
+//       const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fil,en`;
+//       try {
+//         const res = await fetch(url, { headers: { Accept: "application/json" } });
+//         if (!res.ok) throw new Error("Reverse geocode failed");
+//         const data = await res.json();
+//         const a = data.address || {};
+//         const pretty =
+//           data.display_name ||
+//           [a.road, a.suburb || a.village || a.barangay, a.town || a.city || a.municipality, a.state, a.country]
+//             .filter(Boolean)
+//             .join(", ");
+//         const value = pretty || key;
+//         setCachedAddress(key, value);
+//         return value;
+//       } catch {
+//         return key;
+//       }
+//     },
+//     [fmtKey, getCachedAddress, setCachedAddress]
+//   );
+
+//   // Kick off reverse-geocoding for SELL coords (so Location Frequency shows place names)
+//   useEffect(() => {
+//     const run = async () => {
+//       const coords = (sells || [])
+//         .filter((r) => r?.location?.lat != null && r?.location?.lng != null)
+//         .map((r) => fmtKey(r.location.lat, r.location.lng));
+
+//       const unique = Array.from(new Set(coords));
+//       if (!unique.length) return;
+
+//       // seed from cache
+//       const seed = {};
+//       unique.forEach((k) => {
+//         const cached = getCachedAddress(k);
+//         if (cached) seed[k] = cached;
+//       });
+//       if (Object.keys(seed).length) setAddressMap((prev) => ({ ...seed, ...prev }));
+
+//       // find missing
+//       const missing = unique.filter((k) => !seed[k] && !addressMap[k]);
+//       if (!missing.length) return;
+
+//       const results = {};
+//       for (const k of missing) {
+//         const [lat, lng] = k.split(",").map(Number);
+//         try {
+//           // polite delay
+//           // eslint-disable-next-line no-await-in-loop
+//           await new Promise((r) => setTimeout(r, 150));
+//           // eslint-disable-next-line no-await-in-loop
+//           const addr = await reverseGeocodeInline(lat, lng);
+//           results[k] = addr;
+//         } catch {
+//           results[k] = k;
+//         }
+//       }
+
+//       if (Object.keys(results).length) setAddressMap((prev) => ({ ...prev, ...results }));
+//     };
+
+//     run();
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
+//   }, [sells, fmtKey, getCachedAddress, reverseGeocodeInline]);
+
+//   // Custom extractor for SELL: if location is only lat/lng, replace with pretty address from addressMap
+//   const extractSellLocation = useCallback(
+//     (record) => {
+//       // First try normal extraction (keeps compatibility if API already stores a text address)
+//       const base = (extractLocation(record) || "").trim();
+
+//       const loc = record?.location;
+//       const hasLatLng = loc && typeof loc === "object" && loc.lat != null && loc.lng != null;
+
+//       if (hasLatLng) {
+//         const key = fmtKey(loc.lat, loc.lng);
+
+//         // If base looks like JSON-ish lat/lng (not a real place name), prefer pretty address
+//         const looksJsonish =
+//           base.startsWith("{") &&
+//           (base.includes('"lat"') || base.includes("lat")) &&
+//           (base.includes('"lng"') || base.includes("lng"));
+
+//         if (!base || looksJsonish) {
+//           return addressMap[key] || `${loc.lat}, ${loc.lng}`;
+//         }
+
+//         // If base is literally "lat, lng" string, also prefer pretty if available
+//         const looksCoords =
+//           /^[\s-]?\d+(\.\d+)?\s*,\s*[\s-]?\d+(\.\d+)?$/.test(base) ||
+//           base.toLowerCase().includes("looking up");
+
+//         if (looksCoords) {
+//           return addressMap[key] || base;
+//         }
+
+//         return base;
+//       }
+
+//       return base;
+//     },
+//     [addressMap, fmtKey]
+//   );
 
 //   // Fetch current user
 //   useEffect(() => {
@@ -367,23 +483,16 @@
 //       axios.get(`${API_URL}/api/orders`, {
 //         headers: token ? { Authorization: `Bearer ${token}` } : {},
 //       }),
-//       // sales might not exist in some setups; keep dashboard resilient
-//       axios
-//         .get(`${API_URL}/api/sales`, {
-//           headers: token ? { Authorization: `Bearer ${token}` } : {},
-//         })
-//         .catch(() => ({ data: [] })),
 //       axios
 //         .get(`${API_URL}/api/reviews`, {
 //           headers: token ? { Authorization: `Bearer ${token}` } : {},
 //         })
 //         .catch(() => ({ data: [] })),
 //     ])
-//       .then(([demolishRes, sellRes, ordersRes, salesRes, reviewsRes]) => {
+//       .then(([demolishRes, sellRes, ordersRes, reviewsRes]) => {
 //         const demolish = demolishRes.data || [];
 //         const sell = sellRes.data || [];
 //         const fetchedOrders = ordersRes.data || [];
-//         const fetchedSales = salesRes.data || [];
 //         const fetchedReviews = reviewsRes.data || [];
 
 //         setDemolitionCount(demolish.length);
@@ -393,14 +502,13 @@
 //         setOrders(fetchedOrders);
 //         setSells(sell);
 //         setDemolitions(demolish);
-//         setSales(fetchedSales);
 //         setReviews(fetchedReviews);
 
 //         let pending = 0;
 //         let revenue = 0;
 
 //         fetchedOrders.forEach((o) => {
-//           if (String(o.status).toLowerCase().includes("pending")) pending++;
+//           if (String(o.status).toLowerCase().includes("pending")) pending += 1;
 //           if (Array.isArray(o.items)) {
 //             o.items.forEach((it) => {
 //               revenue += safeNumber(it.price) * safeNumber(it.quantity);
@@ -413,7 +521,7 @@
 //         setPendingOrders(pending);
 //         setTotalRevenue(revenue);
 
-//         // Location frequency per dataset (Sales removed)
+//         // Initial location frequency (will be refreshed by the effect below once sell addresses resolve)
 //         setFreqOrders(buildLocationFrequency(fetchedOrders));
 //         setFreqSells(buildLocationFrequency(sell));
 //         setFreqDemolitions(buildLocationFrequency(demolish));
@@ -428,7 +536,6 @@
 //         setOrders([]);
 //         setSells([]);
 //         setDemolitions([]);
-//         setSales([]);
 //         setReviews([]);
 //         setPendingOrders(0);
 //         setTotalRevenue(0);
@@ -445,16 +552,21 @@
 //       });
 //   }, []);
 
+//   // Recompute location frequencies whenever data or sell addressMap changes
+//   useEffect(() => {
+//     setFreqOrders(buildLocationFrequency(orders));
+//     setFreqDemolitions(buildLocationFrequency(demolitions));
+//     // IMPORTANT: Sell uses geocoded place names
+//     setFreqSells(buildLocationFrequency(sells, extractSellLocation));
+//   }, [orders, demolitions, sells, extractSellLocation]);
+
 //   // Export CSV
 //   const exportCSV = () => {
 //     const headers = "Order ID,User Email,Status,Total Items,Total Amount,Created At\n";
 //     const rows = orders
 //       .map((o) => {
 //         const totalItems = (o.items || []).reduce((s, i) => s + safeNumber(i.quantity), 0);
-//         const totalAmount = (o.items || []).reduce(
-//           (s, i) => s + safeNumber(i.price) * safeNumber(i.quantity),
-//           0
-//         );
+//         const totalAmount = (o.items || []).reduce((s, i) => s + safeNumber(i.price) * safeNumber(i.quantity), 0);
 //         return `${o._id || ""},${o.userEmail || ""},${o.status || ""},${totalItems},${totalAmount},${o.createdAt || ""}`;
 //       })
 //       .join("\n");
@@ -625,11 +737,14 @@
 //     const layerRef = useRef(null);
 //     const legendRef = useRef(null);
 
-//     // Region IV-A (CALABARZON) bounding box (approx) – restrict map within this region
-//     // You can tighten these later if you want stricter bounds.
-//     const REGION_IVA_BOUNDS = L.latLngBounds(
-//       L.latLng(12.70, 120.40), // SW
-//       L.latLng(15.90, 122.80)  // NE
+//     // memoized so react-hooks/exhaustive-deps is happy and bounds is stable
+//     const REGION_IVA_BOUNDS = useMemo(
+//       () =>
+//         L.latLngBounds(
+//           L.latLng(12.7, 120.4), // SW
+//           L.latLng(15.9, 122.8) // NE
+//         ),
+//       []
 //     );
 
 //     const { list: bins, maxCount, totalPoints, uniqueBins } = buildHeatBins(records, 3);
@@ -640,7 +755,7 @@
 //       // init once
 //       if (!mapRef.current) {
 //         const m = L.map(mapElRef.current, {
-//           center: [14.20, 121.40],
+//           center: [14.2, 121.4],
 //           zoom: 8,
 //           minZoom: 7,
 //           maxZoom: 16,
@@ -688,13 +803,11 @@
 //           },
 //         });
 
-//         const legend = new Legend();
-//         legend.addTo(m);
+//         new Legend().addTo(m);
 
 //         mapRef.current = m;
 //         layerRef.current = g;
 
-//         // Ensure proper sizing after mount
 //         setTimeout(() => {
 //           try {
 //             m.invalidateSize();
@@ -702,12 +815,7 @@
 //           } catch {}
 //         }, 0);
 //       }
-
-//       return () => {
-//         // Keep map instance (don’t destroy) to avoid re-init flicker
-//       };
-//       // eslint-disable-next-line react-hooks/exhaustive-deps
-//     }, []);
+//     }, [REGION_IVA_BOUNDS]);
 
 //     // update points whenever records change
 //     useEffect(() => {
@@ -717,13 +825,11 @@
 
 //       g.clearLayers();
 
-//       // Draw "heat" circles (aggregated bins)
 //       if (bins.length > 0 && maxCount > 0) {
 //         bins.forEach((p) => {
 //           const ratio = safeNumber(p.count) / maxCount; // 0..1
 //           const color = intensityColor(ratio);
 
-//           // radius in meters: bigger for higher intensity
 //           const radius = 700 + ratio * 1800; // 700m .. 2500m
 
 //           const circle = L.circle([p.lat, p.lng], {
@@ -734,31 +840,23 @@
 //             fillOpacity: 0.22 + ratio * 0.25, // 0.22 .. 0.47
 //           });
 
-//           circle.bindTooltip(
-//             `<div style="font-size:12px;"><strong>${p.count}</strong> record${p.count > 1 ? "s" : ""}</div>`,
-//             { sticky: true }
-//           );
+//           circle.bindTooltip(`<div style="font-size:12px;"><strong>${p.count}</strong> record${p.count > 1 ? "s" : ""}</div>`, {
+//             sticky: true,
+//           });
 
 //           circle.addTo(g);
 //         });
 
-//         // Keep map constrained to Region IV-A; also try to zoom to points but clamp inside region
+//         // Always frame Region IV-A (restriction stays intact)
 //         try {
-//           const ptsBounds = L.latLngBounds(bins.map((p) => [p.lat, p.lng]));
-//           const clamped = ptsBounds.isValid() ? ptsBounds.pad(0.15) : REGION_IVA_BOUNDS;
-//           m.fitBounds(REGION_IVA_BOUNDS); // always keep region framing
-//           // If you want to zoom closer when points exist, uncomment:
-//           // m.fitBounds(clamped, { maxZoom: 12 });
-//         } catch {
-//           // ignore
-//         }
+//           m.fitBounds(REGION_IVA_BOUNDS);
+//         } catch {}
 //       } else {
-//         // No points: just show the region bounds
 //         try {
 //           m.fitBounds(REGION_IVA_BOUNDS);
 //         } catch {}
 //       }
-//     }, [records, bins, maxCount]);
+//     }, [bins, maxCount, REGION_IVA_BOUNDS]);
 
 //     return (
 //       <Card className="shadow-sm bg-light h-100">
@@ -766,8 +864,7 @@
 //           <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
 //             <h6 className="mb-0">{title}</h6>
 //             <div className="text-muted" style={{ fontSize: 12 }}>
-//               Points: <strong>{safeNumber(totalPoints)}</strong> &nbsp;|&nbsp; Clusters:{" "}
-//               <strong>{safeNumber(uniqueBins)}</strong>
+//               Points: <strong>{safeNumber(totalPoints)}</strong> &nbsp;|&nbsp; Clusters: <strong>{safeNumber(uniqueBins)}</strong>
 //             </div>
 //           </div>
 
@@ -792,8 +889,7 @@
 //   };
 
 //   // pick dataset for heat map
-//   const heatRecords =
-//     heatTab === "orders" ? orders : heatTab === "demolish" ? demolitions : sells;
+//   const heatRecords = heatTab === "orders" ? orders : heatTab === "demolish" ? demolitions : sells;
 
 //   const heatTitle =
 //     heatTab === "orders"
@@ -910,7 +1006,7 @@
 //         </Col>
 //       </Row>
 
-//       {/* Top 10 Ordered Items - NOW BELOW Location Frequency */}
+//       {/* Top 10 Ordered Items - below Location Frequency */}
 //       <Row className="mb-4">
 //         <Col md={12}>
 //           <TopOrderedItemsCard data={topOrderedItems} />
@@ -925,25 +1021,13 @@
 //               <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
 //                 <h5 style={{ fontWeight: "600", marginBottom: 0 }}>Heat Maps</h5>
 //                 <div className="d-flex gap-2 flex-wrap">
-//                   <Button
-//                     size="sm"
-//                     variant={heatTab === "orders" ? "danger" : "outline-danger"}
-//                     onClick={() => setHeatTab("orders")}
-//                   >
+//                   <Button size="sm" variant={heatTab === "orders" ? "danger" : "outline-danger"} onClick={() => setHeatTab("orders")}>
 //                     Orders
 //                   </Button>
-//                   <Button
-//                     size="sm"
-//                     variant={heatTab === "sell" ? "warning" : "outline-warning"}
-//                     onClick={() => setHeatTab("sell")}
-//                   >
+//                   <Button size="sm" variant={heatTab === "sell" ? "warning" : "outline-warning"} onClick={() => setHeatTab("sell")}>
 //                     Sell
 //                   </Button>
-//                   <Button
-//                     size="sm"
-//                     variant={heatTab === "demolish" ? "dark" : "outline-dark"}
-//                     onClick={() => setHeatTab("demolish")}
-//                   >
+//                   <Button size="sm" variant={heatTab === "demolish" ? "dark" : "outline-dark"} onClick={() => setHeatTab("demolish")}>
 //                     Demolish
 //                   </Button>
 //                 </div>
@@ -954,8 +1038,7 @@
 //               </div>
 
 //               <div className="text-muted mt-2" style={{ fontSize: 12 }}>
-//                 Tip: If some datasets don’t show points, it usually means those records don’t have <code>lat/lng</code>{" "}
-//                 stored (only text addresses).
+//                 Tip: If some datasets don’t show points, it usually means those records don’t have <code>lat/lng</code> stored (only text addresses).
 //               </div>
 //             </Card.Body>
 //           </Card>
@@ -972,8 +1055,9 @@
 // export default Dashboard;
 
 
+
 // src/pages/Dashboard.jsx
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Container, Row, Col, Button, Card, ProgressBar } from "react-bootstrap";
 import { BuildingFillX, HouseFill, CartFill } from "react-bootstrap-icons";
 import { useNavigate } from "react-router-dom";
@@ -1002,6 +1086,57 @@ const CURRENCY = (n) =>
 // Helpers
 function safeNumber(v) {
   return Number.isFinite(Number(v)) ? Number(v) : 0;
+}
+
+function parseDateSafe(v) {
+  if (!v) return null;
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function computeOrderRevenue(o) {
+  if (!o || typeof o !== "object") return 0;
+
+  if (Array.isArray(o.items) && o.items.length) {
+    return o.items.reduce((sum, it) => sum + safeNumber(it.price) * safeNumber(it.quantity), 0);
+  }
+
+  return safeNumber(o.total);
+}
+
+function computeRevenuePeriods(orders = [], now = new Date()) {
+  const y = now.getFullYear();
+  const m = now.getMonth(); // 0-11
+  const q = Math.floor(m / 3); // 0-3
+
+  const startMonth = new Date(y, m, 1, 0, 0, 0, 0);
+  const startNextMonth = new Date(y, m + 1, 1, 0, 0, 0, 0);
+
+  const startQuarter = new Date(y, q * 3, 1, 0, 0, 0, 0);
+  const startNextQuarter = new Date(y, q * 3 + 3, 1, 0, 0, 0, 0);
+
+  const startYear = new Date(y, 0, 1, 0, 0, 0, 0);
+  const startNextYear = new Date(y + 1, 0, 1, 0, 0, 0, 0);
+
+  let total = 0;
+  let monthTotal = 0;
+  let quarterTotal = 0;
+  let yearTotal = 0;
+
+  (orders || []).forEach((o) => {
+    const created = parseDateSafe(o?.createdAt || o?.date || o?.created_at);
+    const rev = computeOrderRevenue(o);
+
+    total += rev;
+
+    if (!created) return;
+
+    if (created >= startMonth && created < startNextMonth) monthTotal += rev;
+    if (created >= startQuarter && created < startNextQuarter) quarterTotal += rev;
+    if (created >= startYear && created < startNextYear) yearTotal += rev;
+  });
+
+  return { total, monthTotal, quarterTotal, yearTotal };
 }
 
 // Try to pull a reasonable "location" string from different record shapes
@@ -1058,12 +1193,16 @@ function extractLocation(record) {
   );
 }
 
-function buildLocationFrequency(records = []) {
+/**
+ * Build location frequency using a custom extractor when needed.
+ * Default extractor keeps existing behavior intact.
+ */
+function buildLocationFrequency(records = [], extractor = extractLocation) {
   const freq = {};
   let missing = 0;
 
   (records || []).forEach((r) => {
-    const loc = (extractLocation(r) || "").trim();
+    const loc = (extractor(r) || "").trim();
     if (!loc) {
       missing += 1;
       return;
@@ -1091,9 +1230,7 @@ function buildInsights(freqObj) {
   const top = entries && entries.length ? entries[0] : null;
   if (top && totalWithLocation > 0) {
     const pct = (safeNumber(top[1]) / totalWithLocation) * 100;
-    list.push(
-      `Top location: ${top[0]} (${top[1]} record${top[1] > 1 ? "s" : ""}, ${pct.toFixed(1)}%).`
-    );
+    list.push(`Top location: ${top[0]} (${top[1]} record${top[1] > 1 ? "s" : ""}, ${pct.toFixed(1)}%).`);
   }
 
   if (entries && entries.length >= 3 && totalWithLocation > 0) {
@@ -1108,8 +1245,7 @@ function buildInsights(freqObj) {
 
   if (typeof missing === "number" && totalRecords > 0) {
     const missPct = (missing / totalRecords) * 100;
-    if (missing > 0)
-      list.push(`Missing location on ${missing} of ${totalRecords} record(s) (${missPct.toFixed(1)}%).`);
+    if (missing > 0) list.push(`Missing location on ${missing} of ${totalRecords} record(s) (${missPct.toFixed(1)}%).`);
   }
 
   return list;
@@ -1176,11 +1312,7 @@ function buildTopOrderedItems(orders = []) {
   const list = Object.values(map).sort((a, b) => b.qty - a.qty).slice(0, 10);
   const maxQty = list.reduce((m, x) => Math.max(m, safeNumber(x.qty)), 0);
 
-  return {
-    list,
-    totalQtyAll,
-    maxQty,
-  };
+  return { list, totalQtyAll, maxQty };
 }
 
 // -----------------------------------------------------------------------------
@@ -1286,6 +1418,11 @@ const Dashboard = () => {
   const [pendingOrders, setPendingOrders] = useState(0);
   const [totalRevenue, setTotalRevenue] = useState(0);
 
+  // NEW: Revenue by period
+  const [monthlyRevenue, setMonthlyRevenue] = useState(0);
+  const [quarterlyRevenue, setQuarterlyRevenue] = useState(0);
+  const [yearlyRevenue, setYearlyRevenue] = useState(0);
+
   // Location frequency per dataset (Sales removed)
   const [freqOrders, setFreqOrders] = useState(buildLocationFrequency([]));
   const [freqSells, setFreqSells] = useState(buildLocationFrequency([]));
@@ -1304,6 +1441,152 @@ const Dashboard = () => {
   // User
   const [currentUser, setCurrentUser] = useState({ username: "", email: "" });
   const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+
+  // ===== Reverse Geocoding State & Helpers (Sell pretty place names) =====
+  const [addressMap, setAddressMap] = useState({}); // { "lat,lng": "Pretty address" }
+
+  const fmtKey = useCallback((lat, lng) => `${Number(lat).toFixed(6)},${Number(lng).toFixed(6)}`, []);
+
+  const getCachedAddress = useCallback((key) => {
+    try {
+      const raw = localStorage.getItem("geo_address_cache");
+      if (!raw) return null;
+      const json = JSON.parse(raw);
+      return json[key] || null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const setCachedAddress = useCallback((key, val) => {
+    try {
+      const raw = localStorage.getItem("geo_address_cache");
+      const json = raw ? JSON.parse(raw) : {};
+      json[key] = val;
+      localStorage.setItem("geo_address_cache", JSON.stringify(json));
+    } catch {}
+  }, []);
+
+  const reverseGeocodeInline = useCallback(
+    async (lat, lng) => {
+      const key = fmtKey(lat, lng);
+      const cached = getCachedAddress(key);
+      if (cached) return cached;
+
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=fil,en`;
+      try {
+        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!res.ok) throw new Error("Reverse geocode failed");
+        const data = await res.json();
+        const a = data.address || {};
+        const pretty =
+          data.display_name ||
+          [a.road, a.suburb || a.village || a.barangay, a.town || a.city || a.municipality, a.state, a.country]
+            .filter(Boolean)
+            .join(", ");
+        const value = pretty || key;
+        setCachedAddress(key, value);
+        return value;
+      } catch {
+        return key;
+      }
+    },
+    [fmtKey, getCachedAddress, setCachedAddress]
+  );
+
+  // Kick off reverse-geocoding for SELL coords (so Location Frequency shows place names)
+  useEffect(() => {
+    const run = async () => {
+      const coords = (sells || [])
+        .filter((r) => r?.location?.lat != null && r?.location?.lng != null)
+        .map((r) => fmtKey(r.location.lat, r.location.lng));
+
+      const unique = Array.from(new Set(coords));
+      if (!unique.length) return;
+
+      // seed from cache
+      const seed = {};
+      unique.forEach((k) => {
+        const cached = getCachedAddress(k);
+        if (cached) seed[k] = cached;
+      });
+      if (Object.keys(seed).length) setAddressMap((prev) => ({ ...seed, ...prev }));
+
+      // find missing
+      const missing = unique.filter((k) => !seed[k] && !addressMap[k]);
+      if (!missing.length) return;
+
+      const results = {};
+      for (const k of missing) {
+        const [lat, lng] = k.split(",").map(Number);
+        try {
+          // polite delay
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((r) => setTimeout(r, 150));
+          // eslint-disable-next-line no-await-in-loop
+          const addr = await reverseGeocodeInline(lat, lng);
+          results[k] = addr;
+        } catch {
+          results[k] = k;
+        }
+      }
+
+      if (Object.keys(results).length) setAddressMap((prev) => ({ ...prev, ...results }));
+    };
+
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sells, fmtKey, getCachedAddress, reverseGeocodeInline]);
+
+  // Custom extractor for SELL: if location is only lat/lng, replace with pretty address from addressMap
+  const extractSellLocation = useCallback(
+    (record) => {
+      // First try normal extraction (keeps compatibility if API already stores a text address)
+      const base = (extractLocation(record) || "").trim();
+
+      const loc = record?.location;
+      const hasLatLng = loc && typeof loc === "object" && loc.lat != null && loc.lng != null;
+
+      if (hasLatLng) {
+        const key = fmtKey(loc.lat, loc.lng);
+
+        // If base looks like JSON-ish lat/lng (not a real place name), prefer pretty address
+        const looksJsonish =
+          base.startsWith("{") &&
+          (base.includes('"lat"') || base.includes("lat")) &&
+          (base.includes('"lng"') || base.includes("lng"));
+
+        if (!base || looksJsonish) {
+          return addressMap[key] || `${loc.lat}, ${loc.lng}`;
+        }
+
+        // If base is literally "lat, lng" string, also prefer pretty if available
+        const looksCoords =
+          /^[\s-]?\d+(\.\d+)?\s*,\s*[\s-]?\d+(\.\d+)?$/.test(base) || base.toLowerCase().includes("looking up");
+
+        if (looksCoords) {
+          return addressMap[key] || base;
+        }
+
+        return base;
+      }
+
+      return base;
+    },
+    [addressMap, fmtKey]
+  );
+
+  // Labels for the revenue cards
+  const nowForLabels = useMemo(() => new Date(), []);
+  const monthLabel = useMemo(
+    () => nowForLabels.toLocaleString("en-PH", { month: "long", year: "numeric" }),
+    [nowForLabels]
+  );
+  const quarterLabel = useMemo(() => {
+    const q = Math.floor(nowForLabels.getMonth() / 3) + 1;
+    return `Q${q} ${nowForLabels.getFullYear()}`;
+  }, [nowForLabels]);
+  const yearLabel = useMemo(() => String(nowForLabels.getFullYear()), [nowForLabels]);
 
   // Fetch current user
   useEffect(() => {
@@ -1362,23 +1645,19 @@ const Dashboard = () => {
         setReviews(fetchedReviews);
 
         let pending = 0;
-        let revenue = 0;
-
         fetchedOrders.forEach((o) => {
           if (String(o.status).toLowerCase().includes("pending")) pending += 1;
-          if (Array.isArray(o.items)) {
-            o.items.forEach((it) => {
-              revenue += safeNumber(it.price) * safeNumber(it.quantity);
-            });
-          } else {
-            revenue += safeNumber(o.total);
-          }
         });
-
         setPendingOrders(pending);
-        setTotalRevenue(revenue);
 
-        // Location frequency per dataset (Sales removed)
+        // Revenue totals (overall + month/quarter/year)
+        const rev = computeRevenuePeriods(fetchedOrders, new Date());
+        setTotalRevenue(rev.total);
+        setMonthlyRevenue(rev.monthTotal);
+        setQuarterlyRevenue(rev.quarterTotal);
+        setYearlyRevenue(rev.yearTotal);
+
+        // Initial location frequency (will be refreshed by the effect below once sell addresses resolve)
         setFreqOrders(buildLocationFrequency(fetchedOrders));
         setFreqSells(buildLocationFrequency(sell));
         setFreqDemolitions(buildLocationFrequency(demolish));
@@ -1395,7 +1674,11 @@ const Dashboard = () => {
         setDemolitions([]);
         setReviews([]);
         setPendingOrders(0);
+
         setTotalRevenue(0);
+        setMonthlyRevenue(0);
+        setQuarterlyRevenue(0);
+        setYearlyRevenue(0);
 
         setFreqOrders(buildLocationFrequency([]));
         setFreqSells(buildLocationFrequency([]));
@@ -1408,6 +1691,23 @@ const Dashboard = () => {
         });
       });
   }, []);
+
+  // Recompute location frequencies whenever data or sell addressMap changes
+  useEffect(() => {
+    setFreqOrders(buildLocationFrequency(orders));
+    setFreqDemolitions(buildLocationFrequency(demolitions));
+    // IMPORTANT: Sell uses geocoded place names
+    setFreqSells(buildLocationFrequency(sells, extractSellLocation));
+  }, [orders, demolitions, sells, extractSellLocation]);
+
+  // NEW: Recompute revenues whenever orders change (keeps totals accurate if data updates)
+  useEffect(() => {
+    const rev = computeRevenuePeriods(orders, new Date());
+    setTotalRevenue(rev.total);
+    setMonthlyRevenue(rev.monthTotal);
+    setQuarterlyRevenue(rev.quarterTotal);
+    setYearlyRevenue(rev.yearTotal);
+  }, [orders]);
 
   // Export CSV
   const exportCSV = () => {
@@ -1827,6 +2127,45 @@ const Dashboard = () => {
         </Col>
       </Row>
 
+      {/* NEW: Revenue by Period */}
+      <Row className="mb-4">
+        <Col md={4} className="mb-3">
+          <Card className="shadow-sm bg-light h-100">
+            <Card.Body>
+              <h6>Monthly Revenue</h6>
+              <div className="text-muted" style={{ fontSize: 12 }}>
+                {monthLabel}
+              </div>
+              <h3 className="text-success mb-0">{CURRENCY(monthlyRevenue)}</h3>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col md={4} className="mb-3">
+          <Card className="shadow-sm bg-light h-100">
+            <Card.Body>
+              <h6>Quarterly Revenue</h6>
+              <div className="text-muted" style={{ fontSize: 12 }}>
+                {quarterLabel}
+              </div>
+              <h3 className="text-success mb-0">{CURRENCY(quarterlyRevenue)}</h3>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col md={4} className="mb-3">
+          <Card className="shadow-sm bg-light h-100">
+            <Card.Body>
+              <h6>Yearly Revenue</h6>
+              <div className="text-muted" style={{ fontSize: 12 }}>
+                {yearLabel}
+              </div>
+              <h3 className="text-success mb-0">{CURRENCY(yearlyRevenue)}</h3>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+
       <KPISummary orders={orders} sells={sells} demolitions={demolitions} />
 
       <Row className="mt-4 mb-4">
@@ -1904,8 +2243,7 @@ const Dashboard = () => {
               </div>
 
               <div className="text-muted mt-2" style={{ fontSize: 12 }}>
-                Tip: If some datasets don’t show points, it usually means those records don’t have{" "}
-                <code>lat/lng</code> stored (only text addresses).
+                Tip: If some datasets don’t show points, it usually means those records don’t have <code>lat/lng</code> stored (only text addresses).
               </div>
             </Card.Body>
           </Card>
